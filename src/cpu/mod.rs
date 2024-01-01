@@ -19,6 +19,18 @@ pub enum AddressingMode {
     NonAddressing,
 }
 
+#[repr(u8)]
+enum Flags {
+    Carry             = 0b0000_0001,
+    Zero              = 0b0000_0010,
+    InterruptDisabled = 0b0000_0100,
+    DecimalMode       = 0b0000_1000,
+    B                 = 0b0001_0000,
+    One               = 0b0010_0000,
+    Overflow          = 0b0100_0000,
+    Negative          = 0b1000_0000,
+}
+
 #[allow(non_snake_case)]
 pub struct CPU {
     register_a: u8,
@@ -140,18 +152,29 @@ impl CPU {
         self.mem_write(addr + 1, hi);
     }
 
+    fn get_flag(&self, flag: Flags) -> bool {
+        self.status & flag as u8 > 0
+    }
+
+    fn clear_flag(&mut self, flag: Flags) {
+        self.status &= !(flag as u8);
+    }
+
+    fn set_flag(&mut self, flag: Flags) {
+        self.status |= flag as u8;
+    }
 
     fn update_zero_and_negative_flags(&mut self, value: u8) {
         if value == 0 {
-            self.status |= 0b0000_0010;
+            self.set_flag(Flags::Zero);
         } else {
-            self.status &= 0b1111_1101;
+            self.clear_flag(Flags::Zero);
         }
 
         if value & 0b1000_0000 != 0 {
-            self.status |= 0b1000_0000;
+            self.set_flag(Flags::Negative);
         } else {
-            self.status &= 0b0111_1111;
+            self.clear_flag(Flags::Negative);
         }
     }
 
@@ -179,4 +202,40 @@ impl CPU {
     }
 
     fn nop() {}
+
+    fn adc(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let value = self.mem_read(addr);
+        let neg1 = self.register_a & 0b1000_0000 != 0;
+        let neg2 = value & 0b1000_0000 != 0;
+        let (result, carry1) = self.register_a.overflowing_add(value);
+        let (result, carry2) = result.overflowing_add(self.get_flag(Flags::Carry) as u8);
+        self.register_a = result;
+        if carry1 | carry2 {
+            self.set_flag(Flags::Carry);
+        } else {
+            self.clear_flag(Flags::Carry);
+        }
+        if (neg1 & neg2 & (self.register_a & 0b1000_0000 == 0)) || (!neg1 & !neg2 & (self.register_a & 0b1000_0000 != 0)) {
+            self.set_flag(Flags::Overflow);
+        } else {
+            self.clear_flag(Flags::Overflow);
+        }
+        self.update_zero_and_negative_flags(self.register_a);
+    }
+
+    fn and(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let value = self.mem_read(addr);
+        self.register_a &= value;
+        self.update_zero_and_negative_flags(self.register_a);
+    }
+
+    fn eor(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let value = self.mem_read(addr);
+        self.register_a ^= value;
+        println!("{}", self.register_a);
+        self.update_zero_and_negative_flags(self.register_a);
+    }
 }
