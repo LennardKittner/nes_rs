@@ -4,7 +4,7 @@ mod opcodes;
 #[cfg(test)]
 mod cpu_tests;
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 #[allow(non_camel_case_types)]
 pub enum AddressingMode {
     Immediate,
@@ -16,6 +16,7 @@ pub enum AddressingMode {
     Absolute_Y,
     Indirect_X,
     Indirect_Y,
+    Relative,
     NonAddressing,
 }
 
@@ -129,6 +130,15 @@ impl CPU {
                 let deref_base = (hi as u16) << 8 | (lo as u16);
                 deref_base.wrapping_add(self.register_y as u16)
             }
+            AddressingMode::Relative => {
+                let mut offset = self.mem_read(self.program_counter) as i8;
+                if offset < 0 {
+                   offset *= -1;
+                    self.program_counter.wrapping_sub(offset as u16)
+                } else {
+                    self.program_counter + (offset as u16)
+                }
+            }
             AddressingMode::NonAddressing => panic!("mode {:?} is not supported", mode),
         }
     }
@@ -153,7 +163,7 @@ impl CPU {
     }
 
     fn get_flag(&self, flag: Flags) -> bool {
-        self.status & flag as u8 > 0
+        self.status & flag as u8 != 0
     }
 
     fn clear_flag(&mut self, flag: Flags) {
@@ -164,18 +174,17 @@ impl CPU {
         self.status |= flag as u8;
     }
 
-    fn update_zero_and_negative_flags(&mut self, value: u8) {
-        if value == 0 {
-            self.set_flag(Flags::Zero);
+    fn update_flag(&mut self, flag: Flags, set: bool) {
+        if set {
+            self.set_flag(flag);
         } else {
-            self.clear_flag(Flags::Zero);
+            self.clear_flag(flag);
         }
+    }
 
-        if value & 0b1000_0000 != 0 {
-            self.set_flag(Flags::Negative);
-        } else {
-            self.clear_flag(Flags::Negative);
-        }
+    fn update_zero_and_negative_flags(&mut self, value: u8) {
+        self.update_flag(Flags::Zero, value == 0);
+        self.update_flag(Flags::Negative, value & 0b1000_0000 != 0);
     }
 
     fn lda(&mut self, mode: &AddressingMode) {
@@ -211,16 +220,8 @@ impl CPU {
         let (result, carry1) = self.register_a.overflowing_add(value);
         let (result, carry2) = result.overflowing_add(self.get_flag(Flags::Carry) as u8);
         self.register_a = result;
-        if carry1 | carry2 {
-            self.set_flag(Flags::Carry);
-        } else {
-            self.clear_flag(Flags::Carry);
-        }
-        if (neg1 & neg2 & (self.register_a & 0b1000_0000 == 0)) || (!neg1 & !neg2 & (self.register_a & 0b1000_0000 != 0)) {
-            self.set_flag(Flags::Overflow);
-        } else {
-            self.clear_flag(Flags::Overflow);
-        }
+        self.update_flag(Flags::Carry, carry1 | carry2);
+        self.update_flag(Flags::Overflow, (neg1 & neg2 & (self.register_a & 0b1000_0000 == 0)) || (!neg1 & !neg2 & (self.register_a & 0b1000_0000 != 0)));
         self.update_zero_and_negative_flags(self.register_a);
     }
 
@@ -235,7 +236,36 @@ impl CPU {
         let addr = self.get_operand_address(mode);
         let value = self.mem_read(addr);
         self.register_a ^= value;
-        println!("{}", self.register_a);
         self.update_zero_and_negative_flags(self.register_a);
+    }
+
+    fn ora(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let value = self.mem_read(addr);
+        self.register_a |= value;
+        self.update_zero_and_negative_flags(self.register_a);
+    }
+
+    fn asl(&mut self, mode: &AddressingMode) {
+        if *mode == AddressingMode::NonAddressing {
+            let carry = self.register_a & 0b1000_0000 != 0;
+            self.register_a = self.register_a.wrapping_shl(1);
+            self.update_flag(Flags::Carry, carry);
+            self.update_zero_and_negative_flags(self.register_a);
+        } else {
+            let addr = self.get_operand_address(mode);
+            let mut value = self.mem_read(addr);
+            let carry = value & 0b1000_0000 != 0;
+            value = value.wrapping_shl(1);
+            self.update_flag(Flags::Carry, carry);
+            self.update_flag(Flags::Negative, value & 0b1000_0000 != 0);
+            self.mem_write(addr, value);
+        }
+    }
+
+    fn bcc(&mut self, mode: &AddressingMode) {
+        if !self.get_flag(Flags::Carry) {
+            self.program_counter = self.get_operand_address(mode);
+        }
     }
 }

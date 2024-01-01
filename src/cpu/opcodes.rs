@@ -54,6 +54,23 @@ lazy_static! {
         map.insert(0x41, OpCode::new(0x41, "EOR", 2, 6, AddressingMode::Indirect_X, Operation::FnCpuAndAddressing(CPU::eor)));
         map.insert(0x51, OpCode::new(0x51, "EOR", 2, 5 /* +1 if page crossed */, AddressingMode::Indirect_Y, Operation::FnCpuAndAddressing(CPU::eor)));
 
+        map.insert(0x09, OpCode::new(0x09, "ORA", 2, 2, AddressingMode::Immediate, Operation::FnCpuAndAddressing(CPU::ora)));
+        map.insert(0x05, OpCode::new(0x05, "ORA", 2, 3, AddressingMode::ZeroPage, Operation::FnCpuAndAddressing(CPU::ora)));
+        map.insert(0x15, OpCode::new(0x15, "ORA", 2, 4, AddressingMode::ZeroPage_X, Operation::FnCpuAndAddressing(CPU::ora)));
+        map.insert(0x0D, OpCode::new(0x0D, "ORA", 3, 4, AddressingMode::Absolute, Operation::FnCpuAndAddressing(CPU::ora)));
+        map.insert(0x1D, OpCode::new(0x1D, "ORA", 3, 4 /* +1 if page crossed */, AddressingMode::Absolute_X, Operation::FnCpuAndAddressing(CPU::ora)));
+        map.insert(0x19, OpCode::new(0x19, "ORA", 3, 4 /* +1 if page crossed */, AddressingMode::Absolute_Y, Operation::FnCpuAndAddressing(CPU::ora)));
+        map.insert(0x01, OpCode::new(0x01, "ORA", 2, 6, AddressingMode::Indirect_X, Operation::FnCpuAndAddressing(CPU::ora)));
+        map.insert(0x11, OpCode::new(0x11, "ORA", 2, 5 /* +1 if page crossed */, AddressingMode::Indirect_Y, Operation::FnCpuAndAddressing(CPU::ora)));
+
+        map.insert(0x0A, OpCode::new(0x0A, "ASL", 1, 2, AddressingMode::NonAddressing, Operation::FnCpuAndAddressing(CPU::asl)));
+        map.insert(0x06, OpCode::new(0x06, "ASL", 2, 5, AddressingMode::ZeroPage, Operation::FnCpuAndAddressing(CPU::asl)));
+        map.insert(0x16, OpCode::new(0x16, "ASL", 2, 6, AddressingMode::ZeroPage_X, Operation::FnCpuAndAddressing(CPU::asl)));
+        map.insert(0x0E, OpCode::new(0x0E, "ASL", 3, 6, AddressingMode::Absolute, Operation::FnCpuAndAddressing(CPU::asl)));
+        map.insert(0x1E, OpCode::new(0x1E, "ASL", 3, 7, AddressingMode::Absolute_X, Operation::FnCpuAndAddressing(CPU::asl)));
+
+        map.insert(0x90, OpCode::new(0x90, "BCC", 2, 2 /* +1 if branch succeeds +2 if to a new page */, AddressingMode::Relative, Operation::FnCpuAndAddressing(CPU::bcc)));
+
         map
     };
 }
