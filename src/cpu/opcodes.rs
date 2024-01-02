@@ -1,14 +1,15 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use lazy_static::lazy_static;
 use crate::cpu::{AddressingMode, CPU};
 
 lazy_static! {
     pub static ref CPU_INSTRUCTIONS: HashMap<u8, OpCode> = {
         let mut map = HashMap::new();
+        //TODO: do more on BRK?
         map.insert(0x00, OpCode::new(0x00, "BRK", 1, 7, AddressingMode::NonAddressing, Operation::Fn(CPU::nop)));
         map.insert(0xAA, OpCode::new(0xAA, "TAX", 1, 2, AddressingMode::NonAddressing, Operation::FnCpu(CPU::tax)));
         map.insert(0xE8, OpCode::new(0xE8, "INX", 1, 2, AddressingMode::NonAddressing, Operation::FnCpu(CPU::inx)));
-        map.insert(0xEA, OpCode::new(0x00, "NOP", 1, 2, AddressingMode::NonAddressing, Operation::Fn(CPU::nop)));
+        map.insert(0xEA, OpCode::new(0xEA, "NOP", 1, 2, AddressingMode::NonAddressing, Operation::Fn(CPU::nop)));
 
         map.insert(0xA9, OpCode::new(0xA9, "LDA", 2, 2, AddressingMode::Immediate, Operation::FnCpuAndAddressing(CPU::lda)));
         map.insert(0xA5, OpCode::new(0xA5, "LDA", 2, 3, AddressingMode::ZeroPage, Operation::FnCpuAndAddressing(CPU::lda)));
@@ -70,11 +71,63 @@ lazy_static! {
         map.insert(0x1E, OpCode::new(0x1E, "ASL", 3, 7, AddressingMode::Absolute_X, Operation::FnCpuAndAddressing(CPU::asl)));
 
         map.insert(0x90, OpCode::new(0x90, "BCC", 2, 2 /* +1 if branch succeeds +2 if to a new page */, AddressingMode::Relative, Operation::FnCpuAndAddressing(CPU::bcc)));
+        map.insert(0xB0, OpCode::new(0xB0, "BCS", 2, 2 /* +1 if branch succeeds +2 if to a new page */, AddressingMode::Relative, Operation::FnCpuAndAddressing(CPU::bcs)));
+        map.insert(0xF0, OpCode::new(0xF0, "BEQ", 2, 2 /* +1 if branch succeeds +2 if to a new page */, AddressingMode::Relative, Operation::FnCpuAndAddressing(CPU::beq)));
+        map.insert(0xD0, OpCode::new(0xD0, "BNE", 2, 2 /* +1 if branch succeeds +2 if to a new page */, AddressingMode::Relative, Operation::FnCpuAndAddressing(CPU::bne)));
+        map.insert(0x10, OpCode::new(0x10, "BPL", 2, 2 /* +1 if branch succeeds +2 if to a new page */, AddressingMode::Relative, Operation::FnCpuAndAddressing(CPU::bpl)));
+        map.insert(0x30, OpCode::new(0x30, "BMI", 2, 2 /* +1 if branch succeeds +2 if to a new page */, AddressingMode::Relative, Operation::FnCpuAndAddressing(CPU::bmi)));
+        map.insert(0x50, OpCode::new(0x50, "BVC", 2, 2 /* +1 if branch succeeds +2 if to a new page */, AddressingMode::Relative, Operation::FnCpuAndAddressing(CPU::bvc)));
+        map.insert(0x70, OpCode::new(0x70, "BVS", 2, 2 /* +1 if branch succeeds +2 if to a new page */, AddressingMode::Relative, Operation::FnCpuAndAddressing(CPU::bvs)));
+
+        map.insert(0x24, OpCode::new(0x24, "BIT", 2, 3, AddressingMode::ZeroPage, Operation::FnCpuAndAddressing(CPU::bit)));
+        map.insert(0x2C, OpCode::new(0x2C, "BIT", 3, 4, AddressingMode::Absolute, Operation::FnCpuAndAddressing(CPU::bit)));
+
+        map.insert(0x18, OpCode::new(0x18, "CLC", 1, 2, AddressingMode::NonAddressing, Operation::FnCpu(CPU::clc)));
+        map.insert(0xD8, OpCode::new(0xD8, "CLD", 1, 2, AddressingMode::NonAddressing, Operation::FnCpu(CPU::cld)));
+        map.insert(0x58, OpCode::new(0x58, "CLI", 1, 2, AddressingMode::NonAddressing, Operation::FnCpu(CPU::cli)));
+        map.insert(0xB8, OpCode::new(0xB8, "CLV", 1, 2, AddressingMode::NonAddressing, Operation::FnCpu(CPU::clv)));
+
+        map.insert(0xC9, OpCode::new(0xC9, "CMP", 2, 2, AddressingMode::Immediate, Operation::FnCpuAndAddressing(CPU::cmp)));
+        map.insert(0xC5, OpCode::new(0xC5, "CMP", 2, 3, AddressingMode::ZeroPage, Operation::FnCpuAndAddressing(CPU::cmp)));
+        map.insert(0xD5, OpCode::new(0xD5, "CMP", 2, 4, AddressingMode::ZeroPage_X, Operation::FnCpuAndAddressing(CPU::cmp)));
+        map.insert(0xCD, OpCode::new(0xCD, "CMP", 3, 4, AddressingMode::Absolute, Operation::FnCpuAndAddressing(CPU::cmp)));
+        map.insert(0xDD, OpCode::new(0xDD, "CMP", 3, 4 /* +1 if page crossed */, AddressingMode::Absolute_X, Operation::FnCpuAndAddressing(CPU::cmp)));
+        map.insert(0xD9, OpCode::new(0xD9, "CMP", 3, 4 /* +1 if page crossed */, AddressingMode::Absolute_Y, Operation::FnCpuAndAddressing(CPU::cmp)));
+        map.insert(0xC1, OpCode::new(0xC1, "CMP", 2, 6, AddressingMode::Indirect_X, Operation::FnCpuAndAddressing(CPU::cmp)));
+        map.insert(0xD1, OpCode::new(0xD1, "CMP", 2, 5 /* +1 if page crossed */, AddressingMode::Indirect_Y, Operation::FnCpuAndAddressing(CPU::cmp)));
+
+        map.insert(0xE0, OpCode::new(0xE0, "CPX", 2, 2, AddressingMode::Immediate, Operation::FnCpuAndAddressing(CPU::cpx)));
+        map.insert(0xE4, OpCode::new(0xE4, "CPX", 2, 3, AddressingMode::ZeroPage, Operation::FnCpuAndAddressing(CPU::cpx)));
+        map.insert(0xEC, OpCode::new(0xEC, "CPX", 3, 4, AddressingMode::Absolute, Operation::FnCpuAndAddressing(CPU::cpx)));
+
+        map.insert(0xC0, OpCode::new(0xC0, "CPY", 2, 2, AddressingMode::Immediate, Operation::FnCpuAndAddressing(CPU::cpy)));
+        map.insert(0xC4, OpCode::new(0xC4, "CPY", 2, 3, AddressingMode::ZeroPage, Operation::FnCpuAndAddressing(CPU::cpy)));
+        map.insert(0xCC, OpCode::new(0xCC, "CPY", 3, 4, AddressingMode::Absolute, Operation::FnCpuAndAddressing(CPU::cpy)));
 
         map
     };
 }
 
+#[test]
+fn test_for_duplicate_opcodes() {
+    let mut set = HashSet::new();
+    for opcode in CPU_INSTRUCTIONS.values().into_iter().map(|oc| oc.code) {
+        if set.contains(&opcode) {
+            panic!("Duplicate opcode 0x{opcode:x}")
+        } else {
+            set.insert(opcode);
+        }
+    }
+}
+
+#[test]
+fn test_opcode_matches_key() {
+    for (key, opcode) in CPU_INSTRUCTIONS.iter().map(|(i, oc)| (i, oc.code)) {
+        if *key != opcode {
+            panic!("Opcode 0x{opcode:x} does not match key 0x{key:x}")
+        }
+    }
+}
 
 #[allow(dead_code)]
 pub struct OpCode {

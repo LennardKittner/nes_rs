@@ -268,4 +268,94 @@ impl CPU {
             self.program_counter = self.get_operand_address(mode);
         }
     }
+
+    fn bcs(&mut self, mode: &AddressingMode) {
+        if self.get_flag(Flags::Carry) {
+            self.program_counter = self.get_operand_address(mode);
+        }
+    }
+
+    fn beq(&mut self, mode: &AddressingMode) {
+        if self.get_flag(Flags::Zero) {
+            self.program_counter = self.get_operand_address(mode);
+        }
+    }
+
+    fn bne(&mut self, mode: &AddressingMode) {
+        if !self.get_flag(Flags::Zero) {
+            self.program_counter = self.get_operand_address(mode);
+        }
+    }
+
+    fn bpl(&mut self, mode: &AddressingMode) {
+        if !self.get_flag(Flags::Negative) {
+            self.program_counter = self.get_operand_address(mode);
+        }
+    }
+
+    fn bmi(&mut self, mode: &AddressingMode) {
+        if self.get_flag(Flags::Negative) {
+            self.program_counter = self.get_operand_address(mode);
+        }
+    }
+
+    fn bvc(&mut self, mode: &AddressingMode) {
+        if !self.get_flag(Flags::Overflow) {
+            self.program_counter = self.get_operand_address(mode);
+        }
+    }
+
+    fn bvs(&mut self, mode: &AddressingMode) {
+        if self.get_flag(Flags::Overflow) {
+            self.program_counter = self.get_operand_address(mode);
+        }
+    }
+
+    fn bit(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let value = self.mem_read(addr);
+        self.update_flag(Flags::Zero, value & self.register_a == 0);
+        self.update_flag(Flags::Overflow, value & Flags::Overflow as u8 != 0);
+        self.update_flag(Flags::Negative, value & Flags::Negative as u8 != 0);
+    }
+
+    fn clc(&mut self) {
+        self.clear_flag(Flags::Carry);
+    }
+
+    fn cld(&mut self) {
+        self.clear_flag(Flags::DecimalMode);
+    }
+
+    fn cli(&mut self) {
+        self.clear_flag(Flags::InterruptDisabled);
+    }
+
+    fn clv(&mut self) {
+        self.clear_flag(Flags::Overflow);
+    }
+
+    fn compare(&mut self, a: u8, b: u8) {
+        self.update_flag(Flags::Carry, a >= b);
+        self.update_flag(Flags::Zero, a == b);
+        self.update_flag(Flags::Negative, a < b);
+    }
+
+    fn cmp(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let value = self.mem_read(addr);
+        self.compare(self.register_a, value);
+    }
+
+    fn cpx(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let value = self.mem_read(addr);
+        self.compare(self.register_x, value);
+    }
+
+    fn cpy(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let value = self.mem_read(addr);
+        self.compare(self.register_y, value);
+    }
 }
