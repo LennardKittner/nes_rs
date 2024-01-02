@@ -8,16 +8,6 @@ fn test_5_ops_working_together() {
 }
 
 #[test]
-fn test_inx_overflow() {
-    let mut cpu = CPU::new();
-    cpu.load(&vec![0xe8, 0xe8, 0x00]);
-    cpu.reset();
-    cpu.register_x = 0xff;
-    cpu.run();
-    assert_eq!(cpu.register_x, 1);
-}
-
-#[test]
 fn test_tax() {
     let mut cpu = CPU::new();
     cpu.load(&vec![0xaa, 0x00]);
@@ -348,4 +338,81 @@ fn test_cpy_lt() {
     assert_eq!(cpu.get_flag(Flags::Carry), false);
     assert_eq!(cpu.get_flag(Flags::Zero), false);
     assert_eq!(cpu.get_flag(Flags::Negative), true);
+}
+
+#[test]
+fn test_dec_zero() {
+    let mut cpu = CPU::new();
+    cpu.load(&vec![0xD6, 0x11, 0x00]);
+    cpu.reset();
+    cpu.register_x = 0x23;
+    cpu.memory[0x34] = 0x1;
+    cpu.run();
+    assert_eq!(cpu.memory[0x34], 0x00);
+    assert_eq!(cpu.get_flag(Flags::Zero), true);
+}
+
+#[test]
+fn test_dex_neg() {
+    let mut cpu = CPU::new();
+    cpu.load_and_run(&vec![0xCA, 0x00]);
+    assert_eq!(cpu.register_x, 0xFF);
+    assert_eq!(cpu.get_flag(Flags::Negative), true);
+}
+
+#[test]
+fn test_dey() {
+    let mut cpu = CPU::new();
+    cpu.load(&vec![0x88, 0x00]);
+    cpu.reset();
+    cpu.register_y = 0x13;
+    cpu.run();
+    assert_eq!(cpu.register_y, 0x12);
+    assert_eq!(cpu.get_flag(Flags::Negative), false);
+    assert_eq!(cpu.get_flag(Flags::Zero), false);
+}
+
+#[test]
+fn test_inc_neg() {
+    let mut cpu = CPU::new();
+    cpu.load(&vec![0xF6, 0x11, 0x00]);
+    cpu.reset();
+    cpu.register_x = 0x23;
+    cpu.memory[0x34] = 0xEF;
+    cpu.run();
+    assert_eq!(cpu.memory[0x34], 0xF0);
+    assert_eq!(cpu.get_flag(Flags::Negative), true);
+}
+
+#[test]
+fn test_inx_overflow() {
+    let mut cpu = CPU::new();
+    cpu.load(&vec![0xE8, 0xE8, 0x00]);
+    cpu.reset();
+    cpu.register_x = 0xFF;
+    cpu.run();
+    assert_eq!(cpu.register_x, 1);
+}
+
+#[test]
+fn test_iny_zero() {
+    let mut cpu = CPU::new();
+    cpu.load(&vec![0xC8, 0x00]);
+    cpu.reset();
+    cpu.register_y = 0xFF;
+    cpu.run();
+    assert_eq!(cpu.register_y, 0x00);
+    assert_eq!(cpu.get_flag(Flags::Zero), true);
+}
+
+#[test]
+fn test_jmp_indirect() {
+    let mut cpu = CPU::new();
+    cpu.load(&vec![0x6C, 0x20, 0x01, 0x00]);
+    cpu.reset();
+    cpu.memory[0x0120] = 0xFC;
+    cpu.memory[0x0121] = 0xBA;
+    cpu.memory[0xBAFC] = 0x00;
+    cpu.run();
+    assert_eq!(cpu.program_counter, 0xBAFC);
 }

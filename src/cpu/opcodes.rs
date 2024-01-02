@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use lazy_static::lazy_static;
 use crate::cpu::{AddressingMode, CPU};
 
@@ -8,7 +8,6 @@ lazy_static! {
         //TODO: do more on BRK?
         map.insert(0x00, OpCode::new(0x00, "BRK", 1, 7, AddressingMode::NonAddressing, Operation::Fn(CPU::nop)));
         map.insert(0xAA, OpCode::new(0xAA, "TAX", 1, 2, AddressingMode::NonAddressing, Operation::FnCpu(CPU::tax)));
-        map.insert(0xE8, OpCode::new(0xE8, "INX", 1, 2, AddressingMode::NonAddressing, Operation::FnCpu(CPU::inx)));
         map.insert(0xEA, OpCode::new(0xEA, "NOP", 1, 2, AddressingMode::NonAddressing, Operation::Fn(CPU::nop)));
 
         map.insert(0xA9, OpCode::new(0xA9, "LDA", 2, 2, AddressingMode::Immediate, Operation::FnCpuAndAddressing(CPU::lda)));
@@ -104,12 +103,32 @@ lazy_static! {
         map.insert(0xC4, OpCode::new(0xC4, "CPY", 2, 3, AddressingMode::ZeroPage, Operation::FnCpuAndAddressing(CPU::cpy)));
         map.insert(0xCC, OpCode::new(0xCC, "CPY", 3, 4, AddressingMode::Absolute, Operation::FnCpuAndAddressing(CPU::cpy)));
 
+        map.insert(0xC6, OpCode::new(0xC6, "DEC", 2, 5, AddressingMode::ZeroPage, Operation::FnCpuAndAddressing(CPU::dec)));
+        map.insert(0xD6, OpCode::new(0xD6, "DEC", 2, 6, AddressingMode::ZeroPage_X, Operation::FnCpuAndAddressing(CPU::dec)));
+        map.insert(0xCE, OpCode::new(0xCE, "DEC", 3, 6, AddressingMode::Absolute, Operation::FnCpuAndAddressing(CPU::dec)));
+        map.insert(0xDE, OpCode::new(0xDE, "DEC", 3, 7, AddressingMode::Absolute_X, Operation::FnCpuAndAddressing(CPU::dec)));
+
+        map.insert(0xCA, OpCode::new(0xCA, "DEX", 1, 2, AddressingMode::NonAddressing, Operation::FnCpu(CPU::dex)));
+        map.insert(0x88, OpCode::new(0x88, "DEY", 1, 2, AddressingMode::NonAddressing, Operation::FnCpu(CPU::dey)));
+
+        map.insert(0xE6, OpCode::new(0xE6, "INC", 2, 5, AddressingMode::ZeroPage, Operation::FnCpuAndAddressing(CPU::inc)));
+        map.insert(0xF6, OpCode::new(0xF6, "INC", 2, 6, AddressingMode::ZeroPage_X, Operation::FnCpuAndAddressing(CPU::inc)));
+        map.insert(0xEE, OpCode::new(0xEE, "INC", 3, 6, AddressingMode::Absolute, Operation::FnCpuAndAddressing(CPU::inc)));
+        map.insert(0xFE, OpCode::new(0xFE, "INC", 3, 7, AddressingMode::Absolute_X, Operation::FnCpuAndAddressing(CPU::inc)));
+
+        map.insert(0xE8, OpCode::new(0xE8, "INX", 1, 2, AddressingMode::NonAddressing, Operation::FnCpu(CPU::inx)));
+        map.insert(0xC8, OpCode::new(0xC8, "INY", 1, 2, AddressingMode::NonAddressing, Operation::FnCpu(CPU::iny)));
+
+        map.insert(0x4C, OpCode::new(0x4C, "JMP", 1, 2, AddressingMode::Absolute, Operation::FnCpuAndAddressing(CPU::jmp)));
+        map.insert(0x6C, OpCode::new(0x6C, "JMP", 1, 2, AddressingMode::Indirect, Operation::FnCpuAndAddressing(CPU::jmp)));
+
         map
     };
 }
 
 #[test]
 fn test_for_duplicate_opcodes() {
+    use std::collections::HashSet;
     let mut set = HashSet::new();
     for opcode in CPU_INSTRUCTIONS.values().into_iter().map(|oc| oc.code) {
         if set.contains(&opcode) {

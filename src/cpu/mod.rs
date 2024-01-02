@@ -14,6 +14,7 @@ pub enum AddressingMode {
     Absolute,
     Absolute_X,
     Absolute_Y,
+    Indirect,
     Indirect_X,
     Indirect_Y,
     Relative,
@@ -116,6 +117,7 @@ impl CPU {
                 let base = self.mem_read_u16(self.program_counter);
                 base.wrapping_add(self.register_y as u16)
             }
+            AddressingMode::Indirect => self.mem_read_u16(self.mem_read_u16(self.program_counter)),
             AddressingMode::Indirect_X => {
                 let base = self.mem_read(self.program_counter);
                 let ptr = base.wrapping_add(self.register_x);
@@ -202,11 +204,6 @@ impl CPU {
 
     fn tax(&mut self) {
         self.register_x = self.register_a;
-        self.update_zero_and_negative_flags(self.register_x);
-    }
-
-    fn inx(&mut self) {
-        self.register_x = self.register_x.wrapping_add(1);
         self.update_zero_and_negative_flags(self.register_x);
     }
 
@@ -357,5 +354,43 @@ impl CPU {
         let addr = self.get_operand_address(mode);
         let value = self.mem_read(addr);
         self.compare(self.register_y, value);
+    }
+
+    fn dec(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let value = self.mem_read(addr).wrapping_sub(1);
+        self.update_zero_and_negative_flags(value);
+        self.mem_write(addr, value);
+    }
+
+    fn dex(&mut self) {
+        self.register_x = self.register_x.wrapping_sub(1);
+        self.update_zero_and_negative_flags(self.register_x);
+    }
+
+    fn dey(&mut self) {
+        self.register_y = self.register_y.wrapping_sub(1);
+        self.update_zero_and_negative_flags(self.register_y);
+    }
+
+    fn inc(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let value = self.mem_read(addr).wrapping_add(1);
+        self.update_zero_and_negative_flags(value);
+        self.mem_write(addr, value);
+    }
+
+    fn inx(&mut self) {
+        self.register_x = self.register_x.wrapping_add(1);
+        self.update_zero_and_negative_flags(self.register_x);
+    }
+
+    fn iny(&mut self) {
+        self.register_y = self.register_y.wrapping_add(1);
+        self.update_zero_and_negative_flags(self.register_y);
+    }
+
+    fn jmp(&mut self, mode: &AddressingMode) {
+        self.program_counter = self.get_operand_address(mode).wrapping_sub(1);
     }
 }
