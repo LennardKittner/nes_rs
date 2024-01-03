@@ -133,7 +133,7 @@ lazy_static! {
         map.insert(0xA0, OpCode::new(0xA0, "LDY", 2, 2, AddressingMode::Immediate, Operation::FnCpuAndAddressing(CPU::ldy)));
         map.insert(0xA4, OpCode::new(0xA4, "LDY", 2, 3, AddressingMode::ZeroPage, Operation::FnCpuAndAddressing(CPU::ldy)));
         map.insert(0xB4, OpCode::new(0xB4, "LDY", 2, 4, AddressingMode::ZeroPage_X, Operation::FnCpuAndAddressing(CPU::ldy)));
-        map.insert(0xAC, OpCode::new(0xAE, "LDY", 3, 4, AddressingMode::Absolute, Operation::FnCpuAndAddressing(CPU::ldy)));
+        map.insert(0xAC, OpCode::new(0xAC, "LDY", 3, 4, AddressingMode::Absolute, Operation::FnCpuAndAddressing(CPU::ldy)));
         map.insert(0xBC, OpCode::new(0xBC, "LDY", 3, 4 /* +1 if page crossed */, AddressingMode::Absolute_X, Operation::FnCpuAndAddressing(CPU::ldy)));
 
         map
