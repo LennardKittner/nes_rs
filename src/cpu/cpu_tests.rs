@@ -414,5 +414,38 @@ fn test_jmp_indirect() {
     cpu.memory[0x0121] = 0xBA;
     cpu.memory[0xBAFC] = 0x00;
     cpu.run();
-    assert_eq!(cpu.program_counter, 0xBAFC);
+    assert_eq!(cpu.program_counter, 0xBAFD);
+}
+
+#[test]
+fn test_jsr() {
+    let mut cpu = CPU::new();
+    cpu.load(&vec![0x20, 0x33, 0x45, 0x00]);
+    cpu.reset();
+    cpu.memory[0x4533] = 0x00;
+    cpu.run();
+    assert_eq!(cpu.program_counter, 0x4534);
+    assert_eq!(cpu.pull_u16(), 0x8002)
+}
+
+#[test]
+fn test_ldx_zero_page_y() {
+    let mut cpu = CPU::new();
+    cpu.load(&vec![0xB6, 0x3A, 0x00]);
+    cpu.reset();
+    cpu.register_y = 0x41;
+    cpu.memory[0x007B] = 0x76;
+    cpu.run();
+    assert_eq!(cpu.register_x, 0x76);
+}
+
+#[test]
+fn test_ldy_zero_absolute_x() {
+    let mut cpu = CPU::new();
+    cpu.load(&vec![0xBC, 0x45, 0x42, 0x00]);
+    cpu.reset();
+    cpu.register_x = 0x33;
+    cpu.memory[0x4278] = 0x17;
+    cpu.run();
+    assert_eq!(cpu.register_y, 0x17);
 }

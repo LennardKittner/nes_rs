@@ -119,11 +119,46 @@ lazy_static! {
         map.insert(0xE8, OpCode::new(0xE8, "INX", 1, 2, AddressingMode::NonAddressing, Operation::FnCpu(CPU::inx)));
         map.insert(0xC8, OpCode::new(0xC8, "INY", 1, 2, AddressingMode::NonAddressing, Operation::FnCpu(CPU::iny)));
 
-        map.insert(0x4C, OpCode::new(0x4C, "JMP", 1, 2, AddressingMode::Absolute, Operation::FnCpuAndAddressing(CPU::jmp)));
-        map.insert(0x6C, OpCode::new(0x6C, "JMP", 1, 2, AddressingMode::Indirect, Operation::FnCpuAndAddressing(CPU::jmp)));
+        map.insert(0x4C, OpCode::new(0x4C, "JMP", 3, 3, AddressingMode::Absolute, Operation::FnCpuAndAddressing(CPU::jmp)));
+        map.insert(0x6C, OpCode::new(0x6C, "JMP", 3, 5, AddressingMode::Indirect, Operation::FnCpuAndAddressing(CPU::jmp)));
+
+        map.insert(0x20, OpCode::new(0x20, "JSR", 3, 6, AddressingMode::Absolute, Operation::FnCpuAndAddressing(CPU::jsr)));
+
+        map.insert(0xA2, OpCode::new(0xA2, "LDX", 2, 2, AddressingMode::Immediate, Operation::FnCpuAndAddressing(CPU::ldx)));
+        map.insert(0xA6, OpCode::new(0xA6, "LDX", 2, 3, AddressingMode::ZeroPage, Operation::FnCpuAndAddressing(CPU::ldx)));
+        map.insert(0xB6, OpCode::new(0xB6, "LDX", 2, 4, AddressingMode::ZeroPage_Y, Operation::FnCpuAndAddressing(CPU::ldx)));
+        map.insert(0xAE, OpCode::new(0xAE, "LDX", 3, 4, AddressingMode::Absolute, Operation::FnCpuAndAddressing(CPU::ldx)));
+        map.insert(0xBE, OpCode::new(0xBE, "LDX", 3, 4 /* +1 if page crossed */, AddressingMode::Absolute_Y, Operation::FnCpuAndAddressing(CPU::ldx)));
+
+        map.insert(0xA0, OpCode::new(0xA0, "LDY", 2, 2, AddressingMode::Immediate, Operation::FnCpuAndAddressing(CPU::ldy)));
+        map.insert(0xA4, OpCode::new(0xA4, "LDY", 2, 3, AddressingMode::ZeroPage, Operation::FnCpuAndAddressing(CPU::ldy)));
+        map.insert(0xB4, OpCode::new(0xB4, "LDY", 2, 4, AddressingMode::ZeroPage_X, Operation::FnCpuAndAddressing(CPU::ldy)));
+        map.insert(0xAC, OpCode::new(0xAE, "LDY", 3, 4, AddressingMode::Absolute, Operation::FnCpuAndAddressing(CPU::ldy)));
+        map.insert(0xBC, OpCode::new(0xBC, "LDY", 3, 4 /* +1 if page crossed */, AddressingMode::Absolute_X, Operation::FnCpuAndAddressing(CPU::ldy)));
 
         map
     };
+}
+
+#[test]
+fn test_size() {
+    use std::collections::HashSet;
+    for opcode in CPU_INSTRUCTIONS.values() {
+        match opcode.mode {
+            AddressingMode::Immediate => assert_eq!(opcode.size, 2),
+            AddressingMode::ZeroPage => assert_eq!(opcode.size, 2),
+            AddressingMode::ZeroPage_X => assert_eq!(opcode.size, 2),
+            AddressingMode::ZeroPage_Y => assert_eq!(opcode.size, 2),
+            AddressingMode::Absolute => assert_eq!(opcode.size, 3),
+            AddressingMode::Absolute_X => assert_eq!(opcode.size, 3),
+            AddressingMode::Absolute_Y => assert_eq!(opcode.size, 3),
+            AddressingMode::Indirect => assert_eq!(opcode.size, 3),
+            AddressingMode::Indirect_X => assert_eq!(opcode.size, 2),
+            AddressingMode::Indirect_Y => assert_eq!(opcode.size, 2),
+            AddressingMode::Relative => assert_eq!(opcode.size, 2),
+            AddressingMode::NonAddressing => assert_eq!(opcode.size, 1),
+        }
+    }
 }
 
 #[test]
