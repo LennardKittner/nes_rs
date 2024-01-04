@@ -424,8 +424,12 @@ fn test_jsr() {
     cpu.reset();
     cpu.memory[0x4533] = 0x00;
     cpu.run();
+    // pull the stuff brk pushes
+    cpu.pull();
+    cpu.pull_u16();
     assert_eq!(cpu.program_counter, 0x4534);
-    assert_eq!(cpu.pull_u16(), 0x8002)
+    assert_eq!(cpu.pull_u16(), 0x8002);
+    assert_eq!(cpu.register_s, 0xFF);
 }
 
 #[test]
@@ -479,7 +483,12 @@ fn test_pha() {
     cpu.reset();
     cpu.register_a = 0b0100_1001;
     cpu.run();
+    // pull the stuff brk pushes
+    cpu.pull();
+    cpu.pull_u16();
     assert_eq!(cpu.pull(), 0b0100_1001);
+    assert_eq!(cpu.register_s, 0xFF);
+
 }
 
 #[test]
@@ -490,7 +499,11 @@ fn test_php() {
     cpu.set_flag(Flags::Carry);
     cpu.set_flag(Flags::Negative);
     cpu.run();
-    assert_eq!(cpu.pull(), 0b1000_0001);
+    // pull the stuff brk pushes
+    cpu.pull();
+    cpu.pull_u16();
+    assert_eq!(cpu.pull(), 0b1001_0001);
+    assert_eq!(cpu.register_s, 0xFF);
 }
 
 #[test]
@@ -679,6 +692,9 @@ fn test_txs_neg() {
     cpu.reset();
     cpu.register_x = 0xF2;
     cpu.run();
+    // pull the stuff brk pushes
+    cpu.pull();
+    cpu.pull_u16();
     assert_eq!(cpu.register_s, 0xF2);
     assert!(!cpu.get_flag(Flags::Zero));
 }

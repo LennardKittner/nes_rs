@@ -28,8 +28,8 @@ enum Flags {
     Zero              = 0b0000_0010,
     InterruptDisabled = 0b0000_0100,
     DecimalMode       = 0b0000_1000,
-    B                 = 0b0001_0000,
-    One               = 0b0010_0000,
+    B1                = 0b0001_0000,
+    B2                = 0b0010_0000,
     Overflow          = 0b0100_0000,
     Negative          = 0b1000_0000,
 }
@@ -54,13 +54,15 @@ impl Default for CPU {
 //TODO: interrupts
 impl CPU {
     const STACK_BASE_ADDRESS: u16 = 0x0100;
+    const STACK_END: u8 = 0xFF;
+
     pub fn new() -> Self {
         CPU {
             register_a: 0,
             register_x: 0,
             register_y: 0,
-            register_s: 0xFF,
-            status: 0,//TODO: init status
+            register_s: CPU::STACK_END,
+            status: 0,
             program_counter: 0,
             memory: [0; 0xFFFF],
         }
@@ -81,7 +83,7 @@ impl CPU {
         self.register_x = 0;
         self.register_a = 0;
         self.register_y = 0;
-        self.register_s = 0xFF;
+        self.register_s = CPU::STACK_END;
         self.status = 0;
         self.program_counter = self.mem_read_u16(0xFFFC);
     }
@@ -90,12 +92,12 @@ impl CPU {
         loop {
             let op_code = self.mem_read(self.program_counter);
             self.program_counter += 1;
-            if op_code == 0 {
-                return;
-            }
 
             if let Some(instruction) = CPU_INSTRUCTIONS.get(&op_code) {
                 instruction.execute(self);
+                if op_code == 0x00 {
+                    return;
+                }
             } else {
                 panic!("Unknown opcode {:x}", op_code);
             }
@@ -184,8 +186,6 @@ impl CPU {
     fn push_u16(&mut self, data: u16) {
         self.push((data >> 8) as u8);
         self.push((data & 0xFF) as u8);
-        self.mem_write_u16(CPU::STACK_BASE_ADDRESS + self.register_s as u16 - 1, data);
-        self.register_s = self.register_s.wrapping_sub(2);
     }
 
     fn pull_u16(&mut self) -> u16 {
@@ -278,6 +278,12 @@ impl CPU {
     }
 
     fn nop() {}
+
+    fn brk(&mut self) {
+        //TODO: do anything else on BRK?
+        self.push_u16(self.program_counter);
+        self.push(self.status & Flags::B1 as u8);
+    }
 
     fn add_to_a(&mut self, value: u8) {
         let neg1 = self.register_a & 0b1000_0000 != 0;
@@ -495,7 +501,7 @@ impl CPU {
     }
 
     fn php(&mut self) {
-        self.push(self.status);
+        self.push(self.status | Flags::B1 as u8);
     }
 
     fn pla(&mut self) {
