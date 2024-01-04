@@ -21,6 +21,7 @@ pub enum AddressingMode {
     NonAddressing,
 }
 
+#[derive(Copy, Clone)]
 #[repr(u8)]
 enum Flags {
     Carry             = 0b0000_0001,
@@ -50,6 +51,7 @@ impl Default for CPU {
     }
 }
 
+//TODO: interrupts
 impl CPU {
     const STACK_BASE_ADDRESS: u16 = 0x0100;
     pub fn new() -> Self {
@@ -58,7 +60,7 @@ impl CPU {
             register_x: 0,
             register_y: 0,
             register_s: 0xFF,
-            status: 0,
+            status: 0,//TODO: init status
             program_counter: 0,
             memory: [0; 0xFFFF],
         }
@@ -253,9 +255,7 @@ impl CPU {
 
     fn nop() {}
 
-    fn adc(&mut self, mode: &AddressingMode) {
-        let addr = self.get_operand_address(mode);
-        let value = self.mem_read(addr);
+    fn add_to_a(&mut self, value: u8) {
         let neg1 = self.register_a & 0b1000_0000 != 0;
         let neg2 = value & 0b1000_0000 != 0;
         let (result, carry1) = self.register_a.overflowing_add(value);
@@ -264,6 +264,12 @@ impl CPU {
         self.update_flag(Flags::Carry, carry1 | carry2);
         self.update_flag(Flags::Overflow, (neg1 & neg2 & (self.register_a & 0b1000_0000 == 0)) || (!neg1 & !neg2 & (self.register_a & 0b1000_0000 != 0)));
         self.update_zero_and_negative_flags(self.register_a);
+    }
+
+    fn adc(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let value = self.mem_read(addr);
+        self.add_to_a(value);
     }
 
     fn and(&mut self, mode: &AddressingMode) {
@@ -441,5 +447,92 @@ impl CPU {
         let addr = self.get_operand_address(mode);
         self.push_u16(self.program_counter.wrapping_add(1)); // +1 because the program_counter was not incremented yet
         self.program_counter = addr.wrapping_sub(2); // -2 because the program_counter will be incremented by 2 (the size of the instruction - 1)
+    }
+
+    fn lsr(&mut self, mode: &AddressingMode) {
+        if *mode == AddressingMode::NonAddressing {
+            let carry = self.register_a & 0b0000_0001 != 0;
+            self.register_a = self.register_a.wrapping_shr(1);
+            self.update_flag(Flags::Carry, carry);
+            self.update_zero_and_negative_flags(self.register_a);
+        } else {
+            let addr = self.get_operand_address(mode);
+            let mut value = self.mem_read(addr);
+            let carry = value & 0b0000_0001 != 0;
+            value = value.wrapping_shr(1);
+            self.update_flag(Flags::Carry, carry);
+            self.update_zero_and_negative_flags(value);
+            self.mem_write(addr, value);
+        }
+    }
+
+    fn pha(&mut self) {
+        self.push(self.register_a);
+    }
+
+    fn php(&mut self) {
+        self.push(self.status);
+    }
+
+    fn pla(&mut self) {
+        self.register_a = self.pull();
+        self.update_zero_and_negative_flags(self.register_a);
+    }
+
+    fn plp(&mut self) {
+        self.status = self.pull();
+    }
+
+    fn rol(&mut self, mode: &AddressingMode) {
+        if *mode == AddressingMode::NonAddressing {
+            let carry = self.register_a & 0b1000_0000 != 0;
+            self.register_a = self.register_a.wrapping_shl(1);
+            self.register_a |= if self.get_flag(Flags::Carry) { 1 } else { 0 };
+            self.update_flag(Flags::Carry, carry);
+            self.update_zero_and_negative_flags(self.register_a);
+        } else {
+            let addr = self.get_operand_address(mode);
+            let mut value = self.mem_read(addr);
+            let carry = value & 0b1000_0000 != 0;
+            value = value.wrapping_shl(1);
+            value |= if self.get_flag(Flags::Carry) { 1 } else { 0 };
+            self.update_flag(Flags::Carry, carry);
+            self.update_flag(Flags::Negative, value & 0b1000_0000 != 0);
+            self.mem_write(addr, value);
+        }
+    }
+
+    fn ror(&mut self, mode: &AddressingMode) {
+        if *mode == AddressingMode::NonAddressing {
+            let carry = self.register_a & 0b0000_0001 != 0;
+            self.register_a = self.register_a.wrapping_shr(1);
+            self.register_a |= if self.get_flag(Flags::Carry) { 0b1000_0000 } else { 0 };
+            self.update_flag(Flags::Carry, carry);
+            self.update_zero_and_negative_flags(self.register_a);
+        } else {
+            let addr = self.get_operand_address(mode);
+            let mut value = self.mem_read(addr);
+            let carry = value & 0b0000_0001 != 0;
+            value = value.wrapping_shr(1);
+            value |= if self.get_flag(Flags::Carry) { 0b1000_0000 } else { 0 };
+            self.update_flag(Flags::Carry, carry);
+            self.update_flag(Flags::Negative, value & 0b1000_0000 != 0);
+            self.mem_write(addr, value);
+        }
+    }
+
+    fn rti(&mut self) {
+        self.status = self.pull();
+        self.program_counter = self.pull_u16();
+    }
+
+    fn rts(&mut self) {
+        self.program_counter = self.pull_u16().wrapping_add(1);
+    }
+
+    fn sbc(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let value = self.mem_read(addr);
+        self.add_to_a(value.wrapping_neg());
     }
 }

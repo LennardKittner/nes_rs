@@ -449,3 +449,152 @@ fn test_ldy_zero_absolute_x() {
     cpu.run();
     assert_eq!(cpu.register_y, 0x17);
 }
+
+#[test]
+fn test_lsr_carry() {
+    let mut cpu = CPU::new();
+    cpu.load(&vec![0x4A, 0x00]);
+    cpu.reset();
+    cpu.register_a = 0b0100_1001;
+    cpu.run();
+    assert_eq!(cpu.register_a, 0b0010_0100);
+    assert_eq!(cpu.get_flag(Flags::Carry), true);
+}
+
+#[test]
+fn test_lsr_zero_page() {
+    let mut cpu = CPU::new();
+    cpu.load(&vec![0x46, 0xAA,0x00]);
+    cpu.reset();
+    cpu.memory[0xAA] = 0b0100_1001;
+    cpu.run();
+    assert_eq!(cpu.memory[0xAA], 0b0010_0100);
+    assert_eq!(cpu.get_flag(Flags::Carry), true);
+}
+
+#[test]
+fn test_pha() {
+    let mut cpu = CPU::new();
+    cpu.load(&vec![0x48, 0x00]);
+    cpu.reset();
+    cpu.register_a = 0b0100_1001;
+    cpu.run();
+    assert_eq!(cpu.pull(), 0b0100_1001);
+}
+
+#[test]
+fn test_php() {
+    let mut cpu = CPU::new();
+    cpu.load(&vec![0x08, 0x00]);
+    cpu.reset();
+    cpu.set_flag(Flags::Carry);
+    cpu.set_flag(Flags::Negative);
+    cpu.run();
+    assert_eq!(cpu.pull(), 0b1000_0001);
+}
+
+#[test]
+fn test_pla() {
+    let mut cpu = CPU::new();
+    cpu.load(&vec![0x68, 0x00]);
+    cpu.reset();
+    cpu.push(0xAB);
+    cpu.run();
+    assert_eq!(cpu.register_a, 0xAB);
+}
+
+#[test]
+fn test_plp() {
+    let mut cpu = CPU::new();
+    cpu.load(&vec![0x28, 0x00]);
+    cpu.reset();
+    cpu.push(0b1000_0011);
+    cpu.run();
+    assert!(cpu.get_flag(Flags::Carry));
+    assert!(cpu.get_flag(Flags::Negative));
+    assert!(cpu.get_flag(Flags::Zero));
+    assert!(!cpu.get_flag(Flags::Overflow));
+}
+
+#[test]
+fn test_rol_carry_absolute() {
+    let mut cpu = CPU::new();
+    cpu.load(&vec![0x2E, 0x99, 0x55, 0x00]);
+    cpu.reset();
+    cpu.memory[0x5599] = 0b0100_1000;
+    cpu.set_flag(Flags::Carry);
+    cpu.run();
+    assert_eq!(cpu.memory[0x5599], 0b1001_0001);
+    assert_eq!(cpu.get_flag(Flags::Carry), false);
+}
+
+#[test]
+fn test_rol_carry_a() {
+    let mut cpu = CPU::new();
+    cpu.load(&vec![0x2A, 0x00]);
+    cpu.reset();
+    cpu.register_a = 0b0001_1000;
+    cpu.set_flag(Flags::Carry);
+    cpu.run();
+    assert_eq!(cpu.register_a, 0b0011_0001);
+    assert_eq!(cpu.get_flag(Flags::Carry), false);
+}
+
+#[test]
+fn test_ror_carry_neg_absolute() {
+    let mut cpu = CPU::new();
+    cpu.load(&vec![0x6E, 0x99, 0x55, 0x00]);
+    cpu.reset();
+    cpu.memory[0x5599] = 0b0100_1001;
+    cpu.set_flag(Flags::Carry);
+    cpu.run();
+    assert_eq!(cpu.memory[0x5599], 0b1010_0100);
+    assert_eq!(cpu.get_flag(Flags::Negative), true);
+    assert_eq!(cpu.get_flag(Flags::Carry), true);
+}
+
+#[test]
+fn test_ror_zero_and_carry_a() {
+    let mut cpu = CPU::new();
+    cpu.load(&vec![0x6A, 0x00]);
+    cpu.reset();
+    cpu.register_a = 0b0000_0001;
+    cpu.run();
+    assert_eq!(cpu.register_a, 0x00);
+    assert_eq!(cpu.get_flag(Flags::Carry), true);
+}
+
+#[test]
+fn test_rti() {
+    let mut cpu = CPU::new();
+    cpu.load(&vec![0x40, 0x00]);
+    cpu.reset();
+    cpu.push_u16(0xAABB);
+    cpu.push(0b1000_0010);
+    cpu.memory[0xAABB] = 0x00;
+    cpu.run();
+    assert_eq!(cpu.program_counter, 0xAABC);
+    assert_eq!(cpu.status, 0b1000_0010);
+}
+
+#[test]
+fn test_rts() {
+    let mut cpu = CPU::new();
+    cpu.load(&vec![0x60, 0x00]);
+    cpu.reset();
+    cpu.push_u16(0xAABA);
+    cpu.memory[0xAABB] = 0x00;
+    cpu.run();
+    assert_eq!(cpu.program_counter, 0xAABC);
+}
+
+#[test]
+fn test_sbc_overflow() {
+    let mut cpu = CPU::new();
+    cpu.load(&vec![0xE9, 0b0000_0010, 0x00]);
+    cpu.reset();
+    cpu.register_a = 0x01;
+    cpu.run();
+    assert_eq!(cpu.register_a, 0b1111_1111);
+    assert_eq!(cpu.get_flag(Flags::Negative), true);
+}

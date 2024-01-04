@@ -136,6 +136,41 @@ lazy_static! {
         map.insert(0xAC, OpCode::new(0xAC, "LDY", 3, 4, AddressingMode::Absolute, Operation::FnCpuAndAddressing(CPU::ldy)));
         map.insert(0xBC, OpCode::new(0xBC, "LDY", 3, 4 /* +1 if page crossed */, AddressingMode::Absolute_X, Operation::FnCpuAndAddressing(CPU::ldy)));
 
+        map.insert(0x4A, OpCode::new(0x4A, "LSR", 1, 2, AddressingMode::NonAddressing, Operation::FnCpuAndAddressing(CPU::lsr)));
+        map.insert(0x46, OpCode::new(0x46, "LSR", 2, 5, AddressingMode::ZeroPage, Operation::FnCpuAndAddressing(CPU::lsr)));
+        map.insert(0x56, OpCode::new(0x56, "LSR", 2, 6, AddressingMode::ZeroPage_X, Operation::FnCpuAndAddressing(CPU::lsr)));
+        map.insert(0x4E, OpCode::new(0x4E, "LSR", 3, 6, AddressingMode::Absolute, Operation::FnCpuAndAddressing(CPU::lsr)));
+        map.insert(0x5E, OpCode::new(0x5E, "LSR", 3, 7, AddressingMode::Absolute_X, Operation::FnCpuAndAddressing(CPU::lsr)));
+
+        map.insert(0x48, OpCode::new(0x48, "PHA", 1, 3, AddressingMode::NonAddressing, Operation::FnCpu(CPU::pha)));
+        map.insert(0x08, OpCode::new(0x08, "PHP", 1, 3, AddressingMode::NonAddressing, Operation::FnCpu(CPU::php)));
+        map.insert(0x68, OpCode::new(0x68, "PLA", 1, 4, AddressingMode::NonAddressing, Operation::FnCpu(CPU::pla)));
+        map.insert(0x28, OpCode::new(0x28, "PLP", 1, 4, AddressingMode::NonAddressing, Operation::FnCpu(CPU::plp)));
+
+        map.insert(0x2A, OpCode::new(0x2A, "ROL", 1, 2, AddressingMode::NonAddressing, Operation::FnCpuAndAddressing(CPU::rol)));
+        map.insert(0x26, OpCode::new(0x26, "ROL", 2, 5, AddressingMode::ZeroPage, Operation::FnCpuAndAddressing(CPU::rol)));
+        map.insert(0x36, OpCode::new(0x36, "ROL", 2, 6, AddressingMode::ZeroPage_X, Operation::FnCpuAndAddressing(CPU::rol)));
+        map.insert(0x2E, OpCode::new(0x2E, "ROL", 3, 6, AddressingMode::Absolute, Operation::FnCpuAndAddressing(CPU::rol)));
+        map.insert(0x3E, OpCode::new(0x3E, "ROL", 3, 7, AddressingMode::Absolute_X, Operation::FnCpuAndAddressing(CPU::rol)));
+
+        map.insert(0x6A, OpCode::new(0x6A, "ROR", 1, 2, AddressingMode::NonAddressing, Operation::FnCpuAndAddressing(CPU::ror)));
+        map.insert(0x66, OpCode::new(0x66, "ROR", 2, 5, AddressingMode::ZeroPage, Operation::FnCpuAndAddressing(CPU::ror)));
+        map.insert(0x76, OpCode::new(0x76, "ROR", 2, 6, AddressingMode::ZeroPage_X, Operation::FnCpuAndAddressing(CPU::ror)));
+        map.insert(0x6E, OpCode::new(0x6E, "ROR", 3, 6, AddressingMode::Absolute, Operation::FnCpuAndAddressing(CPU::ror)));
+        map.insert(0x7E, OpCode::new(0x7E, "ROR", 3, 7, AddressingMode::Absolute_X, Operation::FnCpuAndAddressing(CPU::ror)));
+
+        map.insert(0x40, OpCode::new(0x40, "RTI", 1, 6, AddressingMode::NonAddressing, Operation::FnCpu(CPU::rti)));
+        map.insert(0x60, OpCode::new(0x60, "RTS", 1, 6, AddressingMode::NonAddressing, Operation::FnCpu(CPU::rts)));
+
+        map.insert(0xE9, OpCode::new(0xE9, "SBC", 2, 2, AddressingMode::Immediate, Operation::FnCpuAndAddressing(CPU::sbc)));
+        map.insert(0xE5, OpCode::new(0xE5, "SBC", 2, 3, AddressingMode::ZeroPage, Operation::FnCpuAndAddressing(CPU::sbc)));
+        map.insert(0xF5, OpCode::new(0xF5, "SBC", 2, 4, AddressingMode::ZeroPage_X, Operation::FnCpuAndAddressing(CPU::sbc)));
+        map.insert(0xED, OpCode::new(0xED, "SBC", 3, 4, AddressingMode::Absolute, Operation::FnCpuAndAddressing(CPU::sbc)));
+        map.insert(0xFD, OpCode::new(0xFD, "SBC", 3, 4 /* +1 if page crossed */, AddressingMode::Absolute_X, Operation::FnCpuAndAddressing(CPU::sbc)));
+        map.insert(0xF9, OpCode::new(0xF9, "SBC", 3, 4 /* +1 if page crossed */, AddressingMode::Absolute_Y, Operation::FnCpuAndAddressing(CPU::sbc)));
+        map.insert(0xE1, OpCode::new(0xE1, "SBC", 2, 6, AddressingMode::Indirect_X, Operation::FnCpuAndAddressing(CPU::sbc)));
+        map.insert(0xF1, OpCode::new(0xF1, "SBC", 2, 5 /* +1 if page crossed */, AddressingMode::Indirect_Y, Operation::FnCpuAndAddressing(CPU::sbc)));
+
         map
     };
 }
