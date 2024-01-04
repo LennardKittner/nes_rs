@@ -598,3 +598,98 @@ fn test_sbc_overflow() {
     assert_eq!(cpu.register_a, 0b1111_1111);
     assert_eq!(cpu.get_flag(Flags::Negative), true);
 }
+
+#[test]
+fn test_sec() {
+    let mut cpu = CPU::new();
+    cpu.load_and_run(&vec![0x38, 0x00]);
+    assert!(cpu.get_flag(Flags::Carry));
+}
+
+#[test]
+fn test_sed() {
+    let mut cpu = CPU::new();
+    cpu.load_and_run(&vec![0xF8, 0x00]);
+    assert!(cpu.get_flag(Flags::DecimalMode));
+}
+
+#[test]
+fn test_sei() {
+    let mut cpu = CPU::new();
+    cpu.load_and_run(&vec![0x78, 0x00]);
+    assert!(cpu.get_flag(Flags::InterruptDisabled));
+}
+
+#[test]
+fn test_stx_zero_page_y() {
+    let mut cpu = CPU::new();
+    cpu.load(&vec![0x96, 0x24, 0x00]);
+    cpu.reset();
+    cpu.register_y = 0x53;
+    cpu.register_x = 0xFE;
+    cpu.run();
+    assert_eq!(cpu.memory[0x77], 0xFE);
+}
+
+#[test]
+fn test_sty_zero_page_x() {
+    let mut cpu = CPU::new();
+    cpu.load(&vec![0x94, 0x24, 0x00]);
+    cpu.reset();
+    cpu.register_x = 0x53;
+    cpu.register_y = 0xFE;
+    cpu.run();
+    assert_eq!(cpu.memory[0x77], 0xFE);
+}
+
+#[test]
+fn test_tay_neg() {
+    let mut cpu = CPU::new();
+    cpu.load(&vec![0xA8, 0x00]);
+    cpu.reset();
+    cpu.register_a = 0xFF;
+    cpu.run();
+    assert_eq!(cpu.register_y, 0xFF);
+    assert!(cpu.get_flag(Flags::Negative));
+}
+
+#[test]
+fn test_tsx_neg() {
+    let mut cpu = CPU::new();
+    cpu.load_and_run(&vec![0xBA, 0x00]);
+    assert_eq!(cpu.register_x, 0xFF);
+    assert!(cpu.get_flag(Flags::Negative));
+}
+
+#[test]
+fn test_txa_zero() {
+    let mut cpu = CPU::new();
+    cpu.load(&vec![0x8A, 0x00]);
+    cpu.reset();
+    cpu.register_a = 0x12;
+    cpu.run();
+    assert_eq!(cpu.register_a, 0x00);
+    assert!(cpu.get_flag(Flags::Zero));
+}
+
+#[test]
+fn test_txs_neg() {
+    let mut cpu = CPU::new();
+    cpu.load(&vec![0x9A, 0x00]);
+    cpu.reset();
+    cpu.register_x = 0xF2;
+    cpu.run();
+    assert_eq!(cpu.register_s, 0xF2);
+    assert!(!cpu.get_flag(Flags::Zero));
+}
+
+#[test]
+fn test_tya_zero() {
+    let mut cpu = CPU::new();
+    cpu.load(&vec![0x98, 0x00]);
+    cpu.reset();
+    cpu.register_a = 0x12;
+    cpu.run();
+    assert_eq!(cpu.register_a, 0x00);
+    assert!(cpu.get_flag(Flags::Zero));
+}

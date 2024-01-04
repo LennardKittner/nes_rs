@@ -171,6 +171,24 @@ lazy_static! {
         map.insert(0xE1, OpCode::new(0xE1, "SBC", 2, 6, AddressingMode::Indirect_X, Operation::FnCpuAndAddressing(CPU::sbc)));
         map.insert(0xF1, OpCode::new(0xF1, "SBC", 2, 5 /* +1 if page crossed */, AddressingMode::Indirect_Y, Operation::FnCpuAndAddressing(CPU::sbc)));
 
+        map.insert(0x38, OpCode::new(0x38, "SEC", 1, 2, AddressingMode::NonAddressing, Operation::FnCpu(CPU::sec)));
+        map.insert(0xF8, OpCode::new(0xF8, "SED", 1, 2, AddressingMode::NonAddressing, Operation::FnCpu(CPU::sed)));
+        map.insert(0x78, OpCode::new(0x78, "SEI", 1, 2, AddressingMode::NonAddressing, Operation::FnCpu(CPU::sei)));
+
+        map.insert(0x86, OpCode::new(0x86, "STX", 2, 3, AddressingMode::ZeroPage, Operation::FnCpuAndAddressing(CPU::stx)));
+        map.insert(0x96, OpCode::new(0x96, "STX", 2, 4, AddressingMode::ZeroPage_Y, Operation::FnCpuAndAddressing(CPU::stx)));
+        map.insert(0x8E, OpCode::new(0x8E, "STX", 3, 4, AddressingMode::Absolute, Operation::FnCpuAndAddressing(CPU::stx)));
+
+        map.insert(0x84, OpCode::new(0x84, "STY", 2, 3, AddressingMode::ZeroPage, Operation::FnCpuAndAddressing(CPU::sty)));
+        map.insert(0x94, OpCode::new(0x94, "STY", 2, 4, AddressingMode::ZeroPage_X, Operation::FnCpuAndAddressing(CPU::sty)));
+        map.insert(0x8C, OpCode::new(0x8C, "STY", 3, 4, AddressingMode::Absolute, Operation::FnCpuAndAddressing(CPU::sty)));
+
+        map.insert(0xA8, OpCode::new(0xA8, "TAY", 1, 2, AddressingMode::NonAddressing, Operation::FnCpu(CPU::tay)));
+        map.insert(0xBA, OpCode::new(0xBA, "TSX", 1, 2, AddressingMode::NonAddressing, Operation::FnCpu(CPU::tsx)));
+        map.insert(0x8A, OpCode::new(0x8A, "TXA", 1, 2, AddressingMode::NonAddressing, Operation::FnCpu(CPU::txa)));
+        map.insert(0x9A, OpCode::new(0x9A, "TXS", 1, 2, AddressingMode::NonAddressing, Operation::FnCpu(CPU::txs)));
+        map.insert(0x98, OpCode::new(0x98, "TYA", 1, 2, AddressingMode::NonAddressing, Operation::FnCpu(CPU::tya)));
+
         map
     };
 }
