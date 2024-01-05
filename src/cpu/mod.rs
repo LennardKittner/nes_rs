@@ -68,15 +68,15 @@ impl CPU {
         }
     }
 
-    pub fn load_and_run(&mut self, program: &[u8]) {
-        self.load(program);
+    pub fn load_and_run(&mut self, program: &[u8], at: u16) {
+        self.load(program, at);
         self.reset();
         self.run();
     }
 
-    pub fn load(&mut self, program: &[u8]) {
-        self.memory[0x8000..(0x8000 + program.len())].copy_from_slice(program);
-        self.mem_write_u16(0xFFFC, 0x8000);
+    pub fn load(&mut self, program: &[u8], at: u16) {
+        self.memory[(at as usize)..((at as usize) + program.len())].copy_from_slice(program);
+        self.mem_write_u16(0xFFFC, at);
     }
 
     pub fn reset(&mut self) {
@@ -89,7 +89,15 @@ impl CPU {
     }
 
     pub fn run(&mut self) {
+        self.run_with_callback(|_| {});
+    }
+
+    pub fn run_with_callback<F>(&mut self, mut callback: F)
+    where
+        F: FnMut(&mut CPU)
+    {
         loop {
+            callback(self);
             let op_code = self.mem_read(self.program_counter);
             self.program_counter += 1;
 
@@ -141,9 +149,9 @@ impl CPU {
                 deref_base.wrapping_add(self.register_y as u16)
             }
             AddressingMode::Relative => {
-                let mut offset = self.mem_read(self.program_counter) as i8;
-                if offset < 0 {
-                   offset *= -1;
+                let mut offset = self.mem_read(self.program_counter);
+                if offset & 0b100_0000 != 0 {
+                    offset = offset.wrapping_neg();
                     self.program_counter.wrapping_sub(offset as u16)
                 } else {
                     self.program_counter + (offset as u16)
@@ -153,7 +161,7 @@ impl CPU {
         }
     }
 
-    fn mem_read(&self, addr: u16) -> u8 {
+    pub fn mem_read(&self, addr: u16) -> u8 {
         self.memory[addr as usize]
     }
 
@@ -161,7 +169,7 @@ impl CPU {
         u16::from_le_bytes([self.mem_read(addr), self.mem_read(addr + 1)])
     }
 
-    fn mem_write(&mut self, addr: u16, data: u8) {
+    pub fn mem_write(&mut self, addr: u16, data: u8) {
         self.memory[addr as usize] = data;
     }
 
@@ -563,7 +571,8 @@ impl CPU {
     fn sbc(&mut self, mode: &AddressingMode) {
         let addr = self.get_operand_address(mode);
         let value = self.mem_read(addr);
-        self.add_to_a(value.wrapping_neg());
+        // The value has to be bitwise negated instead of arithmetically negated because of the carry
+        self.add_to_a(!value);
     }
 
     fn sec(&mut self) {
