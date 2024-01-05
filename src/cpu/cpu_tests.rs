@@ -283,7 +283,7 @@ fn test_clv() {
 #[test]
 fn test_cmp_eq() {
     let mut cpu = CPU::new();
-    cpu.load(&vec![0xC9, 0x50], 0x8000);
+    cpu.load(&vec![0xC9, 0x50, 0x00], 0x8000);
     cpu.reset();
     cpu.register_a = 0x50;
     cpu.run();
@@ -295,7 +295,7 @@ fn test_cmp_eq() {
 #[test]
 fn test_cmp_lt() {
     let mut cpu = CPU::new();
-    cpu.load(&vec![0xC9, 0x70], 0x8000);
+    cpu.load(&vec![0xC9, 0x70, 0x00], 0x8000);
     cpu.reset();
     cpu.register_a = 0x65;
     cpu.run();
@@ -307,7 +307,7 @@ fn test_cmp_lt() {
 #[test]
 fn test_cmp_gt() {
     let mut cpu = CPU::new();
-    cpu.load(&vec![0xC9, 0x30], 0x8000);
+    cpu.load(&vec![0xC9, 0x30, 0x00], 0x8000);
     cpu.reset();
     cpu.register_a = 0x91;
     cpu.run();
@@ -319,7 +319,7 @@ fn test_cmp_gt() {
 #[test]
 fn test_cpx_gt() {
     let mut cpu = CPU::new();
-    cpu.load(&vec![0xE0, 0x32], 0x8000);
+    cpu.load(&vec![0xE0, 0x32, 0x00], 0x8000);
     cpu.reset();
     cpu.register_x = 0x93;
     cpu.run();
@@ -331,7 +331,7 @@ fn test_cpx_gt() {
 #[test]
 fn test_cpy_lt() {
     let mut cpu = CPU::new();
-    cpu.load(&vec![0xE0, 0x52], 0x8000);
+    cpu.load(&vec![0xC0, 0x52, 0x00], 0x8000);
     cpu.reset();
     cpu.register_y = 0x33;
     cpu.run();
@@ -720,4 +720,55 @@ fn test_tya_zero() {
     cpu.run();
     assert_eq!(cpu.register_a, 0x00);
     assert!(cpu.get_flag(Flags::Zero));
+}
+
+#[test]
+fn test_nop() {
+    let mut cpu = CPU::new();
+    cpu.load(&vec![0xEA, 0x00], 0x8000);
+    cpu.reset();
+    cpu.run();
+    assert_eq!(cpu.program_counter, 0x8002);
+}
+
+#[test]
+fn test_ora_neg_indirect_y() {
+    let mut cpu = CPU::new();
+    cpu.load(&vec![0x11, 0x10, 0x00], 0x8000);
+    cpu.reset();
+    cpu.mem_write(0x10, 0x22);
+    cpu.register_y = 0x20;
+    cpu.register_a = 0b0010_1100;
+    cpu.mem_write(0x42, 0b1000_0000);
+    cpu.run();
+    assert_eq!(cpu.register_a, 0b1010_1100);
+    assert_eq!(cpu.get_flag(Flags::Negative), true);
+}
+
+#[test]
+fn test_ora_neg_indirect_x() {
+    let mut cpu = CPU::new();
+    cpu.load(&vec![0x01, 0x10, 0x00], 0x8000);
+    cpu.reset();
+    cpu.register_x = 0x20;
+    cpu.mem_write(0x30, 0x22);
+    cpu.mem_write(0x31, 0x32);
+    cpu.register_a = 0b0010_1100;
+    cpu.mem_write(0x3222, 0b1000_0000);
+    cpu.run();
+    assert_eq!(cpu.register_a, 0b1010_1100);
+    assert_eq!(cpu.get_flag(Flags::Negative), true);
+}
+
+#[test]
+fn test_ora_neg_absolute_y() {
+    let mut cpu = CPU::new();
+    cpu.load(&vec![0x19, 0x10, 0x22, 0x00], 0x8000);
+    cpu.reset();
+    cpu.register_y = 0x35;
+    cpu.mem_write(0x2245, 0b1000_0000);
+    cpu.register_a = 0b0010_1100;
+    cpu.run();
+    assert_eq!(cpu.register_a, 0b1010_1100);
+    assert_eq!(cpu.get_flag(Flags::Negative), true);
 }

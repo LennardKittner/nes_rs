@@ -7,10 +7,6 @@ use sdl2::pixels::{Color, PixelFormatEnum};
 use nes_rs::cpu::CPU;
 
 fn main() {
-    // println!("{:b}", (3u8 as i8 * -1) as u8);
-    // println!("{:b}", 3u8.wrapping_neg());
-    // println!("{:b}", (3u8 as i8).wrapping_neg().wrapping_sub(1) as u8);
-    // return;
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
     let window = video_subsystem
