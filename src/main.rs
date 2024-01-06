@@ -5,6 +5,7 @@ use sdl2::EventPump;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::{Color, PixelFormatEnum};
 use nes_rs::cpu::CPU;
+use nes_rs::bus::{Bus65k, Mem};
 
 fn main() {
     let sdl_context = sdl2::init().unwrap();
@@ -43,7 +44,7 @@ fn main() {
         0xea, 0xca, 0xd0, 0xfb, 0x60
     ];
 
-    let mut cpu = CPU::new();
+    let mut cpu = CPU::new_with_bus(Bus65k::new());
     cpu.load(&game_code, 0x0600);
     cpu.reset();
 

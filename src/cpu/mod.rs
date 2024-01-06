@@ -1,3 +1,4 @@
+use crate::bus::{Bus, Mem};
 use crate::cpu::opcodes::CPU_INSTRUCTIONS;
 
 mod opcodes;
@@ -42,12 +43,22 @@ pub struct CPU {
     register_s: u8,
     status: u8,
     program_counter: u16,
-    memory: [u8; 0xFFFF],
+    bus: Box<dyn Mem>,
 }
 
 impl Default for CPU {
     fn default() -> Self {
         CPU::new()
+    }
+}
+
+impl Mem for CPU {
+    fn mem_read(&self, addr: u16) -> u8 {
+        self.bus.mem_read(addr)
+    }
+
+    fn mem_write(&mut self, addr: u16, data: u8) {
+        self.bus.mem_write(addr, data);
     }
 }
 
@@ -64,8 +75,14 @@ impl CPU {
             register_s: CPU::STACK_END,
             status: 0,
             program_counter: 0,
-            memory: [0; 0xFFFF],
+            bus: Box::new(Bus::new()),
         }
+    }
+
+    pub fn new_with_bus<T: Mem + 'static>(bus: T) -> Self {
+        let mut cpu = CPU::new();
+        cpu.bus = Box::new(bus);
+        cpu
     }
 
     pub fn load_and_run(&mut self, program: &[u8], at: u16) {
@@ -75,7 +92,9 @@ impl CPU {
     }
 
     pub fn load(&mut self, program: &[u8], at: u16) {
-        self.memory[(at as usize)..((at as usize) + program.len())].copy_from_slice(program);
+        for (i, byte) in program.iter().enumerate() {
+            self.mem_write(at + i as u16, *byte);
+        }
         self.mem_write_u16(0xFFFC, at);
     }
 
@@ -159,25 +178,6 @@ impl CPU {
             }
             AddressingMode::NonAddressing => panic!("mode {:?} is not supported", mode),
         }
-    }
-
-    pub fn mem_read(&self, addr: u16) -> u8 {
-        self.memory[addr as usize]
-    }
-
-    fn mem_read_u16(&self, addr: u16) -> u16 {
-        u16::from_le_bytes([self.mem_read(addr), self.mem_read(addr + 1)])
-    }
-
-    pub fn mem_write(&mut self, addr: u16, data: u8) {
-        self.memory[addr as usize] = data;
-    }
-
-    fn mem_write_u16(&mut self, addr: u16, data: u16) {
-        let hi = (data >> 8) as u8;
-        let lo = (data & 0xFF) as u8;
-        self.mem_write(addr, lo);
-        self.mem_write(addr + 1, hi);
     }
 
     fn push(&mut self, data: u8) {
