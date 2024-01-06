@@ -1,5 +1,6 @@
 use crate::bus::{Bus, Mem};
 use crate::cpu::opcodes::CPU_INSTRUCTIONS;
+use crate::rom::Rom;
 
 mod opcodes;
 #[cfg(test)]
@@ -46,12 +47,6 @@ pub struct CPU {
     bus: Box<dyn Mem>,
 }
 
-impl Default for CPU {
-    fn default() -> Self {
-        CPU::new()
-    }
-}
-
 impl Mem for CPU {
     fn mem_read(&self, addr: u16) -> u8 {
         self.bus.mem_read(addr)
@@ -67,7 +62,11 @@ impl CPU {
     const STACK_BASE_ADDRESS: u16 = 0x0100;
     const STACK_END: u8 = 0xFF;
 
-    pub fn new() -> Self {
+    pub fn new(rom: Rom) -> Self {
+        CPU::new_with_bus(Bus::new(rom))
+    }
+
+    pub fn new_with_bus<T: Mem + 'static>(bus: T) -> Self {
         CPU {
             register_a: 0,
             register_x: 0,
@@ -75,14 +74,8 @@ impl CPU {
             register_s: CPU::STACK_END,
             status: 0,
             program_counter: 0,
-            bus: Box::new(Bus::new()),
+            bus: Box::new(bus),
         }
-    }
-
-    pub fn new_with_bus<T: Mem + 'static>(bus: T) -> Self {
-        let mut cpu = CPU::new();
-        cpu.bus = Box::new(bus);
-        cpu
     }
 
     pub fn load_and_run(&mut self, program: &[u8], at: u16) {
