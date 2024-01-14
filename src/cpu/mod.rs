@@ -2,7 +2,7 @@ use crate::bus::{Bus, Mem};
 use crate::cpu::opcodes::CPU_INSTRUCTIONS;
 use crate::rom::Rom;
 
-mod opcodes;
+pub mod opcodes;
 #[cfg(test)]
 mod cpu_tests;
 
@@ -38,13 +38,13 @@ enum Flags {
 
 #[allow(non_snake_case)]
 pub struct CPU {
-    register_a: u8,
-    register_x: u8,
-    register_y: u8,
-    register_s: u8,
-    status: u8,
-    program_counter: u16,
-    bus: Box<dyn Mem>,
+    pub register_a: u8,
+    pub register_x: u8,
+    pub register_y: u8,
+    pub register_s: u8,
+    pub status: u8,
+    pub program_counter: u16,
+    pub bus: Box<dyn Mem>,
 }
 
 impl Mem for CPU {
@@ -60,7 +60,8 @@ impl Mem for CPU {
 //TODO: interrupts
 impl CPU {
     const STACK_BASE_ADDRESS: u16 = 0x0100;
-    const STACK_END: u8 = 0xFF;
+    const STACK_END: u8 = 0xFD;
+    const INITIAL_STATUS: u8 = 0x24;
 
     pub fn new(rom: Rom) -> Self {
         CPU::new_with_bus(Bus::new(rom))
@@ -72,7 +73,7 @@ impl CPU {
             register_x: 0,
             register_y: 0,
             register_s: CPU::STACK_END,
-            status: 0,
+            status: CPU::INITIAL_STATUS,
             program_counter: 0,
             bus: Box::new(bus),
         }
@@ -96,7 +97,7 @@ impl CPU {
         self.register_a = 0;
         self.register_y = 0;
         self.register_s = CPU::STACK_END;
-        self.status = 0;
+        self.status = CPU::INITIAL_STATUS;
         self.program_counter = self.mem_read_u16(0xFFFC);
     }
 

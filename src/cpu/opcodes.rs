@@ -247,11 +247,11 @@ fn test_opcode_matches_key() {
 
 #[allow(dead_code)]
 pub struct OpCode {
-    code: u8,
-    name: &'static str,
-    size: u16,
-    cycles: u8,
-    mode: AddressingMode,
+    pub code: u8,
+    pub name: &'static str,
+    pub size: u16,
+    pub cycles: u8,
+    pub mode: AddressingMode,
     operation: Operation
 }
 

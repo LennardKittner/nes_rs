@@ -430,7 +430,7 @@ fn test_jsr() {
     cpu.pull_u16();
     assert_eq!(cpu.program_counter, 0x4534);
     assert_eq!(cpu.pull_u16(), 0x8002);
-    assert_eq!(cpu.register_s, 0xFF);
+    assert_eq!(cpu.register_s, 0xFD);
 }
 
 #[test]
@@ -488,7 +488,7 @@ fn test_pha() {
     cpu.pull();
     cpu.pull_u16();
     assert_eq!(cpu.pull(), 0b0100_1001);
-    assert_eq!(cpu.register_s, 0xFF);
+    assert_eq!(cpu.register_s, 0xFD);
 
 }
 
@@ -503,8 +503,8 @@ fn test_php() {
     // pull the stuff brk pushes
     cpu.pull();
     cpu.pull_u16();
-    assert_eq!(cpu.pull(), 0b1001_0001);
-    assert_eq!(cpu.register_s, 0xFF);
+    assert_eq!(cpu.pull(), 0b1011_0101);
+    assert_eq!(cpu.register_s, 0xFD);
 }
 
 #[test]
@@ -683,7 +683,7 @@ fn test_tay_neg() {
 fn test_tsx_neg() {
     let mut cpu = CPU::new_with_bus(Bus65k::new());
     cpu.load_and_run(&vec![0xBA, 0x00], 0x8000);
-    assert_eq!(cpu.register_x, 0xFF);
+    assert_eq!(cpu.register_x, 0xFD);
     assert!(cpu.get_flag(Flags::Negative));
 }
 

@@ -1,3 +1,6 @@
+use std::fs::File;
+use std::io::Read;
+
 #[derive(Debug, PartialEq)]
 #[allow(non_camel_case_types)]
 pub enum Mirroring {
@@ -19,6 +22,15 @@ const CHR_ROM_PAGE_SIZE: usize = 8192;
 const HEADER_SIZE: usize = 16;
 
 impl Rom {
+    pub fn load_from_disk(path: &str) -> Result<Self, String> {
+        let mut file = File::open(path).unwrap();
+        let metadata = file.metadata().unwrap();
+        let file_size = metadata.len() as usize;
+        let mut rom_content = Vec::with_capacity(file_size);
+        file.read_to_end(&mut rom_content).unwrap();
+        Rom::new(&rom_content)
+    }
+
     pub fn new(raw: &[u8]) -> Result<Self, String> {
         if &raw[0..4] != NES_TAG.as_bytes() {
             return Err("File is not in iNES file format".to_string());
@@ -53,4 +65,4 @@ impl Rom {
     }
 }
 
-//TODO: test
+//TODO: tests
