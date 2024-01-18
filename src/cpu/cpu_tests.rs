@@ -588,7 +588,7 @@ fn test_rti() {
     cpu.mem_write(0xAABB, 0x00);
     cpu.run();
     assert_eq!(cpu.program_counter, 0xAABC);
-    assert_eq!(cpu.status, 0b1000_0010);
+    assert_eq!(cpu.status, 0b1010_0010);
 }
 
 #[test]

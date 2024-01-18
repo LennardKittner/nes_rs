@@ -16,7 +16,7 @@ pub struct Rom {
     pub screen_mirroring: Mirroring
 }
 
-const NES_TAG: &'static str = "NES\x1A";
+const NES_TAG: &str = "NES\x1A";
 const PRG_ROM_PAGE_SIZE: usize = 16384;
 const CHR_ROM_PAGE_SIZE: usize = 8192;
 const HEADER_SIZE: usize = 16;

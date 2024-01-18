@@ -15,7 +15,7 @@ impl Bus {
     pub fn new(rom: Rom) -> Self {
         Bus {
             cpu_vram: [0; 2048],
-            rom: rom
+            rom
         }
     }
 
@@ -109,4 +109,4 @@ impl Mem for Bus65k {
     }
 }
 
-//TODO: test
+//TODO: tests

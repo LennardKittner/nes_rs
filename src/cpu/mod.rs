@@ -9,6 +9,7 @@ mod cpu_tests;
 #[derive(Debug, Eq, PartialEq)]
 #[allow(non_camel_case_types)]
 pub enum AddressingMode {
+    Accumulator,
     Immediate,
     ZeroPage,
     ZeroPage_X,
@@ -146,7 +147,18 @@ impl CPU {
                 let base = self.mem_read_u16(self.program_counter);
                 base.wrapping_add(self.register_y as u16)
             }
-            AddressingMode::Indirect => self.mem_read_u16(self.mem_read_u16(self.program_counter)),
+            // An original 6502 does not correctly fetch the target address if the indirect vector falls on a page boundary (e.g. $xxFF where xx is any value from $00 to $FF).
+            // In this case fetches the LSB from $xxFF as expected but takes the MSB from $xx00.
+            AddressingMode::Indirect => {
+                let address = self.mem_read_u16(self.program_counter);
+                if address & 0xFF == 0xFF {
+                    let lo = self.mem_read(address);
+                    let hi = self.mem_read(address & 0xFF00);
+                    (hi as u16) << 8 | (lo as u16)
+                } else {
+                    self.mem_read_u16(address)
+                }
+            },
             AddressingMode::Indirect_X => {
                 let base = self.mem_read(self.program_counter);
                 let ptr = base.wrapping_add(self.register_x);
@@ -170,6 +182,7 @@ impl CPU {
                     self.program_counter + (offset as u16)
                 }
             }
+            AddressingMode::Accumulator |
             AddressingMode::NonAddressing => panic!("mode {:?} is not supported", mode),
         }
     }
@@ -326,18 +339,20 @@ impl CPU {
     }
 
     fn asl(&mut self, mode: &AddressingMode) {
-        if *mode == AddressingMode::NonAddressing {
-            let carry = self.register_a & 0b1000_0000 != 0;
-            self.register_a = self.register_a.wrapping_shl(1);
-            self.update_flag(Flags::Carry, carry);
-            self.update_zero_and_negative_flags(self.register_a);
+        let mut addr = 0;
+        let mut value = if *mode == AddressingMode::Accumulator {
+            self.register_a
         } else {
-            let addr = self.get_operand_address(mode);
-            let mut value = self.mem_read(addr);
-            let carry = value & 0b1000_0000 != 0;
-            value = value.wrapping_shl(1);
-            self.update_flag(Flags::Carry, carry);
-            self.update_flag(Flags::Negative, value & 0b1000_0000 != 0);
+            addr = self.get_operand_address(mode);
+            self.mem_read(addr)
+        };
+        let carry = value & 0b1000_0000 != 0;
+        value = value.wrapping_shl(1);
+        self.update_flag(Flags::Carry, carry);
+        self.update_zero_and_negative_flags(value);
+        if *mode == AddressingMode::Accumulator {
+            self.register_a = value;
+        } else {
             self.mem_write(addr, value);
         }
     }
@@ -482,18 +497,21 @@ impl CPU {
     }
 
     fn lsr(&mut self, mode: &AddressingMode) {
-        if *mode == AddressingMode::NonAddressing {
-            let carry = self.register_a & 0b0000_0001 != 0;
-            self.register_a = self.register_a.wrapping_shr(1);
-            self.update_flag(Flags::Carry, carry);
-            self.update_zero_and_negative_flags(self.register_a);
+        let mut addr = 0;
+        let mut value = if *mode == AddressingMode::Accumulator {
+            self.register_a
         } else {
-            let addr = self.get_operand_address(mode);
-            let mut value = self.mem_read(addr);
-            let carry = value & 0b0000_0001 != 0;
-            value = value.wrapping_shr(1);
-            self.update_flag(Flags::Carry, carry);
-            self.update_zero_and_negative_flags(value);
+            addr = self.get_operand_address(mode);
+            self.mem_read(addr)
+        };
+        let carry = value & 0b0000_0001 != 0;
+        self.update_flag(Flags::Carry, carry);
+        value = value.wrapping_shr(1);
+        self.update_flag(Flags::Carry, carry);
+        self.update_zero_and_negative_flags(value);
+        if *mode == AddressingMode::Accumulator {
+            self.register_a = value;
+        } else {
             self.mem_write(addr, value);
         }
     }
@@ -503,7 +521,7 @@ impl CPU {
     }
 
     fn php(&mut self) {
-        self.push(self.status | Flags::B1 as u8);
+        self.push(self.status | Flags::B1 as u8 | Flags::B2 as u8);
     }
 
     fn pla(&mut self) {
@@ -513,10 +531,12 @@ impl CPU {
 
     fn plp(&mut self) {
         self.status = self.pull();
+        self.set_flag(Flags::B2);
+        self.clear_flag(Flags::B1);
     }
 
     fn rol(&mut self, mode: &AddressingMode) {
-        if *mode == AddressingMode::NonAddressing {
+        if *mode == AddressingMode::Accumulator {
             let carry = self.register_a & 0b1000_0000 != 0;
             self.register_a = self.register_a.wrapping_shl(1);
             self.register_a |= if self.get_flag(Flags::Carry) { 1 } else { 0 };
@@ -535,7 +555,7 @@ impl CPU {
     }
 
     fn ror(&mut self, mode: &AddressingMode) {
-        if *mode == AddressingMode::NonAddressing {
+        if *mode == AddressingMode::Accumulator {
             let carry = self.register_a & 0b0000_0001 != 0;
             self.register_a = self.register_a.wrapping_shr(1);
             self.register_a |= if self.get_flag(Flags::Carry) { 0b1000_0000 } else { 0 };
@@ -554,7 +574,7 @@ impl CPU {
     }
 
     fn rti(&mut self) {
-        self.status = self.pull();
+        self.plp();
         self.program_counter = self.pull_u16();
     }
 

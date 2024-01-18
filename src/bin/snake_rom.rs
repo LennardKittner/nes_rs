@@ -1,6 +1,4 @@
 use std::env;
-use std::fs::File;
-use std::io::Read;
 use std::time::Duration;
 use rand::Rng;
 use sdl2::event::Event;

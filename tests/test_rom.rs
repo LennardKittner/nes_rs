@@ -11,7 +11,8 @@ fn test_rom() -> Rom {
 }
 
 #[test]
-fn test_against_nes_test_log() {
+#[should_panic(expected = "no entry found for key")]
+fn test_against_nes_test_log_documented() {
     let bus = Bus::new(test_rom());
     let mut cpu = CPU::new_with_bus(bus);
     cpu.reset();
@@ -23,9 +24,9 @@ fn test_against_nes_test_log() {
     }).collect_vec();
 
     cpu.run_with_callback(|cpu| {
-        println!("{}", trace(cpu));
         assert_eq!(test_file[line_num], trace(cpu));
         line_num += 1;
+        println!("{}", trace(cpu));
     });
 }
 

@@ -118,25 +118,25 @@ lazy_static! {
         map.insert(0x01, OpCode::new(0x01, "ORA", 2, 6, AddressingMode::Indirect_X, Operation::FnCpuAndAddressing(CPU::ora)));
         map.insert(0x11, OpCode::new(0x11, "ORA", 2, 5 /* +1 if page crossed */, AddressingMode::Indirect_Y, Operation::FnCpuAndAddressing(CPU::ora)));
 
-        map.insert(0x0A, OpCode::new(0x0A, "ASL", 1, 2, AddressingMode::NonAddressing, Operation::FnCpuAndAddressing(CPU::asl)));
+        map.insert(0x0A, OpCode::new(0x0A, "ASL", 1, 2, AddressingMode::Accumulator, Operation::FnCpuAndAddressing(CPU::asl)));
         map.insert(0x06, OpCode::new(0x06, "ASL", 2, 5, AddressingMode::ZeroPage, Operation::FnCpuAndAddressing(CPU::asl)));
         map.insert(0x16, OpCode::new(0x16, "ASL", 2, 6, AddressingMode::ZeroPage_X, Operation::FnCpuAndAddressing(CPU::asl)));
         map.insert(0x0E, OpCode::new(0x0E, "ASL", 3, 6, AddressingMode::Absolute, Operation::FnCpuAndAddressing(CPU::asl)));
         map.insert(0x1E, OpCode::new(0x1E, "ASL", 3, 7, AddressingMode::Absolute_X, Operation::FnCpuAndAddressing(CPU::asl)));
 
-        map.insert(0x4A, OpCode::new(0x4A, "LSR", 1, 2, AddressingMode::NonAddressing, Operation::FnCpuAndAddressing(CPU::lsr)));
+        map.insert(0x4A, OpCode::new(0x4A, "LSR", 1, 2, AddressingMode::Accumulator, Operation::FnCpuAndAddressing(CPU::lsr)));
         map.insert(0x46, OpCode::new(0x46, "LSR", 2, 5, AddressingMode::ZeroPage, Operation::FnCpuAndAddressing(CPU::lsr)));
         map.insert(0x56, OpCode::new(0x56, "LSR", 2, 6, AddressingMode::ZeroPage_X, Operation::FnCpuAndAddressing(CPU::lsr)));
         map.insert(0x4E, OpCode::new(0x4E, "LSR", 3, 6, AddressingMode::Absolute, Operation::FnCpuAndAddressing(CPU::lsr)));
         map.insert(0x5E, OpCode::new(0x5E, "LSR", 3, 7, AddressingMode::Absolute_X, Operation::FnCpuAndAddressing(CPU::lsr)));
 
-        map.insert(0x2A, OpCode::new(0x2A, "ROL", 1, 2, AddressingMode::NonAddressing, Operation::FnCpuAndAddressing(CPU::rol)));
+        map.insert(0x2A, OpCode::new(0x2A, "ROL", 1, 2, AddressingMode::Accumulator, Operation::FnCpuAndAddressing(CPU::rol)));
         map.insert(0x26, OpCode::new(0x26, "ROL", 2, 5, AddressingMode::ZeroPage, Operation::FnCpuAndAddressing(CPU::rol)));
         map.insert(0x36, OpCode::new(0x36, "ROL", 2, 6, AddressingMode::ZeroPage_X, Operation::FnCpuAndAddressing(CPU::rol)));
         map.insert(0x2E, OpCode::new(0x2E, "ROL", 3, 6, AddressingMode::Absolute, Operation::FnCpuAndAddressing(CPU::rol)));
         map.insert(0x3E, OpCode::new(0x3E, "ROL", 3, 7, AddressingMode::Absolute_X, Operation::FnCpuAndAddressing(CPU::rol)));
 
-        map.insert(0x6A, OpCode::new(0x6A, "ROR", 1, 2, AddressingMode::NonAddressing, Operation::FnCpuAndAddressing(CPU::ror)));
+        map.insert(0x6A, OpCode::new(0x6A, "ROR", 1, 2, AddressingMode::Accumulator, Operation::FnCpuAndAddressing(CPU::ror)));
         map.insert(0x66, OpCode::new(0x66, "ROR", 2, 5, AddressingMode::ZeroPage, Operation::FnCpuAndAddressing(CPU::ror)));
         map.insert(0x76, OpCode::new(0x76, "ROR", 2, 6, AddressingMode::ZeroPage_X, Operation::FnCpuAndAddressing(CPU::ror)));
         map.insert(0x6E, OpCode::new(0x6E, "ROR", 3, 6, AddressingMode::Absolute, Operation::FnCpuAndAddressing(CPU::ror)));
@@ -207,6 +207,7 @@ lazy_static! {
 fn test_size() {
     for opcode in CPU_INSTRUCTIONS.values() {
         match opcode.mode {
+            AddressingMode::Accumulator => assert_eq!(opcode.size, 1),
             AddressingMode::Immediate => assert_eq!(opcode.size, 2),
             AddressingMode::ZeroPage => assert_eq!(opcode.size, 2),
             AddressingMode::ZeroPage_X => assert_eq!(opcode.size, 2),
