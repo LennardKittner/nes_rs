@@ -1,10 +1,16 @@
 use itertools::Itertools;
 use crate::bus::Mem;
 use crate::cpu::{AddressingMode, CPU};
-use crate::cpu::opcodes::CPU_INSTRUCTIONS;
+use crate::cpu::opcodes::{CPU_INSTRUCTIONS};
 
 pub fn trace(cpu: &CPU) -> String {
-    let opcode = &CPU_INSTRUCTIONS[&cpu.mem_read(cpu.program_counter)];
+    let opcode = match CPU_INSTRUCTIONS.get(&cpu.mem_read(cpu.program_counter)) {
+        None => {
+            println!("unknown opcode 0x{:02X}", cpu.mem_read(cpu.program_counter));
+            panic!("no entry found for key")
+        }
+        Some(opcode) =>  opcode
+    };
     let mut instruction_bytes = Vec::new();
     for i in 0..opcode.size {
         instruction_bytes.push(cpu.mem_read(cpu.program_counter + i));
@@ -12,12 +18,19 @@ pub fn trace(cpu: &CPU) -> String {
     let opcode_string = instruction_bytes.iter().map(|b| format!("{:02X}", *b)).join(" ");
 
 
-    let mut asm = opcode.name.to_string();
+    let mut asm = opcode.mnemonics.to_string();
     asm.push_str(&match opcode.mode {
         AddressingMode::Accumulator => " A".to_string(),
         AddressingMode::Immediate => format!(" #${:02X}", instruction_bytes[1]),
         AddressingMode::Relative => {
-            format!(" ${:02X}", cpu.program_counter.wrapping_add(instruction_bytes[1] as u16).wrapping_add(opcode.size))
+            let mut offset = instruction_bytes[1];
+            let target = if offset & 0b100_0000 != 0 {
+                offset = offset.wrapping_neg();
+                cpu.program_counter.wrapping_sub(offset as u16)
+            } else {
+                cpu.program_counter + (offset as u16)
+            };
+            format!(" ${:02X}", target.wrapping_add(opcode.size))
         }
         AddressingMode::ZeroPage => {
             let mut output = format!(" ${:02X}", instruction_bytes[1]);
@@ -37,7 +50,7 @@ pub fn trace(cpu: &CPU) -> String {
         },
         AddressingMode::Absolute => {
             let mut output = format!(" ${:02X}{:02X}", instruction_bytes[2], instruction_bytes[1]);
-            if opcode.name != "JMP" && opcode.name != "JSR" {
+            if opcode.mnemonics != "JMP" && opcode.mnemonics != "JSR" {
                 let value = cpu.mem_read(((instruction_bytes[2] as u16) << 8) | instruction_bytes[1] as u16);
                 output.push_str(&format!(" = {value:02X}"));
             }
@@ -82,5 +95,9 @@ pub fn trace(cpu: &CPU) -> String {
         },
         AddressingMode::NonAddressing => { String::new() }
     });
-    format!("{:04X}  {:<8}  {:<31} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X}", cpu.program_counter, opcode_string, asm, cpu.register_a, cpu.register_x, cpu.register_y, cpu.status, cpu.register_s)
+    if opcode.mnemonics.len() == 3 {
+        format!("{:04X}  {:<8}  {:<31} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X}", cpu.program_counter, opcode_string, asm, cpu.register_a, cpu.register_x, cpu.register_y, cpu.status, cpu.register_s)
+    } else {
+        format!("{:04X}  {:<8} {:<32} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X}", cpu.program_counter, opcode_string, asm, cpu.register_a, cpu.register_x, cpu.register_y, cpu.status, cpu.register_s)
+    }
 }

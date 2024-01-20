@@ -773,3 +773,53 @@ fn test_ora_neg_absolute_y() {
     assert_eq!(cpu.register_a, 0b1010_1100);
     assert_eq!(cpu.get_flag(Flags::Negative), true);
 }
+
+#[test]
+fn test_lax() {
+    let mut cpu = CPU::new_with_bus(Bus65k::new());
+    cpu.load(&vec![0xA7, 0x10, 0x00], 0x8000);
+    cpu.reset();
+    cpu.mem_write(0x10, 0xAB);
+    cpu.register_a = 0xFF;
+    cpu.register_x = 0xFF;
+    cpu.run();
+    assert_eq!(cpu.register_a, 0xAB);
+    assert_eq!(cpu.register_x, 0xAB);
+}
+
+#[test]
+fn test_sax() {
+    let mut cpu = CPU::new_with_bus(Bus65k::new());
+    cpu.load(&vec![0x87, 0x10, 0x00], 0x8000);
+    cpu.reset();
+    cpu.register_a = 0b1001_0000;
+    cpu.register_x = 0b1000_1000;
+    cpu.run();
+    assert_eq!(cpu.mem_read(0x10), 0b1000_0000);
+    assert!(!cpu.get_flag(Flags::Negative))
+}
+
+#[test]
+fn test_sbc2_sub_zero() {
+    let mut cpu = CPU::new_with_bus(Bus65k::new());
+    cpu.load(&vec![0xEB, 0x00, 0x00], 0x8000);
+    cpu.reset();
+    cpu.set_flag(Flags::Carry);
+    cpu.register_a = 0x01;
+    cpu.run();
+    assert_eq!(cpu.register_a, 0x01);
+}
+
+#[test]
+fn test_dcp() {
+    let mut cpu = CPU::new_with_bus(Bus65k::new());
+    cpu.load(&vec![0xC7, 0x10, 0x00], 0x8000);
+    cpu.reset();
+    cpu.mem_write(0x10, 0x05);
+    cpu.register_a = 0x02;
+    cpu.run();
+    assert_eq!(cpu.mem_read(0x10), 0x04);
+    assert_eq!(cpu.get_flag(Flags::Carry), false);
+    assert_eq!(cpu.get_flag(Flags::Zero), false);
+    assert_eq!(cpu.get_flag(Flags::Negative), true);
+}

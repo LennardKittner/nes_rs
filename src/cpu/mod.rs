@@ -610,4 +610,25 @@ impl CPU {
         let addr = self.get_operand_address(mode);
         self.mem_write(addr, self.register_y);
     }
+
+    fn lax(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let value = self.mem_read(addr);
+        self.register_a = value;
+        self.register_x = value;
+        self.update_zero_and_negative_flags(value)
+    }
+
+    fn sax(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let value = self.register_a & self.register_x;
+        self.mem_write(addr, value);
+    }
+
+    fn dcp(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let value = self.mem_read(addr).wrapping_sub(1);
+        self.mem_write(addr, value);
+        self.compare(self.register_a, value);
+    }
 }
