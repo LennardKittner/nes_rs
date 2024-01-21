@@ -823,3 +823,40 @@ fn test_dcp() {
     assert_eq!(cpu.get_flag(Flags::Zero), false);
     assert_eq!(cpu.get_flag(Flags::Negative), true);
 }
+
+#[test]
+fn test_isb() {
+    let mut cpu = CPU::new_with_bus(Bus65k::new());
+    cpu.load(&vec![0xE7, 0x10, 0x00], 0x8000);
+    cpu.reset();
+    cpu.mem_write(0x10, 0x05);
+    cpu.register_a = 0x15;
+    cpu.run();
+    assert_eq!(cpu.mem_read(0x10), 0x06);
+    assert_eq!(cpu.register_a, 0x0E)
+}
+
+#[test]
+fn test_slo() {
+    let mut cpu = CPU::new_with_bus(Bus65k::new());
+    cpu.load(&vec![0x07, 0x10, 0x00], 0x8000);
+    cpu.reset();
+    cpu.mem_write(0x10, 0b0001_0010);
+    cpu.register_a = 0b0010_1000;
+    cpu.run();
+    assert_eq!(cpu.mem_read(0x10), 0b0010_0100);
+    assert_eq!(cpu.register_a, 0b0010_1100)
+}
+
+#[test]
+fn test_rla() {
+    let mut cpu = CPU::new_with_bus(Bus65k::new());
+    cpu.load(&vec![0x27, 0x10, 0x00], 0x8000);
+    cpu.reset();
+    cpu.mem_write(0x10, 0b0001_0010);
+    cpu.register_a = 0b0010_1000;
+    cpu.set_flag(Flags::Carry);
+    cpu.run();
+    assert_eq!(cpu.mem_read(0x10), 0b0010_0101);
+    assert_eq!(cpu.register_a, 0b0010_0000)
+}

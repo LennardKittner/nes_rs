@@ -136,6 +136,14 @@ lazy_static! {
         map.insert(0xC3, OpCode::new(0xC3, "*DCP", 2, 8, AddressingMode::Indirect_X, Operation::FnCpuAndAddressing(CPU::dcp)));
         map.insert(0xD3, OpCode::new(0xD3, "*DCP", 2, 8, AddressingMode::Indirect_Y, Operation::FnCpuAndAddressing(CPU::dcp)));
 
+        map.insert(0xE7, OpCode::new(0xE7, "*ISB", 2, 5, AddressingMode::ZeroPage, Operation::FnCpuAndAddressing(CPU::isb)));
+        map.insert(0xF7, OpCode::new(0xF7, "*ISB", 2, 6, AddressingMode::ZeroPage_X, Operation::FnCpuAndAddressing(CPU::isb)));
+        map.insert(0xEF, OpCode::new(0xEF, "*ISB", 3, 6, AddressingMode::Absolute, Operation::FnCpuAndAddressing(CPU::isb)));
+        map.insert(0xFF, OpCode::new(0xFF, "*ISB", 3, 7, AddressingMode::Absolute_X, Operation::FnCpuAndAddressing(CPU::isb)));
+        map.insert(0xFB, OpCode::new(0xFB, "*ISB", 3, 7, AddressingMode::Absolute_Y, Operation::FnCpuAndAddressing(CPU::isb)));
+        map.insert(0xE3, OpCode::new(0xE3, "*ISB", 2, 8, AddressingMode::Indirect_X, Operation::FnCpuAndAddressing(CPU::isb)));
+        map.insert(0xF3, OpCode::new(0xF3, "*ISB", 2, 8, AddressingMode::Indirect_Y, Operation::FnCpuAndAddressing(CPU::isb)));
+
         /* Bit Operations */
         map.insert(0x29, OpCode::new(0x29, "AND", 2, 2, AddressingMode::Immediate, Operation::FnCpuAndAddressing(CPU::and)));
         map.insert(0x25, OpCode::new(0x25, "AND", 2, 3, AddressingMode::ZeroPage, Operation::FnCpuAndAddressing(CPU::and)));
@@ -192,6 +200,22 @@ lazy_static! {
         map.insert(0x97, OpCode::new(0x97, "*SAX", 2, 4, AddressingMode::ZeroPage_Y, Operation::FnCpuAndAddressing(CPU::sax)));
         map.insert(0x83, OpCode::new(0x83, "*SAX", 2, 6, AddressingMode::Indirect_X, Operation::FnCpuAndAddressing(CPU::sax)));
         map.insert(0x8F, OpCode::new(0x8F, "*SAX", 3, 4, AddressingMode::Absolute, Operation::FnCpuAndAddressing(CPU::sax)));
+
+        map.insert(0x07, OpCode::new(0x07, "*SLO", 2, 5, AddressingMode::ZeroPage, Operation::FnCpuAndAddressing(CPU::slo)));
+        map.insert(0x17, OpCode::new(0x17, "*SLO", 2, 6, AddressingMode::ZeroPage_X, Operation::FnCpuAndAddressing(CPU::slo)));
+        map.insert(0x0F, OpCode::new(0x0F, "*SLO", 3, 6, AddressingMode::Absolute, Operation::FnCpuAndAddressing(CPU::slo)));
+        map.insert(0x1F, OpCode::new(0x1F, "*SLO", 3, 7, AddressingMode::Absolute_X, Operation::FnCpuAndAddressing(CPU::slo)));
+        map.insert(0x1B, OpCode::new(0x1B, "*SLO", 3, 7, AddressingMode::Absolute_Y, Operation::FnCpuAndAddressing(CPU::slo)));
+        map.insert(0x03, OpCode::new(0x03, "*SLO", 2, 8, AddressingMode::Indirect_X, Operation::FnCpuAndAddressing(CPU::slo)));
+        map.insert(0x13, OpCode::new(0x13, "*SLO", 2, 8, AddressingMode::Indirect_Y, Operation::FnCpuAndAddressing(CPU::slo)));
+
+        map.insert(0x27, OpCode::new(0x27, "*RLA", 2, 5, AddressingMode::ZeroPage, Operation::FnCpuAndAddressing(CPU::rla)));
+        map.insert(0x37, OpCode::new(0x37, "*RLA", 2, 6, AddressingMode::ZeroPage_X, Operation::FnCpuAndAddressing(CPU::rla)));
+        map.insert(0x2F, OpCode::new(0x2F, "*RLA", 3, 6, AddressingMode::Absolute, Operation::FnCpuAndAddressing(CPU::rla)));
+        map.insert(0x3F, OpCode::new(0x3F, "*RLA", 3, 7, AddressingMode::Absolute_X, Operation::FnCpuAndAddressing(CPU::rla)));
+        map.insert(0x3B, OpCode::new(0x3B, "*RLA", 3, 7, AddressingMode::Absolute_Y, Operation::FnCpuAndAddressing(CPU::rla)));
+        map.insert(0x23, OpCode::new(0x23, "*RLA", 2, 8, AddressingMode::Indirect_X, Operation::FnCpuAndAddressing(CPU::rla)));
+        map.insert(0x33, OpCode::new(0x33, "*RLA", 2, 8, AddressingMode::Indirect_Y, Operation::FnCpuAndAddressing(CPU::rla)));
 
         /* Comparisons */
         map.insert(0x24, OpCode::new(0x24, "BIT", 2, 3, AddressingMode::ZeroPage, Operation::FnCpuAndAddressing(CPU::bit)));

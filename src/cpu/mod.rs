@@ -175,7 +175,7 @@ impl CPU {
             }
             AddressingMode::Relative => {
                 let mut offset = self.mem_read(self.program_counter);
-                if offset & 0b100_0000 != 0 {
+                if offset & 0b1000_0000 != 0 {
                     offset = offset.wrapping_neg();
                     self.program_counter.wrapping_sub(offset as u16)
                 } else {
@@ -338,7 +338,7 @@ impl CPU {
         self.update_zero_and_negative_flags(self.register_a);
     }
 
-    fn asl(&mut self, mode: &AddressingMode) {
+    fn asl_logic(&mut self, mode: &AddressingMode) -> u8 {
         let mut addr = 0;
         let mut value = if *mode == AddressingMode::Accumulator {
             self.register_a
@@ -355,6 +355,11 @@ impl CPU {
         } else {
             self.mem_write(addr, value);
         }
+        return value;
+    }
+
+    fn asl(&mut self, mode: &AddressingMode) {
+        let _ = self.asl_logic(mode);
     }
 
     fn bcc(&mut self, mode: &AddressingMode) {
@@ -535,13 +540,14 @@ impl CPU {
         self.clear_flag(Flags::B1);
     }
 
-    fn rol(&mut self, mode: &AddressingMode) {
+    fn rol_logic(&mut self, mode: &AddressingMode) -> u8 {
         if *mode == AddressingMode::Accumulator {
             let carry = self.register_a & 0b1000_0000 != 0;
             self.register_a = self.register_a.wrapping_shl(1);
             self.register_a |= if self.get_flag(Flags::Carry) { 1 } else { 0 };
             self.update_flag(Flags::Carry, carry);
             self.update_zero_and_negative_flags(self.register_a);
+            self.register_a
         } else {
             let addr = self.get_operand_address(mode);
             let mut value = self.mem_read(addr);
@@ -551,7 +557,12 @@ impl CPU {
             self.update_flag(Flags::Carry, carry);
             self.update_flag(Flags::Negative, value & 0b1000_0000 != 0);
             self.mem_write(addr, value);
+            value
         }
+    }
+
+    fn rol(&mut self, mode: &AddressingMode) {
+        let _ = self.rol_logic(mode);
     }
 
     fn ror(&mut self, mode: &AddressingMode) {
@@ -630,5 +641,25 @@ impl CPU {
         let value = self.mem_read(addr).wrapping_sub(1);
         self.mem_write(addr, value);
         self.compare(self.register_a, value);
+    }
+
+    fn isb(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let value = self.mem_read(addr).wrapping_add(1);
+        self.mem_write(addr, value);
+        // The value has to be bitwise negated instead of arithmetically negated because of the carry
+        self.add_to_a(!value);
+    }
+
+    fn slo(&mut self, mode: &AddressingMode) {
+        let value = self.asl_logic(mode);
+        self.register_a |= value;
+        self.update_zero_and_negative_flags(self.register_a);
+    }
+
+    fn rla(&mut self, mode: &AddressingMode) {
+        let value = self.rol_logic(mode);
+        self.register_a &= value;
+        self.update_zero_and_negative_flags(self.register_a);
     }
 }

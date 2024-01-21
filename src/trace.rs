@@ -24,7 +24,7 @@ pub fn trace(cpu: &CPU) -> String {
         AddressingMode::Immediate => format!(" #${:02X}", instruction_bytes[1]),
         AddressingMode::Relative => {
             let mut offset = instruction_bytes[1];
-            let target = if offset & 0b100_0000 != 0 {
+            let target = if offset & 0b1000_0000 != 0 {
                 offset = offset.wrapping_neg();
                 cpu.program_counter.wrapping_sub(offset as u16)
             } else {
