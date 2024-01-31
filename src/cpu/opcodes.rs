@@ -355,6 +355,6 @@ impl OpCode {
             Operation::FnCpu(op) => op(cpu),
             Operation::Fn(op) => op(),
         }
-        cpu.program_counter += self.size-1;
+        cpu.program_counter += self.size;
     }
 }
