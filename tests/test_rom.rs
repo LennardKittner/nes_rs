@@ -11,7 +11,7 @@ fn test_rom() -> Rom {
 }
 
 #[test]
-#[should_panic(expected = "no entry found for key")]
+#[should_panic(expected = "APU not implemented")]
 fn test_against_nes_test_log_documented() {
     let bus = Bus::new(test_rom());
     let mut cpu = CPU::new_with_bus(bus);
@@ -24,6 +24,9 @@ fn test_against_nes_test_log_documented() {
     }).collect_vec();
 
     cpu.run_with_callback(|cpu| {
+        if cpu.program_counter == 0xC68B {
+            panic!("APU not implemented")
+        }
         assert_eq!(test_file[line_num], trace(cpu));
         line_num += 1;
         println!("{}", trace(cpu));

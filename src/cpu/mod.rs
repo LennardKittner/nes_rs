@@ -498,7 +498,7 @@ impl CPU {
         self.program_counter = addr.wrapping_sub(CPU_INSTRUCTIONS[&0x20].size); // because the program_counter will be incremented by the size of the instruction
     }
 
-    fn lsr(&mut self, mode: &AddressingMode) {
+    fn lsr_logic(&mut self, mode: &AddressingMode) -> u8 {
         let mut addr = 0;
         let mut value = if *mode == AddressingMode::Accumulator {
             self.register_a
@@ -516,6 +516,11 @@ impl CPU {
         } else {
             self.mem_write(addr, value);
         }
+        value
+    }
+
+    fn lsr(&mut self, mode: &AddressingMode) {
+        let _ = self.lsr_logic(mode);
     }
 
     fn pha(&mut self) {
@@ -562,13 +567,14 @@ impl CPU {
         let _ = self.rol_logic(mode);
     }
 
-    fn ror(&mut self, mode: &AddressingMode) {
+    fn ror_logic(&mut self, mode: &AddressingMode) -> u8 {
         if *mode == AddressingMode::Accumulator {
             let carry = self.register_a & 0b0000_0001 != 0;
             self.register_a = self.register_a.wrapping_shr(1);
             self.register_a |= if self.get_flag(Flags::Carry) { 0b1000_0000 } else { 0 };
             self.update_flag(Flags::Carry, carry);
             self.update_zero_and_negative_flags(self.register_a);
+            self.register_a
         } else {
             let addr = mode.get_operand_address(self).unwrap();
             let mut value = self.mem_read(addr);
@@ -578,7 +584,12 @@ impl CPU {
             self.update_flag(Flags::Carry, carry);
             self.update_flag(Flags::Negative, value & 0b1000_0000 != 0);
             self.mem_write(addr, value);
+            value
         }
+    }
+
+    fn ror(&mut self, mode: &AddressingMode) {
+        let _ = self.ror_logic(mode);
     }
 
     fn rti(&mut self) {
@@ -656,5 +667,97 @@ impl CPU {
         let value = self.rol_logic(mode);
         self.register_a &= value;
         self.update_zero_and_negative_flags(self.register_a);
+    }
+
+    fn sre(&mut self, mode: &AddressingMode) {
+        let value = self.lsr_logic(mode);
+        self.register_a ^= value;
+        self.update_zero_and_negative_flags(self.register_a);
+    }
+
+    fn rra(&mut self, mode: &AddressingMode) {
+        let value = self.ror_logic(mode);
+        self.add_to_a(value);
+    }
+
+    fn aac(&mut self, mode: &AddressingMode) {
+        let value = self.get_operand(mode);
+        self.register_a &= value;
+        self.update_flag(Flags::Carry, 0b1000_0000 & self.register_a != 0);
+        self.update_zero_and_negative_flags(self.register_a);
+    }
+
+    fn kil(&mut self) {
+        self.program_counter -= 1;
+    }
+
+    fn asr(&mut self, mode: &AddressingMode) {
+        let value = self.get_operand(mode);
+        self.register_a &= value;
+        self.lsr_logic(&AddressingMode::Accumulator);
+        self.update_zero_and_negative_flags(self.register_a);
+    }
+
+    fn arr(&mut self, mode: &AddressingMode) {
+        let value = self.get_operand(mode);
+        self.register_a &= value;
+        self.ror_logic(&AddressingMode::Accumulator);
+        self.update_zero_and_negative_flags(self.register_a);
+    }
+
+    // Exact operation unknown
+    fn xaa(&mut self, mode: &AddressingMode) {
+        self.register_x = self.register_a;
+        let value = self.get_operand(mode);
+        self.register_a &= value;
+        self.update_zero_and_negative_flags(self.register_a);
+    }
+
+    fn axa(&mut self, mode: &AddressingMode) {
+        let addr = mode.get_operand_address(self).unwrap();
+        println!("{}", (((addr >> 8) as u8) + 1));
+        let value = self.register_a & self.register_x & (((addr >> 8) as u8) + 1);
+        self.mem_write(addr, value);
+    }
+
+    fn xas(&mut self, mode: &AddressingMode) {
+        self.register_s = self.register_a & self.register_x;
+        let addr = mode.get_operand_address(self).unwrap();
+        let value = self.register_s & (((addr >> 8) as u8) + 1);
+        self.mem_write(addr, value);
+    }
+
+    fn sya(&mut self, mode: &AddressingMode) {
+        let addr = mode.get_operand_address(self).unwrap();
+        let value = self.register_y & (((addr >> 8) as u8) + 1);
+        self.mem_write(addr, value);
+    }
+
+    fn sxa(&mut self, mode: &AddressingMode) {
+        let addr = mode.get_operand_address(self).unwrap();
+        let value = self.register_x & (((addr >> 8) as u8) + 1);
+        self.mem_write(addr, value);
+    }
+
+    fn atx(&mut self, mode: &AddressingMode) {
+        let value = self.get_operand(mode);
+        // some sources say that it should be register_a &= value
+        self.register_a = value;
+        self.register_x = value;
+        self.update_zero_and_negative_flags(self.register_x);
+    }
+
+    fn lar(&mut self, mode: &AddressingMode) {
+        let value = self.get_operand(mode) & self.register_s;
+        self.register_a = value;
+        self.register_x = value;
+        self.register_s = value;
+        self.update_zero_and_negative_flags(self.register_a);
+    }
+
+    fn axs(&mut self, mode: &AddressingMode) {
+        let value = self.get_operand(mode);
+        self.register_x = (self.register_a & self.register_x).wrapping_sub(value);
+        self.update_zero_and_negative_flags(self.register_x);
     }
 }

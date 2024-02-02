@@ -860,3 +860,166 @@ fn test_rla() {
     assert_eq!(cpu.mem_read(0x10), 0b0010_0101);
     assert_eq!(cpu.register_a, 0b0010_0000)
 }
+
+#[test]
+fn test_sre() {
+    let mut cpu = CPU::new_with_bus(Bus65k::new());
+    cpu.load(&vec![0x47, 0x10, 0x00], 0x8000);
+    cpu.reset();
+    cpu.mem_write(0x10, 0b0001_0010);
+    cpu.register_a = 0b0010_1000;
+    cpu.run();
+    assert_eq!(cpu.mem_read(0x10), 0b0000_1001);
+    assert_eq!(cpu.register_a, 0b0010_0001)
+}
+
+#[test]
+fn test_rra() {
+    let mut cpu = CPU::new_with_bus(Bus65k::new());
+    cpu.load(&vec![0x67, 0x10, 0x00], 0x8000);
+    cpu.reset();
+    cpu.mem_write(0x10, 0b0001_0010);
+    cpu.register_a = 0b0010_1000;
+    cpu.run();
+    assert_eq!(cpu.mem_read(0x10), 0b0000_1001);
+    assert_eq!(cpu.register_a, 0b0011_0001)
+}
+
+#[test]
+fn test_aac() {
+    let mut cpu = CPU::new_with_bus(Bus65k::new());
+    cpu.load(&vec![0x0B, 0b1110_1100, 0x00], 0x8000);
+    cpu.reset();
+    cpu.register_a = 0b1011_1000;
+    cpu.run();
+    assert!(cpu.get_flag(Flags::Carry));
+    assert_eq!(cpu.register_a, 0b1010_1000)
+}
+
+#[test]
+fn test_asr() {
+    let mut cpu = CPU::new_with_bus(Bus65k::new());
+    cpu.load(&vec![0x4B, 0b1110_1100, 0x00], 0x8000);
+    cpu.reset();
+    cpu.register_a = 0b1011_1000;
+    cpu.run();
+    assert_eq!(cpu.register_a, 0b0101_0100)
+}
+
+#[test]
+fn test_arr() {
+    let mut cpu = CPU::new_with_bus(Bus65k::new());
+    cpu.load(&vec![0x6B, 0b0000_0001, 0x00], 0x8000);
+    cpu.reset();
+    cpu.register_a = 0b0100_1001;
+    cpu.run();
+    assert_eq!(cpu.register_a, 0x00);
+    assert_eq!(cpu.get_flag(Flags::Carry), true);
+}
+
+#[test]
+fn test_xaa() {
+    let mut cpu = CPU::new_with_bus(Bus65k::new());
+    cpu.load(&vec![0x8B, 0b1110_1100, 0x00], 0x8000);
+    cpu.reset();
+    cpu.register_x = 0xFA;
+    cpu.register_a = 0b1011_1000;
+    cpu.run();
+    assert_eq!(cpu.register_x, 0b1011_1000);
+    assert_eq!(cpu.register_a, 0b1010_1000);
+}
+
+#[test]
+fn test_axa() {
+    let mut cpu = CPU::new_with_bus(Bus65k::new());
+    cpu.load(&vec![0x9F, 0x00, 0x10, 0x00], 0x8000);
+    cpu.reset();
+    cpu.register_x = 0b1101_1110;
+    cpu.register_y = 0x02;
+    cpu.register_a = 0b1001_0010;
+    cpu.mem_write(0x1002, 0xFF);
+    cpu.run();
+    assert_eq!(cpu.mem_read(0x1002), 0b0001_0000);
+}
+
+#[test]
+fn test_xas() {
+    let mut cpu = CPU::new_with_bus(Bus65k::new());
+    cpu.load(&vec![0x9B, 0x10, 0x00, 0x00], 0x8000);
+    cpu.reset();
+    cpu.register_x = 0b1100_1111;
+    cpu.register_y = 0x12;
+    cpu.register_a = 0b1000_0011;
+    cpu.mem_write(0x22, 0xFF);
+    cpu.run();
+    // pull the stuff brk pushes
+    cpu.pull();
+    cpu.pull_u16();
+    assert_eq!(cpu.register_s, 0b1000_0011);
+    assert_eq!(cpu.mem_read(0x22), 0b0000_0001);
+}
+
+#[test]
+fn test_sya() {
+    let mut cpu = CPU::new_with_bus(Bus65k::new());
+    cpu.load(&vec![0x9C, 0x00, 0x10, 0x00], 0x8000);
+    cpu.reset();
+    cpu.register_x = 0x01;
+    cpu.register_y = 0b0001_0001;
+    cpu.mem_write(0x1001, 0xFF);
+    cpu.run();
+    assert_eq!(cpu.mem_read(0x1001), 0b0001_0001);
+}
+
+#[test]
+fn test_sxa() {
+    let mut cpu = CPU::new_with_bus(Bus65k::new());
+    cpu.load(&vec![0x9E, 0x00, 0x10, 0x00], 0x8000);
+    cpu.reset();
+    cpu.register_y = 0x01;
+    cpu.register_x = 0b0001_0001;
+    cpu.mem_write(0x1001, 0xFF);
+    cpu.run();
+    assert_eq!(cpu.mem_read(0x1001), 0b0001_0001);
+}
+
+#[test]
+fn test_axt() {
+    let mut cpu = CPU::new_with_bus(Bus65k::new());
+    cpu.load(&vec![0xAB, 0xCB, 0x00], 0x8000);
+    cpu.reset();
+    cpu.register_a = 0x01;
+    cpu.register_x = 0b0001_0001;
+    cpu.run();
+    assert_eq!(cpu.register_x, 0xCB);
+    assert_eq!(cpu.register_a, 0xCB);
+}
+
+#[test]
+fn test_lar() {
+    let mut cpu = CPU::new_with_bus(Bus65k::new());
+    cpu.load(&vec![0xBB, 0x20, 0x00, 0x00], 0x8000);
+    cpu.reset();
+    cpu.register_s = 0b1100_1100;
+    cpu.register_a = 0xFF;
+    cpu.register_x = 0xFF;
+    cpu.mem_write(0x20, 0b0111_1011);
+    cpu.run();
+    // pull the stuff brk pushes
+    cpu.pull();
+    cpu.pull_u16();
+    assert_eq!(cpu.register_x, 0b0100_1000);
+    assert_eq!(cpu.register_a, 0b0100_1000);
+    assert_eq!(cpu.register_s, 0b0100_1000);
+}
+
+#[test]
+fn test_axs() {
+    let mut cpu = CPU::new_with_bus(Bus65k::new());
+    cpu.load(&vec![0xCB, 0x02, 0x00], 0x8000);
+    cpu.reset();
+    cpu.register_a = 0b1100_1110;
+    cpu.register_x = 0b1010_1010;
+    cpu.run();
+    assert_eq!(cpu.register_x, 0b1000_1000);
+}

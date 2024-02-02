@@ -38,6 +38,19 @@ lazy_static! {
         map.insert(0xDA, OpCode::new(0xDA, "*NOP", 1, 2, AddressingMode::NonAddressing, Operation::Fn(CPU::nop)));
         map.insert(0xFA, OpCode::new(0xFA, "*NOP", 1, 2, AddressingMode::NonAddressing, Operation::Fn(CPU::nop)));
 
+        map.insert(0x02, OpCode::new(0x02, "*KIL", 1, 0, AddressingMode::NonAddressing, Operation::FnCpu(CPU::kil)));
+        map.insert(0x12, OpCode::new(0x12, "*KIL", 1, 0, AddressingMode::NonAddressing, Operation::FnCpu(CPU::kil)));
+        map.insert(0x22, OpCode::new(0x22, "*KIL", 1, 0, AddressingMode::NonAddressing, Operation::FnCpu(CPU::kil)));
+        map.insert(0x32, OpCode::new(0x32, "*KIL", 1, 0, AddressingMode::NonAddressing, Operation::FnCpu(CPU::kil)));
+        map.insert(0x42, OpCode::new(0x42, "*KIL", 1, 0, AddressingMode::NonAddressing, Operation::FnCpu(CPU::kil)));
+        map.insert(0x52, OpCode::new(0x52, "*KIL", 1, 0, AddressingMode::NonAddressing, Operation::FnCpu(CPU::kil)));
+        map.insert(0x62, OpCode::new(0x62, "*KIL", 1, 0, AddressingMode::NonAddressing, Operation::FnCpu(CPU::kil)));
+        map.insert(0x72, OpCode::new(0x72, "*KIL", 1, 0, AddressingMode::NonAddressing, Operation::FnCpu(CPU::kil)));
+        map.insert(0x92, OpCode::new(0x92, "*KIL", 1, 0, AddressingMode::NonAddressing, Operation::FnCpu(CPU::kil)));
+        map.insert(0xB2, OpCode::new(0xB2, "*KIL", 1, 0, AddressingMode::NonAddressing, Operation::FnCpu(CPU::kil)));
+        map.insert(0xD2, OpCode::new(0xD2, "*KIL", 1, 0, AddressingMode::NonAddressing, Operation::FnCpu(CPU::kil)));
+        map.insert(0xF2, OpCode::new(0xF2, "*KIL", 1, 0, AddressingMode::NonAddressing, Operation::FnCpu(CPU::kil)));
+
         /* Transfers */
         map.insert(0xAA, OpCode::new(0xAA, "TAX", 1, 2, AddressingMode::NonAddressing, Operation::FnCpu(CPU::tax)));
         map.insert(0xA8, OpCode::new(0xA8, "TAY", 1, 2, AddressingMode::NonAddressing, Operation::FnCpu(CPU::tay)));
@@ -74,6 +87,10 @@ lazy_static! {
         map.insert(0xB4, OpCode::new(0xB4, "LDY", 2, 4, AddressingMode::ZeroPage_X, Operation::FnCpuAndAddressing(CPU::ldy)));
         map.insert(0xAC, OpCode::new(0xAC, "LDY", 3, 4, AddressingMode::Absolute, Operation::FnCpuAndAddressing(CPU::ldy)));
         map.insert(0xBC, OpCode::new(0xBC, "LDY", 3, 4 /* +1 if page crossed */, AddressingMode::Absolute_X, Operation::FnCpuAndAddressing(CPU::ldy)));
+
+        map.insert(0xAB, OpCode::new(0xAB, "*ATX", 2, 2, AddressingMode::Immediate, Operation::FnCpuAndAddressing(CPU::atx)));
+
+        map.insert(0xBB, OpCode::new(0xBB, "*LAR", 3, 4, /* +1 if page crossed */ AddressingMode::Absolute_Y, Operation::FnCpuAndAddressing(CPU::lar)));
 
         /* Stores */
         map.insert(0x85, OpCode::new(0x85, "STA", 2, 3, AddressingMode::ZeroPage, Operation::FnCpuAndAddressing(CPU::sta)));
@@ -143,6 +160,8 @@ lazy_static! {
         map.insert(0xFB, OpCode::new(0xFB, "*ISB", 3, 7, AddressingMode::Absolute_Y, Operation::FnCpuAndAddressing(CPU::isb)));
         map.insert(0xE3, OpCode::new(0xE3, "*ISB", 2, 8, AddressingMode::Indirect_X, Operation::FnCpuAndAddressing(CPU::isb)));
         map.insert(0xF3, OpCode::new(0xF3, "*ISB", 2, 8, AddressingMode::Indirect_Y, Operation::FnCpuAndAddressing(CPU::isb)));
+
+        map.insert(0xCB, OpCode::new(0xCB, "*AXS", 2, 2, AddressingMode::Immediate, Operation::FnCpuAndAddressing(CPU::axs)));
 
         /* Bit Operations */
         map.insert(0x29, OpCode::new(0x29, "AND", 2, 2, AddressingMode::Immediate, Operation::FnCpuAndAddressing(CPU::and)));
@@ -216,6 +235,40 @@ lazy_static! {
         map.insert(0x3B, OpCode::new(0x3B, "*RLA", 3, 7, AddressingMode::Absolute_Y, Operation::FnCpuAndAddressing(CPU::rla)));
         map.insert(0x23, OpCode::new(0x23, "*RLA", 2, 8, AddressingMode::Indirect_X, Operation::FnCpuAndAddressing(CPU::rla)));
         map.insert(0x33, OpCode::new(0x33, "*RLA", 2, 8, AddressingMode::Indirect_Y, Operation::FnCpuAndAddressing(CPU::rla)));
+
+        map.insert(0x47, OpCode::new(0x47, "*SRE", 2, 5, AddressingMode::ZeroPage, Operation::FnCpuAndAddressing(CPU::sre)));
+        map.insert(0x57, OpCode::new(0x57, "*SRE", 2, 6, AddressingMode::ZeroPage_X, Operation::FnCpuAndAddressing(CPU::sre)));
+        map.insert(0x4F, OpCode::new(0x4F, "*SRE", 3, 6, AddressingMode::Absolute, Operation::FnCpuAndAddressing(CPU::sre)));
+        map.insert(0x5F, OpCode::new(0x5F, "*SRE", 3, 7, AddressingMode::Absolute_X, Operation::FnCpuAndAddressing(CPU::sre)));
+        map.insert(0x5B, OpCode::new(0x5B, "*SRE", 3, 7, AddressingMode::Absolute_Y, Operation::FnCpuAndAddressing(CPU::sre)));
+        map.insert(0x43, OpCode::new(0x43, "*SRE", 2, 8, AddressingMode::Indirect_X, Operation::FnCpuAndAddressing(CPU::sre)));
+        map.insert(0x53, OpCode::new(0x53, "*SRE", 2, 8, AddressingMode::Indirect_Y, Operation::FnCpuAndAddressing(CPU::sre)));
+
+        map.insert(0x67, OpCode::new(0x67, "*RRA", 2, 5, AddressingMode::ZeroPage, Operation::FnCpuAndAddressing(CPU::rra)));
+        map.insert(0x77, OpCode::new(0x77, "*RRA", 2, 6, AddressingMode::ZeroPage_X, Operation::FnCpuAndAddressing(CPU::rra)));
+        map.insert(0x6F, OpCode::new(0x6F, "*RRA", 3, 6, AddressingMode::Absolute, Operation::FnCpuAndAddressing(CPU::rra)));
+        map.insert(0x7F, OpCode::new(0x7F, "*RRA", 3, 7, AddressingMode::Absolute_X, Operation::FnCpuAndAddressing(CPU::rra)));
+        map.insert(0x7B, OpCode::new(0x7B, "*RRA", 3, 7, AddressingMode::Absolute_Y, Operation::FnCpuAndAddressing(CPU::rra)));
+        map.insert(0x63, OpCode::new(0x63, "*RRA", 2, 8, AddressingMode::Indirect_X, Operation::FnCpuAndAddressing(CPU::rra)));
+        map.insert(0x73, OpCode::new(0x73, "*RRA", 2, 8, AddressingMode::Indirect_Y, Operation::FnCpuAndAddressing(CPU::rra)));
+
+        map.insert(0x0B, OpCode::new(0x0B, "*AAC", 2, 2, AddressingMode::Immediate, Operation::FnCpuAndAddressing(CPU::aac)));
+        map.insert(0x2B, OpCode::new(0x2B, "*AAC", 2, 2, AddressingMode::Immediate, Operation::FnCpuAndAddressing(CPU::aac)));
+
+        map.insert(0x4B, OpCode::new(0x4B, "*ASR", 2, 2, AddressingMode::Immediate, Operation::FnCpuAndAddressing(CPU::asr)));
+
+        map.insert(0x6B, OpCode::new(0x6B, "*ARR", 2, 2, AddressingMode::Immediate, Operation::FnCpuAndAddressing(CPU::arr)));
+
+        map.insert(0x8B, OpCode::new(0x8B, "*XAA", 2, 2, AddressingMode::Immediate, Operation::FnCpuAndAddressing(CPU::xaa)));
+
+        map.insert(0x9F, OpCode::new(0x9F, "*AXA", 3, 5, AddressingMode::Absolute_Y, Operation::FnCpuAndAddressing(CPU::axa)));
+        map.insert(0x93, OpCode::new(0x93, "*AXA", 2, 6, AddressingMode::Indirect_Y, Operation::FnCpuAndAddressing(CPU::axa)));
+
+        map.insert(0x9B, OpCode::new(0x9B, "*XAS", 3, 5, AddressingMode::Absolute_Y, Operation::FnCpuAndAddressing(CPU::xas)));
+
+        map.insert(0x9C, OpCode::new(0x9C, "*SYA", 3, 5, AddressingMode::Absolute_X, Operation::FnCpuAndAddressing(CPU::sya)));
+
+        map.insert(0x9E, OpCode::new(0x9E, "*SXA", 3, 5, AddressingMode::Absolute_Y, Operation::FnCpuAndAddressing(CPU::sxa)));
 
         /* Comparisons */
         map.insert(0x24, OpCode::new(0x24, "BIT", 2, 3, AddressingMode::ZeroPage, Operation::FnCpuAndAddressing(CPU::bit)));
@@ -308,6 +361,17 @@ fn test_for_duplicate_opcodes() {
             panic!("Duplicate opcode 0x{opcode:x}")
         } else {
             set.insert(opcode);
+        }
+    }
+}
+
+
+#[test]
+fn test_for_missing_opcodes() {
+    for i in 0..0xFF {
+        if !CPU_INSTRUCTIONS.contains_key(&i) {
+            println!("Instruction {i:02X} not found");
+            panic!()
         }
     }
 }
