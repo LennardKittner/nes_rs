@@ -4,13 +4,7 @@ use crate::cpu::{AddressingMode, CPU};
 use crate::cpu::opcodes::{CPU_INSTRUCTIONS};
 
 pub fn trace(cpu: &CPU) -> String {
-    let opcode = match CPU_INSTRUCTIONS.get(&cpu.mem_read(cpu.program_counter)) {
-        None => {
-            println!("unknown opcode 0x{:02X}", cpu.mem_read(cpu.program_counter));
-            panic!("no entry found for key")
-        }
-        Some(opcode) =>  opcode
-    };
+    let opcode = CPU_INSTRUCTIONS[cpu.mem_read(cpu.program_counter) as usize];
     let mut instruction_bytes = Vec::new();
     for i in 0..opcode.size {
         instruction_bytes.push(cpu.mem_read(cpu.program_counter + i));
@@ -28,7 +22,7 @@ pub fn trace(cpu: &CPU) -> String {
         }
         AddressingMode::ZeroPage => {
             let mut output = format!(" ${:02X}", operand_addr);
-            let value = cpu.mem_read(operand_addr as u16);
+            let value = cpu.mem_read(operand_addr);
             output.push_str(&format!(" = {value:02X}"));
             output
         },

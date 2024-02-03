@@ -6,7 +6,7 @@ pub mod opcodes;
 #[cfg(test)]
 mod cpu_tests;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
 #[allow(non_camel_case_types)]
 pub enum AddressingMode {
     Accumulator,
@@ -180,19 +180,16 @@ impl CPU {
             callback(self);
             let op_code = self.mem_read(self.program_counter);
 
-            if let Some(instruction) = CPU_INSTRUCTIONS.get(&op_code) {
-                instruction.execute(self);
-                if op_code == 0x00 {
-                    return;
-                }
-            } else {
-                panic!("Unknown opcode {:x}", op_code);
+            let instruction = CPU_INSTRUCTIONS[op_code as usize];
+            instruction.execute(self);
+            if op_code == 0x00 {
+                return;
             }
         }
     }
 
     fn get_operand(&self, mode: &AddressingMode) -> u8 {
-        self.mem_read(mode.get_operand_address(&self).unwrap())
+        self.mem_read(mode.get_operand_address(self).unwrap())
     }
 
     fn push(&mut self, data: u8) {
@@ -356,7 +353,7 @@ impl CPU {
         } else {
             self.mem_write(addr, value);
         }
-        return value;
+        value
     }
 
     fn asl(&mut self, mode: &AddressingMode) {
@@ -489,13 +486,13 @@ impl CPU {
     }
 
     fn jmp(&mut self, mode: &AddressingMode) {
-        self.program_counter = mode.get_operand_address(self).unwrap().wrapping_sub(CPU_INSTRUCTIONS[&0x4C].size); //because after this call the program_counter will be incremented by the size of the instruction
+        self.program_counter = mode.get_operand_address(self).unwrap().wrapping_sub(CPU_INSTRUCTIONS[0x4C].size); //because after this call the program_counter will be incremented by the size of the instruction
     }
 
     fn jsr(&mut self, mode: &AddressingMode) {
         let addr = mode.get_operand_address(self).unwrap();
         self.push_u16(self.program_counter.wrapping_add(2)); // +2 because the program_counter was not incremented yet
-        self.program_counter = addr.wrapping_sub(CPU_INSTRUCTIONS[&0x20].size); // because the program_counter will be incremented by the size of the instruction
+        self.program_counter = addr.wrapping_sub(CPU_INSTRUCTIONS[0x20].size); // because the program_counter will be incremented by the size of the instruction
     }
 
     fn lsr_logic(&mut self, mode: &AddressingMode) -> u8 {
