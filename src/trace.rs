@@ -3,7 +3,8 @@ use crate::bus::Mem;
 use crate::cpu::{AddressingMode, CPU};
 use crate::cpu::opcodes::{CPU_INSTRUCTIONS};
 
-pub fn trace(cpu: &CPU) -> String {
+//TODO: cpu mut not good
+pub fn trace(cpu: &mut CPU) -> String {
     let opcode = CPU_INSTRUCTIONS[cpu.mem_read(cpu.program_counter) as usize];
     let mut instruction_bytes = Vec::new();
     for i in 0..opcode.size {

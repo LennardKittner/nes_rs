@@ -26,7 +26,7 @@ pub enum AddressingMode {
 
 impl AddressingMode {
 
-    pub fn get_operand_address(&self, cpu: &CPU) -> Option<u16> {
+    pub fn get_operand_address(&self, cpu: &mut CPU) -> Option<u16> {
         let operand_location = cpu.program_counter + 1;
         match self {
             AddressingMode::Immediate => Some(operand_location),
@@ -90,6 +90,18 @@ impl AddressingMode {
 
 }
 
+// 7  bit  0
+// ---- ----
+// NV1B DIZC
+// |||| ||||
+// |||| |||+- Carry
+// |||| ||+-- Zero
+// |||| |+--- Interrupt Disable
+// |||| +---- Decimal
+// |||+------ (No CPU effect; see: the B flag)
+// ||+------- (No CPU effect; always pushed as 1)
+// |+-------- Overflow
+// +--------- Negative
 #[derive(Copy, Clone)]
 #[repr(u8)]
 enum Flags {
@@ -115,7 +127,7 @@ pub struct CPU {
 }
 
 impl Mem for CPU {
-    fn mem_read(&self, addr: u16) -> u8 {
+    fn mem_read(&mut self, addr: u16) -> u8 {
         self.bus.mem_read(addr)
     }
 
@@ -124,7 +136,6 @@ impl Mem for CPU {
     }
 }
 
-//TODO: interrupts
 impl CPU {
     const STACK_BASE_ADDRESS: u16 = 0x0100;
     const STACK_END: u8 = 0xFD;
@@ -188,8 +199,9 @@ impl CPU {
         }
     }
 
-    fn get_operand(&self, mode: &AddressingMode) -> u8 {
-        self.mem_read(mode.get_operand_address(self).unwrap())
+    fn get_operand(&mut self, mode: &AddressingMode) -> u8 {
+        let addr = mode.get_operand_address(self).unwrap();
+        self.mem_read(addr)
     }
 
     fn push(&mut self, data: u8) {
@@ -712,7 +724,6 @@ impl CPU {
 
     fn axa(&mut self, mode: &AddressingMode) {
         let addr = mode.get_operand_address(self).unwrap();
-        println!("{}", (((addr >> 8) as u8) + 1));
         let value = self.register_a & self.register_x & (((addr >> 8) as u8) + 1);
         self.mem_write(addr, value);
     }

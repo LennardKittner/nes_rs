@@ -1,3 +1,4 @@
+use crate::ppu::PPU;
 use crate::rom::Rom;
 
 // A bus addressing 65k of RAM for testing and the snake game
@@ -8,23 +9,26 @@ pub struct Bus65k {
 // Real NES bus
 pub struct Bus {
     cpu_vram: [u8; 2048],
-    rom: Rom
+    prg_rom: Vec<u8>,
+    ppu: PPU
 }
 
 impl Bus {
     pub fn new(rom: Rom) -> Self {
+        let ppu = PPU::new(rom.chr_rom, rom.screen_mirroring);
         Bus {
             cpu_vram: [0; 2048],
-            rom
+            prg_rom: rom.prg_rom,
+            ppu
         }
     }
 
     fn read_prg_rom(&self, addr: u16) -> u8 {
         let mut addr = addr - 0x8000;
-        if self.rom.prg_rom.len() == 0x4000 && addr >= 0x4000 {
+        if self.prg_rom.len() == 0x4000 && addr >= 0x4000 {
             addr %= 0x4000;
         }
-        self.rom.prg_rom[addr as usize]
+        self.prg_rom[addr as usize]
     }
 }
 
@@ -37,11 +41,11 @@ impl Bus65k {
 }
 
 pub trait Mem {
-    fn mem_read(&self, addr: u16) -> u8;
+    fn mem_read(&mut self, addr: u16) -> u8;
 
     fn mem_write(&mut self, addr: u16, data: u8);
 
-    fn mem_read_u16(&self, pos: u16) -> u16 {
+    fn mem_read_u16(&mut self, pos: u16) -> u16 {
         let lo = self.mem_read(pos) as u16;
         let hi = self.mem_read(pos + 1) as u16;
         (hi << 8) | lo
@@ -63,15 +67,19 @@ const CARTRIDGE_ROM_START: u16 = 0x8000;
 const CARTRIDGE_ROM_END: u16 = 0xFFFF;
 
 impl Mem for Bus {
-    fn mem_read(&self, addr: u16) -> u8 {
+    fn mem_read(&mut self, addr: u16) -> u8 {
         match addr {
             RAM..=RAM_MIRRORS_END => {
                 let mirror_down_addr = addr & 0b00000111_11111111;
                 self.cpu_vram[mirror_down_addr as usize]
             }
-            PPU_REGISTERS..=PPU_REGISTERS_MIRRORS_END => {
-                let _mirror_down_addr = addr & 0b00100000_00000111;
-                todo!("PPU is not implemented yet")
+            0x2000 | 0x2001 | 0x2003 | 0x2005 | 0x2006 | 0x4014 => {
+                panic!("Attempt to read from write-only PPU address {:x}", addr);
+            }
+            0x2007 => self.ppu.read_data(),
+            0x2008..=PPU_REGISTERS_MIRRORS_END => {
+                let mirror_down_addr = addr & 0b00100000_00000111;
+                self.mem_read(mirror_down_addr)
             }
             CARTRIDGE_ROM_START..=CARTRIDGE_ROM_END => self.read_prg_rom(addr),
             _ => {
@@ -87,9 +95,12 @@ impl Mem for Bus {
                 let mirror_down_addr = addr & 0b00000111_11111111;
                 self.cpu_vram[mirror_down_addr as usize] = data;
             }
-            PPU_REGISTERS..=PPU_REGISTERS_MIRRORS_END => {
-                let _mirror_down_addr = addr & 0b00100000_00000111;
-                todo!("PPU is not implemented yet")
+            0x2000 => self.ppu.control_register = data,
+            0x2006 => self.ppu.write_to_ppu_addr(data),
+            0x2007 => self.ppu.write_to_data(data),
+            0x2008..=PPU_REGISTERS_MIRRORS_END => {
+                let mirror_down_addr = addr & 0b00100000_00000111;
+                self.mem_write(mirror_down_addr, data);
             }
             CARTRIDGE_ROM_START..=CARTRIDGE_ROM_END => panic!("Attempt to write to Cartridge ROM space"),
             _ => {
@@ -100,7 +111,7 @@ impl Mem for Bus {
 }
 
 impl Mem for Bus65k {
-    fn mem_read(&self, addr: u16) -> u8 {
+    fn mem_read(&mut self, addr: u16) -> u8 {
         self.cpu_vram[addr as usize]
     }
 
