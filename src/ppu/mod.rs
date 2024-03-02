@@ -4,6 +4,7 @@ pub mod mask;
 pub mod scroll;
 pub mod status;
 
+use crate::bus::Interrupt;
 use crate::ppu::addr::AddressRegister;
 use crate::ppu::control::ControlRegister;
 use crate::ppu::mask::MaskRegister;
@@ -11,12 +12,13 @@ use crate::ppu::scroll::ScrollRegister;
 use crate::ppu::status::StatusRegister;
 use crate::rom::Mirroring;
 
+//TODO: provide better getter for registers
 pub struct PPU {
     pub chr_rom: Vec<u8>,
     pub palette_table: [u8; 32],
     pub vram: [u8; 2048],
-    pub oam_addr: u8,
-    pub oam_data: [u8; 256],
+    oam_addr: u8,
+    oam_data: [u8; 256],
     control_register: ControlRegister,
     mask_register : MaskRegister,
     status_register: StatusRegister,
@@ -24,6 +26,22 @@ pub struct PPU {
     address_register: AddressRegister,
     mirroring: Mirroring,
     internal_data_buffer: u8,
+
+    scan_line: u16,
+    cycles: usize,
+
+    outstanding_interrupt: bool,
+}
+
+impl Interrupt for PPU {
+    fn poll_nmi_status(&mut self) -> bool {
+        if self.outstanding_interrupt {
+            self.outstanding_interrupt = false;
+            true
+        } else {
+            false
+        }
+    }
 }
 
 impl PPU {
@@ -40,8 +58,30 @@ impl PPU {
             scroll_register: ScrollRegister::new(),
             mirroring,
             address_register: AddressRegister::new(),
-            internal_data_buffer: 0
+            internal_data_buffer: 0,
+            scan_line: 0,
+            cycles: 0,
+            outstanding_interrupt: false
         }
+    }
+
+    //TODO: ret bool necessary?
+    pub fn tick(&mut self, cycles: u8) -> bool  {
+        self.cycles += cycles as usize;
+        if self.cycles > 341 {
+            self.cycles -= 341;
+            self.scan_line += 1;
+
+            if self.scan_line == 241 && self.control_register.contains(ControlRegister::GENERATE_NMI) {
+                self.status_register.insert(StatusRegister::VERTICAL_BLANK);
+                self.outstanding_interrupt = true;
+            } else if self.scan_line > 262 {
+                self.scan_line = 0;
+                self.status_register.remove(StatusRegister::VERTICAL_BLANK);
+                return true;
+            }
+        }
+        false
     }
 
     fn increment_vram_addr(&mut self) {
@@ -108,8 +148,11 @@ impl PPU {
     }
 
     pub fn write_to_ctrl(&mut self, value: u8) {
+        let before_nmi_status = self.control_register.contains(ControlRegister::GENERATE_NMI);
         self.control_register.update(value);
-        //        let before_nmi_status = self.ctrl.generate_vblank_nmi();
+        if !before_nmi_status && self.control_register.contains(ControlRegister::GENERATE_NMI) && self.status_register.contains(StatusRegister::VERTICAL_BLANK) {
+            self.outstanding_interrupt = true;
+        }
     }
 
     pub fn write_to_mask(&mut self, value: u8) {

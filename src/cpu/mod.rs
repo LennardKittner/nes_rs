@@ -1,10 +1,12 @@
-use crate::bus::{Bus, Mem};
+use crate::bus::{Bus, Mem, MemBus};
+use crate::cpu::interrupts::{BRK_INTERRUPT, Interrupt, NMI_INTERRUPT, RESET_INTERRUPT};
 use crate::cpu::opcodes::CPU_INSTRUCTIONS;
 use crate::rom::Rom;
 
 pub mod opcodes;
 #[cfg(test)]
 mod cpu_tests;
+mod interrupts;
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 #[allow(non_camel_case_types)]
@@ -24,7 +26,35 @@ pub enum AddressingMode {
     NonAddressing,
 }
 
+fn page_cross(addr1: u16, addr2: u16) -> bool {
+    (addr1 & 0xFF00) != (addr2 & 0xFF00)
+}
+
 impl AddressingMode {
+    pub fn access_crosses_page_border(&self, cpu: &mut CPU) -> bool {
+        let operand_location = cpu.program_counter + 1;
+        match self {
+            AddressingMode::Absolute_X => {
+                let base = cpu.mem_read_u16(operand_location);
+                let target = base.wrapping_add(cpu.register_x as u16);
+                page_cross(base, target)
+            }
+            AddressingMode::Absolute_Y => {
+                let base = cpu.mem_read_u16(operand_location);
+                let target = base.wrapping_add(cpu.register_y as u16);
+                page_cross(base, target)
+            }
+            AddressingMode::Indirect_Y => {
+                let base = cpu.mem_read(operand_location);
+                let lo = cpu.mem_read(base as u16);
+                let hi = cpu.mem_read(base.wrapping_add(1) as u16);
+                let deref_base = (hi as u16) << 8 | (lo as u16);
+                let deref =  deref_base.wrapping_add(cpu.register_y as u16);
+                page_cross(deref_base, deref)
+            }
+            _ => panic!("")
+        }
+    }
 
     pub fn get_operand_address(&self, cpu: &mut CPU) -> Option<u16> {
         let operand_location = cpu.program_counter + 1;
@@ -87,7 +117,6 @@ impl AddressingMode {
             AddressingMode::NonAddressing => None,
         }
     }
-
 }
 
 // 7  bit  0
@@ -123,7 +152,9 @@ pub struct CPU {
     pub register_s: u8,
     pub status: u8,
     pub program_counter: u16,
-    pub bus: Box<dyn Mem>,
+    pub bus: Box<dyn MemBus>,
+    // indicates how many additional cycles the previous instruction took
+    additional_cycles: u8,
 }
 
 impl Mem for CPU {
@@ -145,7 +176,7 @@ impl CPU {
         CPU::new_with_bus(Bus::new(rom))
     }
 
-    pub fn new_with_bus<T: Mem + 'static>(bus: T) -> Self {
+    pub fn new_with_bus<T: MemBus + 'static>(bus: T) -> Self {
         CPU {
             register_a: 0,
             register_x: 0,
@@ -154,6 +185,7 @@ impl CPU {
             status: CPU::INITIAL_STATUS,
             program_counter: 0,
             bus: Box::new(bus),
+            additional_cycles: 0,
         }
     }
 
@@ -167,7 +199,7 @@ impl CPU {
         for (i, byte) in program.iter().enumerate() {
             self.mem_write(at + i as u16, *byte);
         }
-        self.mem_write_u16(0xFFFC, at);
+        self.mem_write_u16(RESET_INTERRUPT.interrupt_vector, at);
     }
 
     pub fn reset(&mut self) {
@@ -176,7 +208,9 @@ impl CPU {
         self.register_y = 0;
         self.register_s = CPU::STACK_END;
         self.status = CPU::INITIAL_STATUS;
-        self.program_counter = self.mem_read_u16(0xFFFC);
+        self.program_counter = self.mem_read_u16(RESET_INTERRUPT.interrupt_vector);
+        eprintln!("{:X}", self.program_counter);
+        self.bus.tick(RESET_INTERRUPT.cycles);
     }
 
     pub fn run(&mut self) {
@@ -188,6 +222,10 @@ impl CPU {
         F: FnMut(&mut CPU)
     {
         loop {
+            if self.bus.poll_nmi_status() {
+                self.handle_interrupt(NMI_INTERRUPT);
+            }
+
             callback(self);
             let op_code = self.mem_read(self.program_counter);
 
@@ -196,7 +234,22 @@ impl CPU {
             if op_code == 0x00 {
                 return;
             }
+
+            self.bus.tick(instruction.cycles + self.additional_cycles);
+            self.additional_cycles = 0;
         }
+    }
+
+    fn handle_interrupt(&mut self, interrupt: Interrupt) {
+        self.push_u16(self.program_counter);
+        let mut status = self.status | Flags::B2 as u8;
+        if interrupt.b_flag {
+            status |= Flags::B1 as u8;
+        }
+        self.push(status);
+        self.status |= Flags::InterruptDisabled as u8;
+        self.program_counter = self.mem_read_u16(interrupt.interrupt_vector);
+        self.bus.tick(interrupt.cycles);
     }
 
     fn get_operand(&mut self, mode: &AddressingMode) -> u8 {
@@ -249,6 +302,13 @@ impl CPU {
     fn update_zero_and_negative_flags(&mut self, value: u8) {
         self.update_flag(Flags::Zero, value == 0);
         self.update_flag(Flags::Negative, value & 0b1000_0000 != 0);
+    }
+
+    fn branch(&mut self, condition: bool, target: u16) {
+        if condition {
+            self.additional_cycles += 1 + if page_cross(self.program_counter, target) { 2 } else { 0 };
+            self.program_counter = target;
+        }
     }
 
     fn lda(&mut self, mode: &AddressingMode) {
@@ -309,9 +369,9 @@ impl CPU {
     fn nop() {}
 
     fn brk(&mut self) {
-        //TODO: do anything else on BRK?
-        self.push_u16(self.program_counter);
-        self.push(self.status & Flags::B1 as u8);
+        //TODO: maybe pc +2 before handling interrupt
+        //TODO: just exit for now
+        //self.handle_interrupt(BRK_INTERRUPT);
     }
 
     fn add_to_a(&mut self, value: u8) {
@@ -373,51 +433,43 @@ impl CPU {
     }
 
     fn bcc(&mut self, mode: &AddressingMode) {
-        if !self.get_flag(Flags::Carry) {
-            self.program_counter = mode.get_operand_address(self).unwrap();
-        }
+        let target = mode.get_operand_address(self).unwrap();
+        self.branch(!self.get_flag(Flags::Carry), target);
     }
 
     fn bcs(&mut self, mode: &AddressingMode) {
-        if self.get_flag(Flags::Carry) {
-            self.program_counter = mode.get_operand_address(self).unwrap();
-        }
+        let target = mode.get_operand_address(self).unwrap();
+        self.branch(self.get_flag(Flags::Carry), target);
     }
 
     fn beq(&mut self, mode: &AddressingMode) {
-        if self.get_flag(Flags::Zero) {
-            self.program_counter = mode.get_operand_address(self).unwrap();
-        }
+        let target = mode.get_operand_address(self).unwrap();
+        self.branch(self.get_flag(Flags::Zero), target);
     }
 
     fn bne(&mut self, mode: &AddressingMode) {
-        if !self.get_flag(Flags::Zero) {
-            self.program_counter = mode.get_operand_address(self).unwrap();
-        }
+        let target = mode.get_operand_address(self).unwrap();
+        self.branch(!self.get_flag(Flags::Zero), target);
     }
 
     fn bpl(&mut self, mode: &AddressingMode) {
-        if !self.get_flag(Flags::Negative) {
-            self.program_counter = mode.get_operand_address(self).unwrap();
-        }
+        let target = mode.get_operand_address(self).unwrap();
+        self.branch(!self.get_flag(Flags::Negative), target);
     }
 
     fn bmi(&mut self, mode: &AddressingMode) {
-        if self.get_flag(Flags::Negative) {
-            self.program_counter = mode.get_operand_address(self).unwrap();
-        }
+        let target = mode.get_operand_address(self).unwrap();
+        self.branch(self.get_flag(Flags::Negative), target);
     }
 
     fn bvc(&mut self, mode: &AddressingMode) {
-        if !self.get_flag(Flags::Overflow) {
-            self.program_counter = mode.get_operand_address(self).unwrap();
-        }
+        let target = mode.get_operand_address(self).unwrap();
+        self.branch(!self.get_flag(Flags::Overflow), target);
     }
 
     fn bvs(&mut self, mode: &AddressingMode) {
-        if self.get_flag(Flags::Overflow) {
-            self.program_counter = mode.get_operand_address(self).unwrap();
-        }
+        let target = mode.get_operand_address(self).unwrap();
+        self.branch(self.get_flag(Flags::Overflow), target);
     }
 
     fn bit(&mut self, mode: &AddressingMode) {
