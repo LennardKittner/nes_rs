@@ -1,6 +1,7 @@
 use itertools::Itertools;
 use crate::bus::Mem;
-use crate::cpu::{AddressingMode, CPU};
+use crate::cpu::addressing_mode::AddressingMode;
+use crate::cpu::CPU;
 use crate::cpu::opcodes::{CPU_INSTRUCTIONS};
 
 //TODO: cpu mut not good
