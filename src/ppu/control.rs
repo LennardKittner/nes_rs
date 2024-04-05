@@ -80,4 +80,18 @@ impl ControlRegister {
             8
         }
     }
+    
+    pub fn is_slave(&self) -> bool {
+        self.contains(Self::MASTER_SLAVE_SELECT)
+    }
+    
+    pub fn generate_nmi(&self) -> bool {
+        self.contains(Self::GENERATE_NMI)
+    }
+}
+
+impl Default for ControlRegister {
+    fn default() -> Self {
+        Self::new()
+    }
 }

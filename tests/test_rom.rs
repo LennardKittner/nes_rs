@@ -10,10 +10,11 @@ fn test_rom() -> Rom {
     Rom::load_from_disk("./nestest.nes").unwrap()
 }
 
+//TODO: test cycles and PPU and rest of instructions
 #[test]
 #[should_panic(expected = "APU not implemented")]
-fn test_against_nes_test_log_documented() {
-    let bus = Bus::new(test_rom());
+fn test_against_nes_test_log_no_ppu() {
+    let bus = Bus::new(test_rom(), | _ | {});
     let mut cpu = CPU::new_with_bus(bus);
     cpu.reset();
     cpu.program_counter = 0xC000;
@@ -35,7 +36,7 @@ fn test_against_nes_test_log_documented() {
 
 #[test]
 fn test_format_trace() {
-    let mut bus = Bus::new(test_rom());
+    let mut bus = Bus::new(test_rom(), | _ | {});
     bus.mem_write(100, 0xA2);
     bus.mem_write(101, 0x01);
     bus.mem_write(102, 0xCA);
@@ -68,7 +69,7 @@ fn test_format_trace() {
 
 #[test]
 fn test_mem_access() {
-    let mut bus = Bus::new(test_rom());
+    let mut bus = Bus::new(test_rom(), | _ | {});
     // ORA ($33), Y
     bus.mem_write(100, 0x11);
     bus.mem_write(101, 0x33);

@@ -27,3 +27,9 @@ impl ScrollRegister {
         self.w_latch = false;
     }
 }
+
+impl Default for ScrollRegister {
+    fn default() -> Self {
+        Self::new()
+    }
+}

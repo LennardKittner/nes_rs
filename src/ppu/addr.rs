@@ -1,3 +1,4 @@
+
 pub struct AddressRegister {
     value: (u8, u8), // 16bit address high byte first, low bytes second
     hi_ptr: bool,
@@ -49,5 +50,11 @@ impl AddressRegister {
 
     pub fn get(&self) -> u16 {
         (self.value.0 as u16) << 8 | (self.value.1 as u16)
+    }
+}
+
+impl Default for AddressRegister {
+    fn default() -> Self {
+        Self::new()
     }
 }

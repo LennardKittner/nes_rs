@@ -14,14 +14,14 @@ bitflags! {
     // |+-------- Emphasize green (red on PAL/Dendy)
     // +--------- Emphasize blue
     pub struct MaskRegister: u8 {
-        const GREYSCALE               = 0b0000_0001;
+        const GREYSCALE       = 0b0000_0001;
         const BACKGROUND_LEFT = 0b0000_0010;
-        const SPRITES_LEFT = 0b0000_0100;
-        const BACKGROUND = 0b0000_1000;
-        const SPRITES = 0b0001_0000;
-        const RED = 0b0010_0000;
-        const GREEN = 0b0100_0000;
-        const BLUE = 0b1000_0000;
+        const SPRITES_LEFT    = 0b0000_0100;
+        const BACKGROUND      = 0b0000_1000;
+        const SPRITES         = 0b0001_0000;
+        const RED             = 0b0010_0000;
+        const GREEN           = 0b0100_0000;
+        const BLUE            = 0b1000_0000;
     }
 }
 
@@ -40,6 +40,22 @@ impl MaskRegister {
         self.0 = Self::from_bits(data).unwrap().0;
     }
 
+    pub fn is_grayscale(&self) -> bool {
+        self.contains(Self::GREYSCALE)
+    }
+
+    pub fn show_sprites_left(&self) -> bool {
+        self.contains(Self::SPRITES_LEFT)
+    }
+
+    pub fn show_background(&self) -> bool {
+        self.contains(Self::BACKGROUND)
+    }
+
+    pub fn show_sprites(&self) -> bool {
+        self.contains(Self::SPRITES)
+    }
+
     pub fn get_emphesis(&self) -> Vec<Color> {
         let mut result = Vec::new();
         if self.contains(Self::RED) {
@@ -52,5 +68,11 @@ impl MaskRegister {
             result.push(Color::Blue);
         }
         result
+    }
+}
+
+impl Default for MaskRegister {
+    fn default() -> Self {
+        Self::new()
     }
 }

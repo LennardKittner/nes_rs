@@ -38,7 +38,29 @@ impl StatusRegister {
         Self::empty()
     }
 
+    pub fn sprite_overflow(&self) -> bool {
+        self.contains(Self::SPRITE_OVERFLOW)
+    }
+
+    pub fn sprite_zero_hit(&self) -> bool {
+        self.contains(Self::SPRITE_ZERO_HIT)
+    }
+
+    pub fn vertical_blank(&self) -> bool {
+        self.contains(Self::VERTICAL_BLANK)
+    }
+    
+    pub fn set_vertical_blank(&mut self, v_blank: bool) {
+        self.set(Self::VERTICAL_BLANK, v_blank);
+    }
+
     pub fn update(&mut self, data: u8) {
         self.0 = Self::from_bits(data).unwrap().0;
+    }
+}
+
+impl Default for StatusRegister {
+    fn default() -> Self {
+        Self::new()
     }
 }
