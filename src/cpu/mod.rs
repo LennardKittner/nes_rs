@@ -1,4 +1,4 @@
-use crate::bus::{Bus, Mem, MemBus};
+use crate::bus::{Bus, PollInterrupt, Mem};
 use crate::cpu::addressing_mode::{AddressingMode, page_cross};
 use crate::cpu::interrupts::{Interrupt, NMI_INTERRUPT, RESET_INTERRUPT};
 use crate::cpu::opcodes::CPU_INSTRUCTIONS;
@@ -36,19 +36,19 @@ enum Flags {
 }
 
 #[allow(non_snake_case)]
-pub struct CPU {
+pub struct CPU<'a> {
     pub register_a: u8,
     pub register_x: u8,
     pub register_y: u8,
     pub register_s: u8,
     pub status: u8,
     pub program_counter: u16,
-    pub bus: Box<dyn MemBus>,
+    pub bus: Bus<'a>,
     // indicates how many additional cycles the previous instruction took
     additional_cycles: u8,
 }
 
-impl Mem for CPU {
+impl Mem for CPU<'_> {
     fn mem_read(&mut self, addr: u16) -> u8 {
         self.bus.mem_read(addr)
     }
@@ -58,16 +58,16 @@ impl Mem for CPU {
     }
 }
 
-impl CPU {
+impl CPU<'_> {
     const STACK_BASE_ADDRESS: u16 = 0x0100;
     const STACK_END: u8 = 0xFD;
     const INITIAL_STATUS: u8 = 0x24;
 
     pub fn new(rom: Rom) -> Self {
-        CPU::new_with_bus(Bus::new(rom))
+        CPU::new_with_bus(Bus::new(rom, | _ | {}))
     }
 
-    pub fn new_with_bus<T: MemBus + 'static>(bus: T) -> Self {
+    pub fn new_with_bus(bus: Bus) -> CPU {
         CPU {
             register_a: 0,
             register_x: 0,
@@ -75,7 +75,7 @@ impl CPU {
             register_s: CPU::STACK_END,
             status: CPU::INITIAL_STATUS,
             program_counter: 0,
-            bus: Box::new(bus),
+            bus,
             additional_cycles: 0,
         }
     }
@@ -100,7 +100,6 @@ impl CPU {
         self.register_s = CPU::STACK_END;
         self.status = CPU::INITIAL_STATUS;
         self.program_counter = self.mem_read_u16(RESET_INTERRUPT.interrupt_vector);
-        eprintln!("{:X}", self.program_counter);
         self.bus.tick(RESET_INTERRUPT.cycles);
     }
 
@@ -197,7 +196,7 @@ impl CPU {
 
     fn branch(&mut self, condition: bool, target: u16) {
         if condition {
-            self.additional_cycles += 1 + if page_cross(self.program_counter, target) { 2 } else { 0 };
+            self.additional_cycles += 1 + if page_cross(self.program_counter, target) { 1 } else { 0 };
             self.program_counter = target;
         }
     }

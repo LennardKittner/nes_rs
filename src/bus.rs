@@ -1,28 +1,25 @@
 use crate::ppu::PPU;
 use crate::rom::Rom;
 
-// A bus addressing 65k of RAM for testing and the snake game
-pub struct Bus65k {
-    cpu_vram: [u8; 0xFFFF + 1], // +1 because we also want to access 0xFFFF
-    cycles: usize,
-}
-
-// Real NES bus
-pub struct Bus {
+pub struct Bus<'a> {
     cpu_vram: [u8; 2048],
     prg_rom: Vec<u8>,
     ppu: PPU,
     cycles: usize,
+    game_loop_callback: Box<dyn FnMut(&PPU) + 'a>
 }
 
-impl Bus {
-    pub fn new(rom: Rom) -> Self {
+impl<'a> Bus<'a> {
+    pub fn new<'b, F>(rom: Rom, game_loop_callback: F) -> Bus<'b>
+        where F: FnMut(&PPU) + 'b
+    {
         let ppu = PPU::new(rom.chr_rom, rom.screen_mirroring);
         Bus {
             cpu_vram: [0; 2048],
             prg_rom: rom.prg_rom,
             cycles: 0,
-            ppu
+            ppu,
+            game_loop_callback: Box::from(game_loop_callback)
         }
     }
 
@@ -33,24 +30,17 @@ impl Bus {
         }
         self.prg_rom[addr as usize]
     }
-}
 
-impl Bus65k {
-    pub fn new() -> Self {
-        Bus65k {
-            cpu_vram: [0; 0xFFFF + 1],
-            cycles: 0,
+    pub fn tick(&mut self, cycles: u8) {
+        self.cycles += cycles as usize;
+        let refresh = self.ppu.tick(cycles * 3);
+        if refresh {
+            (self.game_loop_callback)(&mut self.ppu);
         }
     }
 }
 
-pub trait MemBus: Clock + Mem + Interrupt {}
-
-pub trait Clock {
-    fn tick(&mut self, cycles: u8);
-}
-
-pub trait Interrupt {
+pub trait PollInterrupt {
     fn poll_nmi_status(&mut self) -> bool;
 }
 
@@ -79,22 +69,13 @@ const PPU_REGISTERS_MIRRORS_END: u16 = 0x3FFF;
 const CARTRIDGE_ROM_START: u16 = 0x8000;
 const CARTRIDGE_ROM_END: u16 = 0xFFFF;
 
-impl MemBus for Bus {}
-
-impl Interrupt for Bus {
+impl PollInterrupt for Bus<'_> {
     fn poll_nmi_status(&mut self) -> bool {
         self.ppu.poll_nmi_status()
     }
 }
 
-impl Clock for Bus {
-    fn tick(&mut self, cycles: u8) {
-        self.cycles += cycles as usize;
-        self.ppu.tick(cycles * 3);
-    }
-}
-
-impl Mem for Bus {
+impl Mem for Bus<'_> {
     fn mem_read(&mut self, addr: u16) -> u8 {
         match addr {
             RAM..=RAM_MIRRORS_END => {
@@ -102,8 +83,12 @@ impl Mem for Bus {
                 self.cpu_vram[mirror_down_addr as usize]
             }
             0x2000 | 0x2001 | 0x2003 | 0x2005 | 0x2006 | 0x4014 => {
-                panic!("Attempt to read from write-only PPU address {:x}", addr);
+                //TODO: maybe detect tracing
+                //panic!("Attempt to read from write-only PPU address {:x}", addr);
+                0
             }
+            0x2002 => self.ppu.read_status(),
+            0x2004 => self.ppu.read_oam_data(),
             0x2007 => self.ppu.read_data(),
             0x2008..=PPU_REGISTERS_MIRRORS_END => {
                 let mirror_down_addr = addr & 0b00100000_00000111;
@@ -111,7 +96,7 @@ impl Mem for Bus {
             }
             CARTRIDGE_ROM_START..=CARTRIDGE_ROM_END => self.read_prg_rom(addr),
             _ => {
-                println!("Ignoring mem accesses at {addr}");
+                println!("Ignoring mem read at {addr}");
                 0
             }
         }
@@ -123,47 +108,29 @@ impl Mem for Bus {
                 let mirror_down_addr = addr & 0b00000111_11111111;
                 self.cpu_vram[mirror_down_addr as usize] = data;
             }
-            0x2000 => self.ppu.write_to_ctrl(data),
+            0x2000 => {
+                //println!("wrote {:X} to control register", {data});
+                self.ppu.write_to_ctrl(data)
+            },
             0x2001 => self.ppu.write_to_mask(data),
             0x2002 => panic!("write to PPU status register"),
             0x2003 => self.ppu.write_to_addr(data),
             0x2004 => self.ppu.write_to_data(data),
             0x2005 => self.ppu.write_to_scroll(data),
             0x2006 => self.ppu.write_to_addr(data),
-            0x2007 => self.ppu.write_to_data(data),
+            0x2007 => {
+                //println!("write 2007 {data}");
+                self.ppu.write_to_data(data)
+            },
             0x2008..=PPU_REGISTERS_MIRRORS_END => {
                 let mirror_down_addr = addr & 0b00100000_00000111;
                 self.mem_write(mirror_down_addr, data);
             }
             CARTRIDGE_ROM_START..=CARTRIDGE_ROM_END => panic!("Attempt to write to Cartridge ROM space"),
             _ => {
-                println!("Ignoring mem accesses at {addr}");
+                println!("Ignoring mem write at 0x{addr:X}");
             }
         }
-    }
-}
-
-impl MemBus for Bus65k {}
-
-impl Interrupt for Bus65k {
-    fn poll_nmi_status(&mut self) -> bool {
-        false
-    }
-}
-
-impl Clock for Bus65k {
-    fn tick(&mut self, cycles: u8) {
-        self.cycles += cycles as usize;
-    }
-}
-
-impl Mem for Bus65k {
-    fn mem_read(&mut self, addr: u16) -> u8 {
-        self.cpu_vram[addr as usize]
-    }
-
-    fn mem_write(&mut self, addr: u16, data: u8) {
-        self.cpu_vram[addr as usize] = data;
     }
 }
 
