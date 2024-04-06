@@ -1,4 +1,3 @@
-use itertools::Itertools;
 use crate::ppu::{PPU, SYSTEM_PALLET};
 use crate::frame::Frame;
 use crate::ppu::sprite::Sprite;
@@ -21,7 +20,6 @@ pub fn get_bg_palette(ppu: &PPU, x_pos: usize, y_pos: usize) -> [u8; 4] {
 }
 
 pub fn get_sprite_palette(ppu: &PPU, palette_idx: usize) -> [u8; 4] {
-    print!("{}", palette_idx);
     let start = 0x11 + palette_idx * 4; //TODO: why 0x11
     [
         0,

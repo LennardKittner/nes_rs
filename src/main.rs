@@ -1,9 +1,11 @@
+use std::collections::HashMap;
 use std::env;
 use itertools::Itertools;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::PixelFormatEnum;
 use nes_rs::bus::Bus;
+use nes_rs::controller::{Controller, ControllerButtons};
 use nes_rs::cpu::CPU;
 use nes_rs::frame::Frame;
 use nes_rs::ppu::PPU;
@@ -38,7 +40,20 @@ fn main() {
     let bytes: Vec<u8> = std::fs::read(path).unwrap();
     let rom = Rom::new(&bytes).unwrap();
     let mut frame = Frame::new();
-    let bus = Bus::new(rom, move | ppu: &PPU | {
+
+    //TODO: second controller
+    //TODO: input buffering
+    let mut key_map = HashMap::new();
+    key_map.insert(Keycode::Down, ControllerButtons::DOWN);
+    key_map.insert(Keycode::Up, ControllerButtons::UP);
+    key_map.insert(Keycode::Right, ControllerButtons::RIGHT);
+    key_map.insert(Keycode::Left, ControllerButtons::LEFT);
+    key_map.insert(Keycode::A, ControllerButtons::A);
+    key_map.insert(Keycode::S, ControllerButtons::B);
+    key_map.insert(Keycode::Space, ControllerButtons::SELECT);
+    key_map.insert(Keycode::Return, ControllerButtons::START);
+
+    let bus = Bus::new(rom, move |ppu: &PPU, controller_1: &mut Controller, _: &mut Controller | {
         render(ppu, &mut frame);
         texture.update(None, &frame.data, 256 * 3).unwrap();
 
@@ -51,6 +66,20 @@ fn main() {
                     keycode: Some(Keycode::Escape),
                     ..
                 } => std::process::exit(0),
+                Event::KeyDown { keycode, .. } => {
+                    if let Some(keycode) = keycode {
+                        if let Some(key) = key_map.get(&keycode) {
+                            controller_1.set_button_state(true, *key);
+                        }
+                    }
+                }
+                Event::KeyUp { keycode, .. } => {
+                    if let Some(keycode) = keycode {
+                        if let Some(key) = key_map.get(&keycode) {
+                            controller_1.set_button_state(false, *key);
+                        }
+                    }
+                }
                 _ => { /* do nothing */ }
             }
         }

@@ -1,3 +1,4 @@
+use crate::controller::Controller;
 use crate::ppu::PPU;
 use crate::rom::Rom;
 
@@ -6,12 +7,14 @@ pub struct Bus<'a> {
     prg_rom: Vec<u8>,
     ppu: PPU,
     cycles: usize,
-    game_loop_callback: Box<dyn FnMut(&PPU) + 'a>
+    game_loop_callback: Box<dyn FnMut(&PPU, &mut Controller, &mut Controller) + 'a>,
+    controller_1: Controller,
+    controller_2: Controller,
 }
 
 impl<'a> Bus<'a> {
     pub fn new<'b, F>(rom: Rom, game_loop_callback: F) -> Bus<'b>
-        where F: FnMut(&PPU) + 'b
+        where F: FnMut(&PPU, &mut Controller, &mut Controller) + 'b
     {
         let ppu = PPU::new(rom.chr_rom, rom.screen_mirroring);
         Bus {
@@ -19,7 +22,9 @@ impl<'a> Bus<'a> {
             prg_rom: rom.prg_rom,
             cycles: 0,
             ppu,
-            game_loop_callback: Box::from(game_loop_callback)
+            game_loop_callback: Box::from(game_loop_callback),
+            controller_1: Controller::new(),
+            controller_2: Controller::new(),
         }
     }
 
@@ -35,7 +40,7 @@ impl<'a> Bus<'a> {
         self.cycles += cycles as usize;
         let refresh = self.ppu.tick(cycles * 3);
         if refresh {
-            (self.game_loop_callback)(&mut self.ppu);
+            (self.game_loop_callback)(&self.ppu, &mut self.controller_1, &mut self.controller_2);
         }
     }
 }
@@ -94,6 +99,8 @@ impl Mem for Bus<'_> {
                 let mirror_down_addr = addr & 0b00100000_00000111;
                 self.mem_read(mirror_down_addr)
             }
+            0x4016 => self.controller_1.read(),
+            0x4017 => self.controller_2.read(),
             CARTRIDGE_ROM_START..=CARTRIDGE_ROM_END => self.read_prg_rom(addr),
             _ => {
                 println!("Ignoring mem read at {addr}");
@@ -136,6 +143,8 @@ impl Mem for Bus<'_> {
                 self.ppu.write_to_oam_data_dma(&buf)
                 //TODO: bonus cycles
             }
+            0x4016 => self.controller_1.write(data),
+            0x4017 => self.controller_2.write(data),
             CARTRIDGE_ROM_START..=CARTRIDGE_ROM_END => panic!("Attempt to write to Cartridge ROM space"),
             _ => {
                 println!("Ignoring mem write at 0x{addr:X}");
