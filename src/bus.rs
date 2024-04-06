@@ -126,6 +126,16 @@ impl Mem for Bus<'_> {
                 let mirror_down_addr = addr & 0b00100000_00000111;
                 self.mem_write(mirror_down_addr, data);
             }
+            0x4014 => {
+                // https://wiki.nesdev.com/w/index.php/PPU_programmer_reference#OAM_DMA_.28.244014.29_.3E_write
+                let mut buf = [0u8; 256];
+                let start_address = (data as u16) << 8;
+                for i in 0..256 {
+                    buf[i] = self.mem_read(start_address + i as u16)
+                }
+                self.ppu.write_to_oam_data_dma(&buf)
+                //TODO: bonus cycles
+            }
             CARTRIDGE_ROM_START..=CARTRIDGE_ROM_END => panic!("Attempt to write to Cartridge ROM space"),
             _ => {
                 println!("Ignoring mem write at 0x{addr:X}");

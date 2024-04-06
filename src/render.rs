@@ -1,5 +1,7 @@
+use itertools::Itertools;
 use crate::ppu::{PPU, SYSTEM_PALLET};
 use crate::frame::Frame;
+use crate::ppu::sprite::Sprite;
 
 
 pub fn get_bg_palette(ppu: &PPU, x_pos: usize, y_pos: usize) -> [u8; 4] {
@@ -18,16 +20,27 @@ pub fn get_bg_palette(ppu: &PPU, x_pos: usize, y_pos: usize) -> [u8; 4] {
     [ppu.palette_table[0], ppu.palette_table[palette_start], ppu.palette_table[palette_start+1], ppu.palette_table[palette_start+2]]
 }
 
+pub fn get_sprite_palette(ppu: &PPU, palette_idx: usize) -> [u8; 4] {
+    print!("{}", palette_idx);
+    let start = 0x11 + palette_idx * 4; //TODO: why 0x11
+    [
+        0,
+        ppu.palette_table[start],
+        ppu.palette_table[start + 1],
+        ppu.palette_table[start + 2],
+    ]
+}
+
 pub fn write_tile(frame: &mut Frame, x_pos: usize, y_pos: usize, tile: &[u8], palette: &[u8; 4]) {
     for y in 0..8 {
         let mut upper = tile[y];
         let mut lower = tile[y + 8];
-    
+
         for x in (0..8).rev() {
             let color_idx = (1 & lower) << 1 | (1 & upper);
             upper >>= 1;
             lower >>= 1;
-    
+
             let rgb = SYSTEM_PALLET[palette[color_idx as usize] as usize];
             frame.set_pixel(x_pos + x, y_pos + y, rgb);
         }
@@ -35,7 +48,41 @@ pub fn write_tile(frame: &mut Frame, x_pos: usize, y_pos: usize, tile: &[u8], pa
 }
 
 pub fn render(ppu: &PPU, frame: &mut Frame) {
-    render_background(&ppu, frame);
+    render_background(ppu, frame);
+    render_sprites(ppu, frame);
+}
+
+//TODO: priority
+fn render_sprites(ppu: &PPU, frame: &mut Frame) {
+    let sprites = (0..ppu.oam_data.len()).step_by(4).rev().map(|idx| {
+        let raw = &ppu.oam_data[idx..idx+4];
+        Sprite::new(raw).unwrap()
+    });
+    for sprite in sprites {
+        let palette = get_sprite_palette(ppu, sprite.get_palette_index());
+        let bank = ppu.control_register.get_sprite_pattern_table_address() as usize;
+        let tile = &ppu.chr_rom[(bank + sprite.get_pattern_index() * 16)..(bank + sprite.get_pattern_index() * 16 + 16)];
+        
+        for y in 0..8 {
+            let mut upper = tile[y];
+            let mut lowwer = tile[y + 8];
+            for x in (0..8).rev() {
+                let color_idx = (1 & lowwer) << 1 | (1 & upper);
+                upper >>= 1;
+                lowwer >>= 1;
+                if color_idx == 0 {
+                    continue;
+                }
+                let rgb = SYSTEM_PALLET[palette[color_idx as usize] as usize];
+                match (sprite.is_horizontal_flip(), sprite.is_vertical_flip()) {
+                    (false, false) => frame.set_pixel(x + sprite.get_x(), y + sprite.get_y(), rgb),
+                    (true, false) => frame.set_pixel(sprite.get_x() + 7 - x, y + sprite.get_y(), rgb),
+                    (false, true) => frame.set_pixel(x + sprite.get_x(), sprite.get_y() + 7 - y, rgb),
+                    (true, true) => frame.set_pixel(sprite.get_x() + 7 - x, sprite.get_y() + 7 - y, rgb),
+                }
+            }
+        }
+    }
 }
 
 fn render_background(ppu: &PPU, frame: &mut Frame) {

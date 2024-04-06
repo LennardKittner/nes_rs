@@ -3,6 +3,7 @@ pub mod control;
 pub mod mask;
 pub mod scroll;
 pub mod status;
+pub mod sprite;
 
 use crate::bus::PollInterrupt;
 use crate::ppu::addr::AddressRegister;
@@ -34,7 +35,7 @@ pub struct PPU {
     pub palette_table: [u8; 32],
     pub vram: [u8; 2048],
     oam_addr: u8,
-    oam_data: [u8; 256],
+    pub oam_data: [u8; 256],
     pub control_register: ControlRegister,
     mask_register : MaskRegister,
     status_register: StatusRegister,
