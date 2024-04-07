@@ -66,18 +66,14 @@ fn main() {
                     keycode: Some(Keycode::Escape),
                     ..
                 } => std::process::exit(0),
-                Event::KeyDown { keycode, .. } => {
-                    if let Some(keycode) = keycode {
-                        if let Some(key) = key_map.get(&keycode) {
-                            controller_1.set_button_state(true, *key);
-                        }
+                Event::KeyDown { keycode: Some(keycode), .. } => {
+                    if let Some(key) = key_map.get(&keycode) {
+                        controller_1.set_button_state(true, *key);
                     }
                 }
-                Event::KeyUp { keycode, .. } => {
-                    if let Some(keycode) = keycode {
-                        if let Some(key) = key_map.get(&keycode) {
-                            controller_1.set_button_state(false, *key);
-                        }
+                Event::KeyUp { keycode: Some(keycode), .. } => {
+                    if let Some(key) = key_map.get(&keycode) {
+                        controller_1.set_button_state(false, *key);
                     }
                 }
                 _ => { /* do nothing */ }

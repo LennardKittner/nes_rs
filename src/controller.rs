@@ -19,6 +19,12 @@ pub struct Controller {
     button_state: ControllerButtons,
 }
 
+impl Default for Controller {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Controller {
     pub fn new() -> Self {
         Controller {
