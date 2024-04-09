@@ -10,6 +10,7 @@ use crate::ppu::addr::AddressRegister;
 use crate::ppu::control::ControlRegister;
 use crate::ppu::mask::MaskRegister;
 use crate::ppu::scroll::ScrollRegister;
+use crate::ppu::sprite::Sprite;
 use crate::ppu::status::StatusRegister;
 use crate::rom::Mirroring;
 
@@ -41,13 +42,13 @@ pub struct PPU {
     status_register: StatusRegister,
     scroll_register: ScrollRegister,
     address_register: AddressRegister,
-    mirroring: Mirroring,
+    pub mirroring: Mirroring,
     internal_data_buffer: u8,
 
     scan_line: u16,
     cycles: usize,
 
-    outstanding_interrupt: bool,
+    pub outstanding_interrupt: bool,
 }
 
 impl PollInterrupt for PPU {
@@ -82,15 +83,19 @@ impl PPU {
         }
     }
 
-    pub(crate) fn tick(&mut self, cycles: u8) -> bool  {
+    pub fn tick(&mut self, cycles: u8) -> bool  {
         self.cycles += cycles as usize;
         if self.cycles >= 341 {
+            if self.is_sprite_0_hit(self.cycles) {
+                self.status_register.set_sprite_zero_hit(true);
+            }
+            
             self.cycles -= 341;
             self.scan_line += 1;
 
-            //TODO: sprite zero hit?
             if self.scan_line == 241 {
                 self.status_register.set_vertical_blank(true);
+                self.status_register.set_sprite_zero_hit(false);
                 if self.control_register.generate_nmi() {
                     self.outstanding_interrupt = true;
                 }
@@ -98,10 +103,17 @@ impl PPU {
                 self.scan_line = 0;
                 self.outstanding_interrupt = false;
                 self.status_register.set_vertical_blank(false);
+                self.status_register.set_sprite_zero_hit(false);
                 return true;
             }
         }
         false
+    }
+
+    //TODO: check transparency
+    fn is_sprite_0_hit(&self, cycle: usize) -> bool {
+        let sprite_0 = Sprite::new(&self.oam_data).unwrap();
+        (sprite_0.get_y() == self.scan_line as usize) && sprite_0.get_x() <= cycle && self.mask_register.show_sprites()
     }
 
     fn increment_vram_addr(&mut self) {
@@ -201,20 +213,29 @@ impl PPU {
     }
 
     pub fn write_to_oam_data(&mut self, value: u8) {
+        // println!("OAM WRITE {} -> {}", self.oam_addr, value);
         self.oam_data[self.oam_addr as usize] = value;
         self.oam_addr = self.oam_addr.wrapping_add(1);
     }
 
     pub fn write_to_oam_data_dma(&mut self, data: &[u8; 256]) {
+        // println!("OAM WRITE DMA {} -> {:?}", self.oam_addr, data);
         for &b in data {
             self.oam_data[self.oam_addr as usize] = b;
             self.oam_addr = self.oam_addr.wrapping_add(1);
         }
     }
 
-
     pub fn read_oam_data(&mut self) -> u8 {
         self.oam_data[self.oam_addr as usize]
+    }
+
+    pub fn get_scroll_x(&self) -> u8 {
+        self.scroll_register.get_scroll_x()
+    }
+
+    pub fn get_scroll_y(&self) -> u8 {
+        self.scroll_register.get_scroll_y()
     }
 }
 

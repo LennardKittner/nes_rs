@@ -26,6 +26,14 @@ impl ScrollRegister {
     pub fn reset_letch(&mut self) {
         self.w_latch = false;
     }
+    
+    pub fn get_scroll_x(&self) -> u8 {
+        self.scroll_x
+    }
+    
+    pub fn get_scroll_y(&self) -> u8 {
+        self.scroll_y
+    }
 }
 
 impl Default for ScrollRegister {

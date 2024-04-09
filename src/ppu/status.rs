@@ -46,6 +46,10 @@ impl StatusRegister {
         self.contains(Self::SPRITE_ZERO_HIT)
     }
 
+    pub fn set_sprite_zero_hit(&mut self, hit: bool) {
+        self.set(Self::SPRITE_ZERO_HIT, hit);
+    }
+
     pub fn vertical_blank(&self) -> bool {
         self.contains(Self::VERTICAL_BLANK)
     }

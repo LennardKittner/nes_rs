@@ -7,9 +7,9 @@ use sdl2::pixels::PixelFormatEnum;
 use nes_rs::bus::Bus;
 use nes_rs::controller::{Controller, ControllerButtons};
 use nes_rs::cpu::CPU;
-use nes_rs::frame::Frame;
+use nes_rs::rendering::frame::Frame;
 use nes_rs::ppu::PPU;
-use nes_rs::render::render;
+use nes_rs::rendering::render;
 use nes_rs::rom::Rom;
 
 fn main() {

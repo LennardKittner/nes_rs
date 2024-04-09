@@ -1,4 +1,4 @@
-use crate::render::write_tile;
+use crate::rendering::write_tile;
 
 pub struct Frame {
     pub data: Vec<u8>
