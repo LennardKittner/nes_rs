@@ -3,7 +3,7 @@ use itertools::Itertools;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::PixelFormatEnum;
-use nes_rs::frame::{Frame, render_tile};
+use nes_rs::rendering::frame::{Frame, render_tile};
 use nes_rs::rom::Rom;
 
 fn main() {
