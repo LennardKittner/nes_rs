@@ -38,8 +38,11 @@ impl<'a> Bus<'a> {
 
     pub fn tick(&mut self, cycles: u8) {
         self.cycles += cycles as usize;
-        let refresh = self.ppu.tick(cycles * 3);
-        if refresh {
+        let nmi_before = self.ppu.outstanding_interrupt;
+        let _ = self.ppu.tick(cycles *3);
+        let nmi_after = self.ppu.outstanding_interrupt;
+
+        if !nmi_before && nmi_after {
             (self.game_loop_callback)(&self.ppu, &mut self.controller_1, &mut self.controller_2);
         }
     }
@@ -100,10 +103,14 @@ impl Mem for Bus<'_> {
                 self.mem_read(mirror_down_addr)
             }
             0x4016 => self.controller_1.read(),
-            0x4017 => self.controller_2.read(),
+            0x4017 => {
+                //TODO: why do I have to return 0
+                // self.controller_2.read() 
+                0
+            },
             CARTRIDGE_ROM_START..=CARTRIDGE_ROM_END => self.read_prg_rom(addr),
             _ => {
-                println!("Ignoring mem read at {addr}");
+                // println!("Ignoring mem read at {addr}");
                 0
             }
         }
@@ -125,10 +132,7 @@ impl Mem for Bus<'_> {
             0x2004 => self.ppu.write_to_data(data),
             0x2005 => self.ppu.write_to_scroll(data),
             0x2006 => self.ppu.write_to_addr(data),
-            0x2007 => {
-                //println!("write 2007 {data}");
-                self.ppu.write_to_data(data)
-            },
+            0x2007 => self.ppu.write_to_data(data),
             0x2008..=PPU_REGISTERS_MIRRORS_END => {
                 let mirror_down_addr = addr & 0b00100000_00000111;
                 self.mem_write(mirror_down_addr, data);
@@ -147,7 +151,7 @@ impl Mem for Bus<'_> {
             0x4017 => self.controller_2.write(data),
             CARTRIDGE_ROM_START..=CARTRIDGE_ROM_END => panic!("Attempt to write to Cartridge ROM space"),
             _ => {
-                println!("Ignoring mem write at 0x{addr:X}");
+                // println!("Ignoring mem write at 0x{addr:X}");
             }
         }
     }

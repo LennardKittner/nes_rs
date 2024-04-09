@@ -35,6 +35,7 @@ impl Controller {
     }
     
     pub fn write(&mut self, data: u8) {
+        println!("STROBE {data}");
         self.strobe = data & 1 == 1;
         if self.strobe {
             self.button_index = 0;
@@ -43,9 +44,11 @@ impl Controller {
     
     pub fn read(&mut self) -> u8 {
         if self.button_index > 7 {
+            println!("OVER Controller read {} -> {}",self.button_index, 1);
             return 1;
         }
         let response = (self.button_state.bits() & (1 << self.button_index)) >> self.button_index;
+        println!("Controller read {} -> {}",self.button_index, response);
         if !self.strobe && self.button_index <= 7 {
             self.button_index += 1;
         }
