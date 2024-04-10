@@ -40,7 +40,7 @@ impl Sprite {
         self.attributes >> 7 == 1
     }
 
-    pub fn has_priority(&self) -> bool {
+    pub fn draw_over_background(&self) -> bool {
         (self.attributes >> 5) & 1 != 1
     }
 

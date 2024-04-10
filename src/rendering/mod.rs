@@ -20,11 +20,11 @@ pub fn get_bg_palette(ppu: &PPU, attribute_table: &[u8], x_pos: usize, y_pos: us
     };
 
     let palette_start = (1 + palette_idx * 4) as usize;
-    [ppu.palette_table[0], ppu.palette_table[palette_start], ppu.palette_table[palette_start+1], ppu.palette_table[palette_start+2]]
+    [ppu.get_universal_background_color(), ppu.palette_table[palette_start], ppu.palette_table[palette_start+1], ppu.palette_table[palette_start+2]]
 }
 
 pub fn get_sprite_palette(ppu: &PPU, palette_idx: usize) -> [u8; 4] {
-    let start = 0x11 + palette_idx * 4; //TODO: why 0x11
+    let start = 0x11 + palette_idx * 4; // + 0x11 is the offset for the sprite palette tables
     [
         0,
         ppu.palette_table[start],
@@ -64,7 +64,9 @@ pub fn render(ppu: &PPU, frame: &mut Frame) {
     render_sprites(ppu, frame);
 }
 
-//TODO: priority
+//TODO: more precise drawing
+// real NES: At any given pixel, if the frontmost opaque sprite's priority bit is true (1), an opaque background pixel is drawn in front of it.
+// Emulation: At any given pixel, only if all opaque sprite's priority bits are true (1), an opaque background pixel is drawn in front of them.
 fn render_sprites(ppu: &PPU, frame: &mut Frame) {
     let sprites = (0..ppu.oam_data.len()).step_by(4).rev().map(|idx| {
         let raw = &ppu.oam_data[idx..idx+4];
@@ -85,16 +87,24 @@ fn render_sprites(ppu: &PPU, frame: &mut Frame) {
                 if color_idx == 0 {
                     continue;
                 }
+
                 let rgb = SYSTEM_PALLET[palette[color_idx as usize] as usize];
                 match (sprite.is_horizontal_flip(), sprite.is_vertical_flip()) {
-                    (false, false) => frame.set_pixel(x + sprite.get_x(), y + sprite.get_y(), rgb),
-                    (true, false) => frame.set_pixel(sprite.get_x() + 7 - x, y + sprite.get_y(), rgb),
-                    (false, true) => frame.set_pixel(x + sprite.get_x(), sprite.get_y() + 7 - y, rgb),
-                    (true, true) => frame.set_pixel(sprite.get_x() + 7 - x, sprite.get_y() + 7 - y, rgb),
+                    (false, false) => draw_sprite_pixel(frame, ppu, x + sprite.get_x(), y + sprite.get_y(), sprite.draw_over_background(), rgb),
+                    (true, false) => draw_sprite_pixel(frame, ppu, sprite.get_x() + 7 - x, y + sprite.get_y(), sprite.draw_over_background(), rgb),
+                    (false, true) => draw_sprite_pixel(frame, ppu, x + sprite.get_x(), sprite.get_y() + 7 - y, sprite.draw_over_background(), rgb),
+                    (true, true) => draw_sprite_pixel(frame, ppu, sprite.get_x() + 7 - x, sprite.get_y() + 7 - y, sprite.draw_over_background(), rgb),
                 }
             }
         }
     }
+}
+
+fn draw_sprite_pixel(frame: &mut Frame, ppu: &PPU, x: usize, y: usize, draw_over_background: bool, color: (u8, u8, u8)) {
+    if !draw_over_background && frame.get_pixel(x, y) != SYSTEM_PALLET[ppu.get_universal_background_color() as usize] { 
+        return;
+    }
+    frame.set_pixel(x, y, color);
 }
 
 fn render_background(ppu: &PPU, frame: &mut Frame) {

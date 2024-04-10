@@ -22,6 +22,15 @@ impl Frame {
             self.data[base + 2] = rgb.2;
         }
     }
+    
+    pub fn get_pixel(&self, x: usize, y: usize) -> (u8, u8, u8) {
+        let base = y * 3 * Self::WIDTH + x * 3;
+        if base + 2 < self.data.len() {
+            (self.data[base], self.data[base + 1], self.data[base + 2])
+        } else {
+            (0, 0, 0)
+        }
+    }
 }
 
 impl Default for Frame {

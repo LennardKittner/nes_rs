@@ -237,6 +237,10 @@ impl PPU {
     pub fn get_scroll_y(&self) -> u8 {
         self.scroll_register.get_scroll_y()
     }
+    
+    pub fn get_universal_background_color(&self) -> u8 {
+        self.palette_table[0]
+    }
 }
 
 #[cfg(test)]
