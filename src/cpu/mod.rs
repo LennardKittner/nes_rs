@@ -64,7 +64,7 @@ impl CPU<'_> {
     const INITIAL_STATUS: u8 = 0x24;
 
     pub fn new(rom: Rom) -> Self {
-        CPU::new_with_bus(Bus::new(rom, | _, _, _ | {}))
+        CPU::new_with_bus(Bus::new(rom, | _ | {}, | _, _ | {}))
     }
 
     pub fn new_with_bus(bus: Bus) -> CPU {
