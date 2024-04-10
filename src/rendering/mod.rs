@@ -102,13 +102,18 @@ fn render_background(ppu: &PPU, frame: &mut Frame) {
     let scroll_y = ppu.get_scroll_y() as usize;
 
     let (main_name_table, second_name_table) = match (&ppu.mirroring, ppu.control_register.get_nametable_base()) {
-        (Mirroring::VERTICAL, 0x2000) | (Mirroring::VERTICAL, 0x2800) => (&ppu.vram[0..0x400], &ppu.vram[0x400..0x800]),
-        (Mirroring::VERTICAL, 0x2400) | (Mirroring::VERTICAL, 0x2C00) => (&ppu.vram[0x400..0x800], &ppu.vram[0..0x400]),
+        (Mirroring::VERTICAL, 0x2000) | (Mirroring::VERTICAL, 0x2800) | (Mirroring::HORIZONTAL, 0x2000) | (Mirroring::HORIZONTAL, 0x2400) => (&ppu.vram[0..0x400], &ppu.vram[0x400..0x800]),
+        (Mirroring::VERTICAL, 0x2400) | (Mirroring::VERTICAL, 0x2C00) | (Mirroring::HORIZONTAL, 0x2800) | (Mirroring::HORIZONTAL, 0x2C00) => (&ppu.vram[0x400..0x800], &ppu.vram[0..0x400]),
         (_, _) => panic!("Unsupported mirroring mode: {:?}", ppu.mirroring),
     };
     
     render_name_table(ppu, frame, main_name_table, Rect::new(scroll_x, scroll_y, 256, 240), -(scroll_x as isize), -(scroll_y as isize));
-    render_name_table(ppu, frame, second_name_table, Rect::new(0, 0, scroll_x, 240), (256 - scroll_x) as isize, 0);
+    if ppu.get_scroll_x() > 0 {
+        render_name_table(ppu, frame, second_name_table, Rect::new(0, 0, scroll_x, 240), (256 - scroll_x) as isize, 0);
+    }
+    if ppu.get_scroll_y() > 0 {
+        render_name_table(ppu, frame, second_name_table, Rect::new(0, 0, 256, scroll_y), 0, (240 - scroll_y) as isize);
+    }
 }
 
 fn render_name_table(ppu: &PPU, frame: &mut Frame, name_table: &[u8], view_port: Rect, shift_x: isize, shift_y: isize) {
