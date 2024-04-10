@@ -105,7 +105,7 @@ impl Mem for Bus<'_> {
             0x4016 => self.controller_1.read(),
             0x4017 => {
                 //TODO: why do I have to return 0
-                // self.controller_2.read() 
+                // self.controller_2.read()
                 0
             },
             CARTRIDGE_ROM_START..=CARTRIDGE_ROM_END => self.read_prg_rom(addr),
@@ -139,13 +139,19 @@ impl Mem for Bus<'_> {
             }
             0x4014 => {
                 // https://wiki.nesdev.com/w/index.php/PPU_programmer_reference#OAM_DMA_.28.244014.29_.3E_write
-                let mut buf = [0u8; 256];
+                // https://www.nesdev.org/wiki/PPU_OAM#DMA
+                // write to oam via dma is directly implemented here instead of using the method from PPU to avoid a buffer and to make it simpler
+                if self.cycles % 2 == 0 {
+                    self.tick(1);
+                } else {
+                    self.tick(2);
+                }
                 let start_address = (data as u16) << 8;
                 for i in 0..256 {
-                    buf[i] = self.mem_read(start_address + i as u16)
+                    self.ppu.oam_data[self.ppu.oam_addr as usize] = self.mem_read(start_address + i as u16);
+                    self.ppu.oam_addr = self.ppu.oam_addr.wrapping_add(1);
+                    self.tick(2);
                 }
-                self.ppu.write_to_oam_data_dma(&buf)
-                //TODO: bonus cycles
             }
             0x4016 => self.controller_1.write(data),
             0x4017 => self.controller_2.write(data),
