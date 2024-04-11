@@ -53,7 +53,7 @@ pub struct PPU {
     scan_line: u16,
     cycles: usize,
 
-    pub outstanding_interrupt: bool,
+    outstanding_interrupt: bool,
 }
 
 impl PollInterrupt for PPU {

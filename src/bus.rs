@@ -46,11 +46,11 @@ impl<'a> Bus<'a> {
 
     pub fn tick(&mut self, cycles: u8) {
         self.cycles += cycles as usize;
-        let nmi_before = self.ppu.outstanding_interrupt;
+        let vblank_before = self.ppu.is_in_vertical_blank();
         let next_scannline = self.ppu.tick(cycles *3);
-        let nmi_after = self.ppu.outstanding_interrupt;
-        
-        if !nmi_before && nmi_after {
+        let vblank_after = self.ppu.is_in_vertical_blank();
+
+        if !vblank_before && vblank_after {
             render(&self.ppu, &mut self.frame);
             (self.graphics_callback)(&self.ppu, &self.frame);
             (self.controller_callback)(&mut self.controller_1, &mut self.controller_2);
