@@ -52,6 +52,10 @@ impl MaskRegister {
         self.contains(Self::BACKGROUND)
     }
 
+    pub fn show_background_left(&self) -> bool {
+        self.contains(Self::BACKGROUND_LEFT)
+    }
+
     pub fn show_sprites(&self) -> bool {
         self.contains(Self::SPRITES)
     }

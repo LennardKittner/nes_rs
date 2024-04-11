@@ -20,16 +20,16 @@ pub fn get_bg_palette(ppu: &PPU, attribute_table: &[u8], x_pos: usize, y_pos: us
     };
 
     let palette_start = (1 + palette_idx * 4) as usize;
-    [ppu.get_universal_background_color(), ppu.palette_table[palette_start], ppu.palette_table[palette_start+1], ppu.palette_table[palette_start+2]]
+    [ppu.get_universal_background_color(), ppu.read_palette_table(palette_start), ppu.read_palette_table(palette_start+1), ppu.read_palette_table(palette_start+2)]
 }
 
 pub fn get_sprite_palette(ppu: &PPU, palette_idx: usize) -> [u8; 4] {
     let start = 0x11 + palette_idx * 4; // + 0x11 is the offset for the sprite palette tables
     [
         0,
-        ppu.palette_table[start],
-        ppu.palette_table[start + 1],
-        ppu.palette_table[start + 2],
+        ppu.read_palette_table(start),
+        ppu.read_palette_table(start + 1),
+        ppu.read_palette_table(start + 2),
     ]
 }
 
@@ -60,8 +60,12 @@ pub fn write_tile_in_view_port(frame: &mut Frame, x_pos: usize, y_pos: usize, sh
 }
 
 pub fn render(ppu: &PPU, frame: &mut Frame) {
-    render_background(ppu, frame);
-    render_sprites(ppu, frame);
+    if ppu.show_background() {
+        render_background(ppu, frame);
+    }
+    if ppu.show_sprites() {
+        render_sprites(ppu, frame);
+    }
 }
 
 //TODO: more precise drawing
@@ -101,7 +105,8 @@ fn render_sprites(ppu: &PPU, frame: &mut Frame) {
 }
 
 fn draw_sprite_pixel(frame: &mut Frame, ppu: &PPU, x: usize, y: usize, draw_over_background: bool, color: (u8, u8, u8)) {
-    if !draw_over_background && frame.get_pixel(x, y) != SYSTEM_PALLET[ppu.get_universal_background_color() as usize] { 
+    if !draw_over_background && frame.get_pixel(x, y) != SYSTEM_PALLET[ppu.get_universal_background_color() as usize]
+        || (!ppu.show_sprites_left() && x < 8) {
         return;
     }
     frame.set_pixel(x, y, color);
@@ -135,6 +140,9 @@ fn render_name_table(ppu: &PPU, frame: &mut Frame, name_table: &[u8], view_port:
         let tile_x = i % 32;
         let tile_y = i / 32;
         let tile = &ppu.chr_rom[(bank + tile_idx * 16) as usize..(bank + tile_idx * 16 + 16) as usize];
+        if !ppu.show_background_left() && tile_x == 0 {
+            continue;
+        }
         write_tile_in_view_port(frame, tile_x * 8, tile_y * 8, shift_x, shift_y, &view_port, tile, &get_bg_palette(ppu, attribute_table, tile_x, tile_y));
     }
 }

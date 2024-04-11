@@ -31,9 +31,12 @@ pub static SYSTEM_PALLET: [(u8, u8, u8); 64] = [
     (0x99, 0xFF, 0xFC), (0xDD, 0xDD, 0xDD), (0x11, 0x11, 0x11), (0x11, 0x11, 0x11)
 ];
 
+//TODO: Sprite overflow
+//TODO: Color emphasis
+//TODO: 8x16 sprites
 pub struct PPU {
     pub chr_rom: Vec<u8>,
-    pub palette_table: [u8; 32],
+    palette_table: [u8; 32],
     pub vram: [u8; 2048],
     pub oam_addr: u8,
     pub oam_data: [u8; 256],
@@ -83,7 +86,7 @@ impl PPU {
         }
     }
 
-    pub fn tick(&mut self, cycles: u8) -> bool  {
+    pub fn tick(&mut self, cycles: u8) -> u16  {
         self.cycles += cycles as usize;
         if self.cycles >= 341 {
             if self.is_sprite_0_hit(self.cycles) {
@@ -104,10 +107,9 @@ impl PPU {
                 self.outstanding_interrupt = false;
                 self.status_register.set_vertical_blank(false);
                 self.status_register.set_sprite_zero_hit(false);
-                return true;
             }
         }
-        false
+        self.scan_line
     }
 
     //TODO: check transparency and the whole sprite instead of just top left
@@ -144,14 +146,22 @@ impl PPU {
     pub fn write_to_data(&mut self, data: u8) {
         let addr = self.address_register.get();
         match addr {
-            0x0000..=0x1FFF => panic!("Attempt to write to Cartridge ROM space"),
+            0x0000..=0x1FFF => print!("Attempt to write to Cartridge ROM space"),
             0x2000..=0x2FFF => self.vram[self.mirror_vram_addr(addr) as usize] = data,
-            0x3000..=0x3EFF => panic!("address space 0x3000..0x3EFF is not expected to be used, requested = {}", addr),
+            0x3000..=0x3EFF => print!("address space 0x3000..0x3EFF is not expected to be used, requested = {}", addr),
             0x3F10 | 0x3F14 | 0x3F18 | 0x3F1C => self.palette_table[(addr - 0x10 - 0x3F00) as usize] = data,
             0x3F00..=0x3FFF => self.palette_table[(addr - 0x3F00) as usize] = data,
-            _               => panic!("unexpected access to mirrored space, requested = {}", addr),
+            _               => print!("unexpected access to mirrored space, requested = {}", addr),
         }
         self.address_register.increment(self.control_register.get_vram_increment());
+    }
+    
+    pub fn read_palette_table(&self, idx: usize) -> u8 {
+        let mut palette = self.palette_table[idx];
+        if self.mask_register.is_grayscale() {
+            palette &= 0x30;
+        }
+        palette
     }
 
     pub fn read_data(&mut self) -> u8 {
@@ -170,8 +180,8 @@ impl PPU {
                 result
             },
             0x3000..=0x3EFF => panic!("address space 0x3000..0x3EFF is not expected to be used, requested = {}", addr),
-            0x3F10 | 0x3F14 | 0x3F18 | 0x3F1C => self.palette_table[(addr - 0x10 - 0x3F00) as usize],
-            0x3F00..=0x3FFF => self.palette_table[(addr - 0x3F00) as usize],
+            0x3F10 | 0x3F14 | 0x3F18 | 0x3F1C =>  self.read_palette_table((addr - 0x10 - 0x3F00) as usize),
+            0x3F00..=0x3FFF => self.read_palette_table((addr - 0x3F00) as usize),
             _               => panic!("unexpected access to mirrored space, requested = {}", addr),
         }
     }
@@ -237,7 +247,23 @@ impl PPU {
     }
 
     pub fn get_universal_background_color(&self) -> u8 {
-        self.palette_table[0]
+        self.read_palette_table(0)
+    }
+    
+    pub fn show_sprites(&self) -> bool {
+        self.mask_register.show_sprites()
+    }
+    
+    pub fn show_background(&self) -> bool {
+        self.mask_register.show_background()
+    }
+    
+    pub fn show_sprites_left(&self) -> bool {
+        self.mask_register.show_sprites_left()
+    }
+
+    pub fn show_background_left(&self) -> bool {
+        self.mask_register.show_background_left()
     }
 }
 

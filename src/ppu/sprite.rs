@@ -1,4 +1,5 @@
 
+#[derive(Debug)]
 pub struct Sprite {
     y_pos: u8,
     pattern_index: u8,
