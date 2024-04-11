@@ -1,6 +1,5 @@
-use std::thread;
-use std::time::Duration;
 use crate::controller::Controller;
+use crate::ppu::pallet::SystemPallet;
 use crate::ppu::PPU;
 use crate::rendering::frame::Frame;
 use crate::rendering::render;
@@ -19,7 +18,7 @@ pub struct Bus<'a> {
 }
 
 impl<'a> Bus<'a> {
-    pub fn new<GF, C1F>(rom: Rom, system_palette: [(u8, u8, u8); 64], graphics_callback: GF, controller_callback: C1F) -> Bus<'a>
+    pub fn new<GF, C1F>(rom: Rom, system_palette: SystemPallet, graphics_callback: GF, controller_callback: C1F) -> Bus<'a>
         where GF: FnMut(&PPU, &Frame) + 'a, C1F: FnMut(&mut Controller, &mut Controller) + 'a
     {
         let ppu = PPU::new(rom.chr_rom, rom.screen_mirroring, system_palette);

@@ -1,4 +1,4 @@
-use crate::ppu::SYSTEM_PALLET;
+use crate::ppu::pallet::SystemPallet;
 use crate::rendering::write_tile;
 
 pub struct Frame {
@@ -23,7 +23,7 @@ impl Frame {
             self.data[base + 2] = rgb.2;
         }
     }
-    
+
     pub fn get_pixel(&self, x: usize, y: usize) -> (u8, u8, u8) {
         let base = y * 3 * Self::WIDTH + x * 3;
         if base + 2 < self.data.len() {
@@ -46,5 +46,6 @@ pub fn render_tile(frame: &mut Frame, x_pos: usize, y_pos:usize, chr_rom: &[u8],
 
     let tile = &chr_rom[(bank_address + tile_n * 16)..(bank_address + tile_n * 16 + 16)];
     
-    write_tile(frame, x_pos, y_pos, tile, &[0x01, 0x23, 0x27, 0x30], &SYSTEM_PALLET);
+    //TODO: separate render function
+    //write_tile(frame, x_pos, y_pos, tile, &[0x01, 0x23, 0x27, 0x30], &SystemPallet::new());
 }

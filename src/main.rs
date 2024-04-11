@@ -1,19 +1,17 @@
 use std::collections::HashMap;
 use std::{env, io};
-use std::error::Error;
 use std::fs::File;
 use std::io::Read;
 use itertools::Itertools;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
-use sdl2::mouse::SystemCursor::No;
 use sdl2::pixels::PixelFormatEnum;
 use nes_rs::bus::Bus;
 use nes_rs::controller::{Controller, ControllerButtons};
 use nes_rs::cpu::CPU;
 use nes_rs::rendering::frame::Frame;
-use nes_rs::ppu::{PPU, SYSTEM_PALLET};
-use nes_rs::rendering::render;
+use nes_rs::ppu::PPU;
+use nes_rs::ppu::pallet::SystemPallet;
 use nes_rs::rom::Rom;
 
 fn main() {
@@ -94,15 +92,15 @@ fn main() {
             }
         }
     };
-    
+
     let palette = if let Some(path) = palette_path {
-        read_palette_table(path).unwrap_or(SYSTEM_PALLET)
+        read_palette_table(path).unwrap_or(SystemPallet::new())
     } else {
-        SYSTEM_PALLET
+        SystemPallet::new()
     };
 
     let bus = Bus::new(rom, palette,
-        move |ppu: &PPU, frame: &Frame | {
+        move |_: &PPU, frame: &Frame | {
             texture.update(None, &frame.data, 256 * 3).unwrap();
 
             canvas.copy(&texture, None, None).unwrap();
@@ -114,15 +112,9 @@ fn main() {
     cpu.run();
 }
 
-fn read_palette_table(path: &str) -> io::Result<[(u8, u8, u8); 64]> {
+fn read_palette_table(path: &str) -> io::Result<SystemPallet> {
     let mut palette_file = File::open(path)?;
-    let mut palette: [(u8, u8, u8); 64] = [(0,0,0); 64];
     let mut buffer = Vec::new();
     palette_file.read_to_end(&mut buffer)?;
-    (0..buffer.len()).step_by(3).map(|i| {
-        (buffer[i], buffer[i+1], buffer[i+2])
-    }).enumerate().for_each(|(i, rgb)| {
-        palette[i] = rgb;
-    });
-    Ok(palette)
+    Ok(SystemPallet::from_raw(&buffer).unwrap())
 }

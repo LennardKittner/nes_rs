@@ -25,12 +25,6 @@ bitflags! {
     }
 }
 
-pub enum Color {
-    Red,
-    Green,
-    Blue
-}
-
 impl MaskRegister {
     pub fn new() -> Self {
         Self::empty()
@@ -60,23 +54,34 @@ impl MaskRegister {
         self.contains(Self::SPRITES)
     }
 
-    pub fn get_emphesis(&self) -> Vec<Color> {
-        let mut result = Vec::new();
-        if self.contains(Self::RED) {
-            result.push(Color::Red);
-        }
-        if self.contains(Self::GREEN) {
-            result.push(Color::Green);
-        }
-        if self.contains(Self::BLUE) {
-            result.push(Color::Blue);
-        }
-        result
+    pub fn get_emphasis_index(&self) -> u8 {
+        self.bits() >> 5
     }
 }
 
 impl Default for MaskRegister {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+pub mod test {
+    use super::*;
+
+    #[test]
+    fn emphasis() {
+        let mut r = MaskRegister::new();
+        assert_eq!(r.get_emphasis_index(), 0);
+        r.insert(MaskRegister::RED);
+        assert_eq!(r.get_emphasis_index(), 1);
+        r.remove(MaskRegister::RED);
+        r.insert(MaskRegister::GREEN);
+        assert_eq!(r.get_emphasis_index(), 2);
+        r.remove(MaskRegister::GREEN);
+        r.insert(MaskRegister::BLUE);
+        assert_eq!(r.get_emphasis_index(), 4);
+        r.insert(MaskRegister::RED);
+        assert_eq!(r.get_emphasis_index(), 5);
     }
 }
