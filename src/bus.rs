@@ -1,21 +1,26 @@
+use std::thread;
+use std::time::Duration;
 use crate::controller::Controller;
 use crate::ppu::PPU;
+use crate::rendering::frame::Frame;
+use crate::rendering::render;
 use crate::rom::Rom;
 
 pub struct Bus<'a> {
     cpu_vram: [u8; 2048],
     prg_rom: Vec<u8>,
     ppu: PPU,
+    frame: Frame,
     cycles: usize,
-    graphics_callback: Box<dyn FnMut(&PPU) + 'a>,
+    graphics_callback: Box<dyn FnMut(&PPU, &Frame) + 'a>,
     controller_callback: Box<dyn FnMut(&mut Controller, &mut Controller) + 'a>,
     controller_1: Controller,
     controller_2: Controller,
 }
 
 impl<'a> Bus<'a> {
-    pub fn new<'b, 'c, GF, C1F>(rom: Rom, graphics_callback: GF, controller_callback: C1F) -> Bus<'b>
-        where GF: FnMut(&PPU) + 'b + 'c, C1F: FnMut(&mut Controller, &mut Controller) + 'b + 'c
+    pub fn new<GF, C1F>(rom: Rom, graphics_callback: GF, controller_callback: C1F) -> Bus<'a>
+        where GF: FnMut(&PPU, &Frame) + 'a, C1F: FnMut(&mut Controller, &mut Controller) + 'a
     {
         let ppu = PPU::new(rom.chr_rom, rom.screen_mirroring);
         Bus {
@@ -23,6 +28,7 @@ impl<'a> Bus<'a> {
             prg_rom: rom.prg_rom,
             cycles: 0,
             ppu,
+            frame: Frame::new(),
             graphics_callback: Box::from(graphics_callback),
             controller_callback: Box::from(controller_callback),
             controller_1: Controller::new(),
@@ -41,11 +47,12 @@ impl<'a> Bus<'a> {
     pub fn tick(&mut self, cycles: u8) {
         self.cycles += cycles as usize;
         let nmi_before = self.ppu.outstanding_interrupt;
-        let _ = self.ppu.tick(cycles *3);
+        let next_scannline = self.ppu.tick(cycles *3);
         let nmi_after = self.ppu.outstanding_interrupt;
-
+        
         if !nmi_before && nmi_after {
-            (self.graphics_callback)(&self.ppu);
+            render(&self.ppu, &mut self.frame);
+            (self.graphics_callback)(&self.ppu, &self.frame);
         }
     }
 }

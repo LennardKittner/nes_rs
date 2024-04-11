@@ -89,8 +89,7 @@ fn main() {
     };
 
     let bus = Bus::new(rom,
-        move |ppu: &PPU | {
-            render(ppu, &mut frame);
+        move |ppu: &PPU, frame: &Frame | {
             texture.update(None, &frame.data, 256 * 3).unwrap();
 
             canvas.copy(&texture, None, None).unwrap();
