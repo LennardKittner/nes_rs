@@ -14,6 +14,7 @@ use crate::ppu::sprite::Sprite;
 use crate::ppu::status::StatusRegister;
 use crate::rom::Mirroring;
 
+// generate pallets https://bisqwit.iki.fi/utils/nespalette.php
 #[rustfmt::skip]
 pub static SYSTEM_PALLET: [(u8, u8, u8); 64] = [
     (0x80, 0x80, 0x80), (0x00, 0x3D, 0xA6), (0x00, 0x12, 0xB0), (0x44, 0x00, 0x96), (0xA1, 0x00, 0x5E),
@@ -37,6 +38,7 @@ pub static SYSTEM_PALLET: [(u8, u8, u8); 64] = [
 pub struct PPU {
     pub chr_rom: Vec<u8>,
     palette_table: [u8; 32],
+    pub system_palette: [(u8, u8, u8); 64],
     pub vram: [u8; 2048],
     pub oam_addr: u8,
     pub oam_data: [u8; 256],
@@ -66,10 +68,11 @@ impl PollInterrupt for PPU {
 }
 
 impl PPU {
-    pub fn new(chr_rom: Vec<u8>, mirroring: Mirroring) -> Self {
+    pub fn new(chr_rom: Vec<u8>, mirroring: Mirroring, system_palette: [(u8, u8, u8); 64]) -> Self {
         PPU {
             chr_rom,
             palette_table: [0; 32],
+            system_palette,
             vram: [0; 2048],
             oam_addr: 0,
             oam_data: [0; 256],
@@ -143,6 +146,10 @@ impl PPU {
         }
     }
 
+    fn address_to_pattern_table_index(&self, addr: u16) -> u16 {
+        (addr - 0x3F00) % 32
+    }
+
     pub fn write_to_data(&mut self, data: u8) {
         let addr = self.address_register.get();
         match addr {
@@ -150,12 +157,12 @@ impl PPU {
             0x2000..=0x2FFF => self.vram[self.mirror_vram_addr(addr) as usize] = data,
             0x3000..=0x3EFF => print!("address space 0x3000..0x3EFF is not expected to be used, requested = {}", addr),
             0x3F10 | 0x3F14 | 0x3F18 | 0x3F1C => self.palette_table[(addr - 0x10 - 0x3F00) as usize] = data,
-            0x3F00..=0x3FFF => self.palette_table[(addr - 0x3F00) as usize] = data,
+            0x3F00..=0x3FFF => self.palette_table[(self.address_to_pattern_table_index(addr)) as usize] = data,
             _               => print!("unexpected access to mirrored space, requested = {}", addr),
         }
         self.address_register.increment(self.control_register.get_vram_increment());
     }
-    
+
     pub fn read_palette_table(&self, idx: usize) -> u8 {
         let mut palette = self.palette_table[idx];
         if self.mask_register.is_grayscale() {
@@ -249,21 +256,25 @@ impl PPU {
     pub fn get_universal_background_color(&self) -> u8 {
         self.read_palette_table(0)
     }
-    
+
     pub fn show_sprites(&self) -> bool {
         self.mask_register.show_sprites()
     }
-    
+
     pub fn show_background(&self) -> bool {
         self.mask_register.show_background()
     }
-    
+
     pub fn show_sprites_left(&self) -> bool {
         self.mask_register.show_sprites_left()
     }
 
     pub fn show_background_left(&self) -> bool {
         self.mask_register.show_background_left()
+    }
+
+    pub fn is_in_vertical_blank(&self) -> bool {
+        self.status_register.vertical_blank()
     }
 }
 
@@ -272,7 +283,7 @@ pub mod test {
     use super::*;
 
     pub fn new_empty_rom() -> PPU {
-        PPU::new(vec![0; 2048], Mirroring::HORIZONTAL)
+        PPU::new(vec![0; 2048], Mirroring::HORIZONTAL, SYSTEM_PALLET)
     }
 
     #[test]
@@ -365,7 +376,7 @@ pub mod test {
     //   [0x2800 a ] [0x2C00 b ]
     #[test]
     fn test_vram_vertical_mirror() {
-        let mut ppu = PPU::new(vec![0; 2048], Mirroring::VERTICAL);
+        let mut ppu = PPU::new(vec![0; 2048], Mirroring::VERTICAL, SYSTEM_PALLET);
 
         ppu.write_to_addr(0x20);
         ppu.write_to_addr(0x05);

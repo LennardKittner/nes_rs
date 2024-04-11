@@ -1,7 +1,7 @@
 pub mod frame;
 mod rect;
 
-use crate::ppu::{PPU, SYSTEM_PALLET};
+use crate::ppu::PPU;
 use crate::ppu::sprite::Sprite;
 use crate::rendering::frame::Frame;
 use crate::rendering::rect::Rect;
@@ -33,12 +33,12 @@ pub fn get_sprite_palette(ppu: &PPU, palette_idx: usize) -> [u8; 4] {
     ]
 }
 
-pub fn write_tile(frame: &mut Frame, x_pos: usize, y_pos: usize, tile: &[u8], palette: &[u8; 4]) {
+pub fn write_tile(frame: &mut Frame, x_pos: usize, y_pos: usize, tile: &[u8], palette: &[u8; 4], system_palette: &[(u8, u8, u8); 64]) {
     let view_port = Rect::new(0, 0, usize::MAX, usize::MAX);
-    write_tile_in_view_port(frame, x_pos, y_pos, 0, 0, &view_port, tile, palette);
+    write_tile_in_view_port(frame, x_pos, y_pos, 0, 0, &view_port, tile, palette, system_palette);
 }
 
-pub fn write_tile_in_view_port(frame: &mut Frame, x_pos: usize, y_pos: usize, shift_x: isize, shift_y: isize, view_port: &Rect, tile: &[u8], palette: &[u8; 4]) {
+pub fn write_tile_in_view_port(frame: &mut Frame, x_pos: usize, y_pos: usize, shift_x: isize, shift_y: isize, view_port: &Rect, tile: &[u8], palette: &[u8; 4], system_palette: &[(u8, u8, u8); 64]) {
     for y in 0..8 {
         let mut upper = tile[y];
         let mut lower = tile[y + 8];
@@ -52,7 +52,7 @@ pub fn write_tile_in_view_port(frame: &mut Frame, x_pos: usize, y_pos: usize, sh
             let pixel_y = y_pos + y;
 
             if pixel_x >= view_port.x1 && pixel_x < view_port.x2 && pixel_y >= view_port.y1 && pixel_y < view_port.y2 {
-                let rgb = SYSTEM_PALLET[palette[color_idx as usize] as usize];
+                let rgb = system_palette[palette[color_idx as usize] as usize];
                 frame.set_pixel((shift_x + pixel_x as isize) as usize, (shift_y + pixel_y as isize) as usize, rgb);
             }
         }
@@ -92,7 +92,7 @@ fn render_sprites(ppu: &PPU, frame: &mut Frame) {
                     continue;
                 }
 
-                let rgb = SYSTEM_PALLET[palette[color_idx as usize] as usize];
+                let rgb = ppu.system_palette[palette[color_idx as usize] as usize];
                 match (sprite.is_horizontal_flip(), sprite.is_vertical_flip()) {
                     (false, false) => draw_sprite_pixel(frame, ppu, x + sprite.get_x(), y + sprite.get_y(), sprite.draw_over_background(), rgb),
                     (true, false) => draw_sprite_pixel(frame, ppu, sprite.get_x() + 7 - x, y + sprite.get_y(), sprite.draw_over_background(), rgb),
@@ -105,7 +105,7 @@ fn render_sprites(ppu: &PPU, frame: &mut Frame) {
 }
 
 fn draw_sprite_pixel(frame: &mut Frame, ppu: &PPU, x: usize, y: usize, draw_over_background: bool, color: (u8, u8, u8)) {
-    if !draw_over_background && frame.get_pixel(x, y) != SYSTEM_PALLET[ppu.get_universal_background_color() as usize]
+    if !draw_over_background && frame.get_pixel(x, y) != ppu.system_palette[ppu.get_universal_background_color() as usize]
         || (!ppu.show_sprites_left() && x < 8) {
         return;
     }
@@ -143,6 +143,6 @@ fn render_name_table(ppu: &PPU, frame: &mut Frame, name_table: &[u8], view_port:
         if !ppu.show_background_left() && tile_x == 0 {
             continue;
         }
-        write_tile_in_view_port(frame, tile_x * 8, tile_y * 8, shift_x, shift_y, &view_port, tile, &get_bg_palette(ppu, attribute_table, tile_x, tile_y));
+        write_tile_in_view_port(frame, tile_x * 8, tile_y * 8, shift_x, shift_y, &view_port, tile, &get_bg_palette(ppu, attribute_table, tile_x, tile_y), &ppu.system_palette);
     }
 }

@@ -1,3 +1,4 @@
+use crate::ppu::SYSTEM_PALLET;
 use crate::rendering::write_tile;
 
 pub struct Frame {
@@ -44,6 +45,6 @@ pub fn render_tile(frame: &mut Frame, x_pos: usize, y_pos:usize, chr_rom: &[u8],
     let bank_address = bank * 0x1000;
 
     let tile = &chr_rom[(bank_address + tile_n * 16)..(bank_address + tile_n * 16 + 16)];
-
-    write_tile(frame, x_pos, y_pos, tile, &[0x01, 0x23, 0x27, 0x30]);
+    
+    write_tile(frame, x_pos, y_pos, tile, &[0x01, 0x23, 0x27, 0x30], &SYSTEM_PALLET);
 }

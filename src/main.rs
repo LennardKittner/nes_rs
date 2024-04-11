@@ -1,14 +1,18 @@
 use std::collections::HashMap;
-use std::env;
+use std::{env, io};
+use std::error::Error;
+use std::fs::File;
+use std::io::Read;
 use itertools::Itertools;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
+use sdl2::mouse::SystemCursor::No;
 use sdl2::pixels::PixelFormatEnum;
 use nes_rs::bus::Bus;
 use nes_rs::controller::{Controller, ControllerButtons};
 use nes_rs::cpu::CPU;
 use nes_rs::rendering::frame::Frame;
-use nes_rs::ppu::PPU;
+use nes_rs::ppu::{PPU, SYSTEM_PALLET};
 use nes_rs::rendering::render;
 use nes_rs::rom::Rom;
 
@@ -18,12 +22,16 @@ fn main() {
         println!("Please provide the path to a NES rom");
         return;
     }
-    let path = &args[1];
+    let rom_path = &args[1];
+    let mut palette_path = None;
+    if args.len() >= 3 {
+        palette_path = Some(&args[2]);
+    }
 
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
     let window = video_subsystem
-        .window(&format!("NESrs -- {path}"), (256.0 * 3.0) as u32, (240.0 * 3.0) as u32)
+        .window(&format!("NESrs -- {rom_path}"), (256.0 * 3.0) as u32, (240.0 * 3.0) as u32)
         .position_centered()
         .build()
         .unwrap();
@@ -37,9 +45,8 @@ fn main() {
         .create_texture_target(PixelFormatEnum::RGB24, 256, 240)
         .unwrap();
 
-    let bytes: Vec<u8> = std::fs::read(path).unwrap();
+    let bytes: Vec<u8> = std::fs::read(rom_path).unwrap();
     let rom = Rom::new(&bytes).unwrap();
-    let mut frame = Frame::new();
 
     let mut key_map_1 = HashMap::new();
     key_map_1.insert(Keycode::Down, ControllerButtons::DOWN);
@@ -87,8 +94,14 @@ fn main() {
             }
         }
     };
+    
+    let palette = if let Some(path) = palette_path {
+        read_palette_table(path).unwrap_or(SYSTEM_PALLET)
+    } else {
+        SYSTEM_PALLET
+    };
 
-    let bus = Bus::new(rom,
+    let bus = Bus::new(rom, palette,
         move |ppu: &PPU, frame: &Frame | {
             texture.update(None, &frame.data, 256 * 3).unwrap();
 
@@ -99,4 +112,17 @@ fn main() {
     let mut cpu = CPU::new_with_bus(bus);
     cpu.reset();
     cpu.run();
+}
+
+fn read_palette_table(path: &str) -> io::Result<[(u8, u8, u8); 64]> {
+    let mut palette_file = File::open(path)?;
+    let mut palette: [(u8, u8, u8); 64] = [(0,0,0); 64];
+    let mut buffer = Vec::new();
+    palette_file.read_to_end(&mut buffer)?;
+    (0..buffer.len()).step_by(3).map(|i| {
+        (buffer[i], buffer[i+1], buffer[i+2])
+    }).enumerate().for_each(|(i, rgb)| {
+        palette[i] = rgb;
+    });
+    Ok(palette)
 }

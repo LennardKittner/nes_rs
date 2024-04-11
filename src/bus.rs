@@ -19,10 +19,10 @@ pub struct Bus<'a> {
 }
 
 impl<'a> Bus<'a> {
-    pub fn new<GF, C1F>(rom: Rom, graphics_callback: GF, controller_callback: C1F) -> Bus<'a>
+    pub fn new<GF, C1F>(rom: Rom, system_palette: [(u8, u8, u8); 64], graphics_callback: GF, controller_callback: C1F) -> Bus<'a>
         where GF: FnMut(&PPU, &Frame) + 'a, C1F: FnMut(&mut Controller, &mut Controller) + 'a
     {
-        let ppu = PPU::new(rom.chr_rom, rom.screen_mirroring);
+        let ppu = PPU::new(rom.chr_rom, rom.screen_mirroring, system_palette);
         Bus {
             cpu_vram: [0; 2048],
             prg_rom: rom.prg_rom,
@@ -53,6 +53,7 @@ impl<'a> Bus<'a> {
         if !nmi_before && nmi_after {
             render(&self.ppu, &mut self.frame);
             (self.graphics_callback)(&self.ppu, &self.frame);
+            (self.controller_callback)(&mut self.controller_1, &mut self.controller_2);
         }
     }
 }
