@@ -60,9 +60,9 @@ pub fn write_tile_in_view_port(ppu: &PPU, frame: &mut Frame, x_pos: usize, y_pos
     }
 }
 
-pub fn render(ppu: &PPU, frame: &mut Frame) {
+pub fn render(ppu: &PPU, frame: &mut Frame, scanline: usize) {
     if ppu.show_background() {
-        render_background(ppu, frame);
+        render_background(ppu, frame, scanline);
     }
     if ppu.show_sprites() {
         render_sprites(ppu, frame);
@@ -72,7 +72,7 @@ pub fn render(ppu: &PPU, frame: &mut Frame) {
 //TODO: more precise drawing
 // real NES: At any given pixel, if the frontmost opaque sprite's priority bit is true (1), an opaque background pixel is drawn in front of it.
 // Emulation: At any given pixel, only if all opaque sprite's priority bits are true (1), an opaque background pixel is drawn in front of them.
-fn render_sprites(ppu: &PPU, frame: &mut Frame) {
+pub fn render_sprites(ppu: &PPU, frame: &mut Frame) {
     let sprites = (0..ppu.oam_data.len()).step_by(4).rev().map(|idx| {
         let raw = &ppu.oam_data[idx..idx+4];
         Sprite::new(raw).unwrap()
@@ -113,7 +113,7 @@ fn draw_sprite_pixel(frame: &mut Frame, ppu: &PPU, x: usize, y: usize, draw_over
     frame.set_pixel(x, y, color);
 }
 
-fn render_background(ppu: &PPU, frame: &mut Frame) {
+pub fn render_background(ppu: &PPU, frame: &mut Frame, scanline: usize) {
     let scroll_x = ppu.get_scroll_x() as usize;
     let scroll_y = ppu.get_scroll_y() as usize;
 
@@ -123,20 +123,20 @@ fn render_background(ppu: &PPU, frame: &mut Frame) {
         (_, _) => panic!("Unsupported mirroring mode: {:?}", ppu.mirroring),
     };
     
-    render_name_table(ppu, frame, main_name_table, Rect::new(scroll_x, scroll_y, 256, 240), -(scroll_x as isize), -(scroll_y as isize));
+    render_name_table(ppu, frame, main_name_table, Rect::new(scroll_x, scroll_y, 256, 240), -(scroll_x as isize), -(scroll_y as isize), scanline, true);
     if ppu.get_scroll_x() > 0 {
-        render_name_table(ppu, frame, second_name_table, Rect::new(0, 0, scroll_x, 240), (256 - scroll_x) as isize, 0);
+        render_name_table(ppu, frame, second_name_table, Rect::new(0, 0, scroll_x, 240), (256 - scroll_x) as isize, 0, scanline, false);
     }
     if ppu.get_scroll_y() > 0 {
-        render_name_table(ppu, frame, second_name_table, Rect::new(0, 0, 256, scroll_y), 0, (240 - scroll_y) as isize);
+        render_name_table(ppu, frame, second_name_table, Rect::new(0, 0, 256, scroll_y), 0, (240 - scroll_y) as isize, scanline, false);
     }
 }
 
-fn render_name_table(ppu: &PPU, frame: &mut Frame, name_table: &[u8], view_port: Rect, shift_x: isize, shift_y: isize) {
+fn render_name_table(ppu: &PPU, frame: &mut Frame, name_table: &[u8], view_port: Rect, shift_x: isize, shift_y: isize, scanline: usize, p: bool) {
     let bank = ppu.control_register.get_background_pattern_table_address();
     let attribute_table = &name_table[0x3C0..0x400];
-
-    for i in 0..0x03C0 {
+    
+    for i in (scanline / 8 * 32)..(scanline / 8 * 32 + 32) {
         let tile_idx = name_table[i] as u16;
         let tile_x = i % 32;
         let tile_y = i / 32;
@@ -144,6 +144,13 @@ fn render_name_table(ppu: &PPU, frame: &mut Frame, name_table: &[u8], view_port:
         if !ppu.show_background_left() && tile_x == 0 {
             continue;
         }
-        write_tile_in_view_port(ppu, frame, tile_x * 8, tile_y * 8, shift_x, shift_y, &view_port, tile, &get_bg_palette(ppu, attribute_table, tile_x, tile_y));
+        
+        let t = if p {
+            [0, 10, 20, 30]
+        } else {
+            get_bg_palette(ppu, attribute_table, tile_x, tile_y)
+        };
+        
+        write_tile_in_view_port(ppu, frame, tile_x * 8, tile_y * 8, shift_x, shift_y, &view_port, tile, &t);
     }
 }
