@@ -2,7 +2,7 @@ use crate::bus::{Bus, PollInterrupt, Mem};
 use crate::cpu::addressing_mode::{AddressingMode, page_cross};
 use crate::cpu::interrupts::{Interrupt, NMI_INTERRUPT, RESET_INTERRUPT};
 use crate::cpu::opcodes::CPU_INSTRUCTIONS;
-use crate::ppu::pallet::SystemPallet;
+use crate::ppu::palette::SystemPalette;
 use crate::rom::Rom;
 
 pub mod opcodes;
@@ -65,7 +65,7 @@ impl CPU<'_> {
     const INITIAL_STATUS: u8 = 0x24;
 
     pub fn new(rom: Rom) -> Self {
-        CPU::new_with_bus(Bus::new(rom, SystemPallet::new(), | _, _ | {}, | _, _ | {}))
+        CPU::new_with_bus(Bus::new(rom, SystemPalette::new(), | _, _ | {}, | _, _ | {}))
     }
 
     pub fn new_with_bus(bus: Bus) -> CPU {

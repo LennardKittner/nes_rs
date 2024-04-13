@@ -11,7 +11,7 @@ use nes_rs::controller::{Controller, ControllerButtons};
 use nes_rs::cpu::CPU;
 use nes_rs::rendering::frame::Frame;
 use nes_rs::ppu::PPU;
-use nes_rs::ppu::pallet::SystemPallet;
+use nes_rs::ppu::palette::SystemPalette;
 use nes_rs::rom::Rom;
 
 fn main() {
@@ -94,9 +94,9 @@ fn main() {
     };
 
     let palette = if let Some(path) = palette_path {
-        read_palette_table(path).unwrap_or(SystemPallet::new())
+        read_palette_table(path).unwrap_or(SystemPalette::new())
     } else {
-        SystemPallet::new()
+        SystemPalette::new()
     };
 
     let bus = Bus::new(rom, palette,
@@ -112,9 +112,9 @@ fn main() {
     cpu.run();
 }
 
-fn read_palette_table(path: &str) -> io::Result<SystemPallet> {
+fn read_palette_table(path: &str) -> io::Result<SystemPalette> {
     let mut palette_file = File::open(path)?;
     let mut buffer = Vec::new();
     palette_file.read_to_end(&mut buffer)?;
-    Ok(SystemPallet::from_raw(&buffer).unwrap())
+    Ok(SystemPalette::from_raw(&buffer).unwrap())
 }

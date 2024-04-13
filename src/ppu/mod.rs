@@ -4,13 +4,13 @@ pub mod mask;
 pub mod scroll;
 pub mod status;
 pub mod sprite;
-pub mod pallet;
+pub mod palette;
 
 use crate::bus::PollInterrupt;
 use crate::ppu::addr::AddressRegister;
 use crate::ppu::control::ControlRegister;
 use crate::ppu::mask::MaskRegister;
-use crate::ppu::pallet::SystemPallet;
+use crate::ppu::palette::SystemPalette;
 use crate::ppu::scroll::ScrollRegister;
 use crate::ppu::sprite::Sprite;
 use crate::ppu::status::StatusRegister;
@@ -21,7 +21,7 @@ use crate::rom::Mirroring;
 pub struct PPU {
     pub chr_rom: Vec<u8>,
     palette_table: [u8; 32],
-    pub system_palette: SystemPallet,
+    pub system_palette: SystemPalette,
     pub vram: [u8; 2048],
     pub oam_addr: u8,
     pub oam_data: [u8; 256],
@@ -51,7 +51,7 @@ impl PollInterrupt for PPU {
 }
 
 impl PPU {
-    pub fn new(chr_rom: Vec<u8>, mirroring: Mirroring, system_palette: SystemPallet) -> Self {
+    pub fn new(chr_rom: Vec<u8>, mirroring: Mirroring, system_palette: SystemPalette) -> Self {
         PPU {
             chr_rom,
             palette_table: [0; 32],
@@ -260,8 +260,8 @@ impl PPU {
         self.status_register.vertical_blank()
     }
 
-    pub fn get_color_from_current_system_pallet(&self, idx: usize) -> (u8, u8, u8) {
-        self.system_palette.get_pallet(self.mask_register.get_emphasis_index() as usize)[idx]
+    pub fn get_color_from_current_system_palette(&self, idx: usize) -> (u8, u8, u8) {
+        self.system_palette.get_palette(self.mask_register.get_emphasis_index() as usize)[idx]
     }
 }
 
@@ -270,7 +270,7 @@ pub mod test {
     use super::*;
 
     pub fn new_empty_rom() -> PPU {
-        PPU::new(vec![0; 2048], Mirroring::HORIZONTAL, SystemPallet::new())
+        PPU::new(vec![0; 2048], Mirroring::HORIZONTAL, SystemPalette::new())
     }
 
     #[test]
@@ -363,7 +363,7 @@ pub mod test {
     //   [0x2800 a ] [0x2C00 b ]
     #[test]
     fn test_vram_vertical_mirror() {
-        let mut ppu = PPU::new(vec![0; 2048], Mirroring::VERTICAL, SystemPallet::new());
+        let mut ppu = PPU::new(vec![0; 2048], Mirroring::VERTICAL, SystemPalette::new());
 
         ppu.write_to_addr(0x20);
         ppu.write_to_addr(0x05);

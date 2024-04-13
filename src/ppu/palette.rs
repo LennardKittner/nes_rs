@@ -1,7 +1,7 @@
-// generate pallets https://bisqwit.iki.fi/utils/nespalette.php
-//TODO: update default pallet
+// generate palettes https://bisqwit.iki.fi/utils/nespalette.php
+//TODO: update default palette
 #[rustfmt::skip]
-static SYSTEM_PALLET: [(u8, u8, u8); 64] = [
+static SYSTEM_PALETTE: [(u8, u8, u8); 64] = [
     (0x80, 0x80, 0x80), (0x00, 0x3D, 0xA6), (0x00, 0x12, 0xB0), (0x44, 0x00, 0x96), (0xA1, 0x00, 0x5E),
     (0xC7, 0x00, 0x28), (0xBA, 0x06, 0x00), (0x8C, 0x17, 0x00), (0x5C, 0x2F, 0x00), (0x10, 0x45, 0x00),
     (0x05, 0x4A, 0x00), (0x00, 0x47, 0x2E), (0x00, 0x41, 0x66), (0x00, 0x00, 0x00), (0x05, 0x05, 0x05),
@@ -17,13 +17,13 @@ static SYSTEM_PALLET: [(u8, u8, u8); 64] = [
     (0x99, 0xFF, 0xFC), (0xDD, 0xDD, 0xDD), (0x11, 0x11, 0x11), (0x11, 0x11, 0x11)
 ];
 
-const PALLET_SIZE_E: usize = 64;
-const PALLET_SIZE_B: usize = PALLET_SIZE_E * 3;
-const NUMBER_PALLETS: usize = 8;
-const SYSTEM_PALLET_SIZE_B: usize = PALLET_SIZE_B * NUMBER_PALLETS;
-const SYSTEM_PALLET_SIZE_E: usize = PALLET_SIZE_E * NUMBER_PALLETS;
+const PALETTE_SIZE_E: usize = 64;
+const PALETTE_SIZE_B: usize = PALETTE_SIZE_E * 3;
+const NUMBER_PALETTES: usize = 8;
+const SYSTEM_PALETTE_SIZE_B: usize = PALETTE_SIZE_B * NUMBER_PALETTES;
+const SYSTEM_PALETTE_SIZE_E: usize = PALETTE_SIZE_E * NUMBER_PALETTES;
 
-pub type Pallet = [(u8, u8, u8); PALLET_SIZE_E];
+pub type Pallet = [(u8, u8, u8); PALETTE_SIZE_E];
 
 
 // bgr
@@ -35,47 +35,47 @@ pub type Pallet = [(u8, u8, u8); PALLET_SIZE_E];
 // 101 -> blue & red   = 5
 // 110 -> blue & green = 6
 // 111 -> all          = 7
-pub struct SystemPallet {
-    pallets: [Pallet; NUMBER_PALLETS]
+pub struct SystemPalette {
+    palettes: [Pallet; NUMBER_PALETTES]
 }
 
-impl SystemPallet {
+impl SystemPalette {
     pub fn new() -> Self {
-        SystemPallet {
-            pallets: [SYSTEM_PALLET; NUMBER_PALLETS]
+        SystemPalette {
+            palettes: [SYSTEM_PALETTE; NUMBER_PALETTES]
         }
     }
 
-    pub fn from_single_pallet(pallet: Pallet) -> Self {
-        SystemPallet {
-            pallets: [pallet; NUMBER_PALLETS]
+    pub fn from_single_palette(palette: Pallet) -> Self {
+        SystemPalette {
+            palettes: [palette; NUMBER_PALETTES]
         }
     }
 
     pub fn from_raw(buffer: &[u8]) -> Option<Self> {
-        if buffer.len() % PALLET_SIZE_B != 0 {
+        if buffer.len() % PALETTE_SIZE_B != 0 {
             return None;
         }
-        let mut system_pallet = SystemPallet::new();
-        for pallet_index in 0..(buffer.len() / (PALLET_SIZE_B)) {
-            ((pallet_index * PALLET_SIZE_B)..(pallet_index * PALLET_SIZE_B + PALLET_SIZE_B))
+        let mut system_palette = SystemPalette::new();
+        for palette_index in 0..(buffer.len() / (PALETTE_SIZE_B)) {
+            ((palette_index * PALETTE_SIZE_B)..(palette_index * PALETTE_SIZE_B + PALETTE_SIZE_B))
                 .step_by(3)
                 .map(|i| {
                     (buffer[i], buffer[i+1], buffer[i+2])
             }).enumerate()
                 .for_each(|(i, rgb)| {
-                system_pallet.pallets[pallet_index][i] = rgb;
+                system_palette.palettes[palette_index][i] = rgb;
             });
         }
 
-        Some(system_pallet)
+        Some(system_palette)
     }
     
-    pub fn get_pallet(&self, idx: usize) -> Pallet {
-        self.pallets[idx]
+    pub fn get_palette(&self, idx: usize) -> Pallet {
+        self.palettes[idx]
     }
 
-    pub fn get_color(&self, pallet_idx: usize, color_idx: usize) -> (u8, u8, u8) {
-        self.pallets[pallet_idx][color_idx]
+    pub fn get_color(&self, palette_idx: usize, color_idx: usize) -> (u8, u8, u8) {
+        self.palettes[palette_idx][color_idx]
     }
 }

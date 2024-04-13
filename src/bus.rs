@@ -1,5 +1,5 @@
 use crate::controller::Controller;
-use crate::ppu::pallet::SystemPallet;
+use crate::ppu::palette::SystemPalette;
 use crate::ppu::PPU;
 use crate::rendering::frame::Frame;
 use crate::rendering::{render_background, render_sprites};
@@ -19,7 +19,7 @@ pub struct Bus<'a> {
 }
 
 impl<'a> Bus<'a> {
-    pub fn new<GF, C1F>(rom: Rom, system_palette: SystemPallet, graphics_callback: GF, controller_callback: C1F) -> Bus<'a>
+    pub fn new<GF, C1F>(rom: Rom, system_palette: SystemPalette, graphics_callback: GF, controller_callback: C1F) -> Bus<'a>
         where GF: FnMut(&PPU, &Frame) + 'a, C1F: FnMut(&mut Controller, &mut Controller) + 'a
     {
         let ppu = PPU::new(rom.chr_rom, rom.screen_mirroring, system_palette);
@@ -52,13 +52,13 @@ impl<'a> Bus<'a> {
         let vblank_after = self.ppu.is_in_vertical_blank();
 
         //TODO: flickering
-        //TODO: maybe only update when the cpu changes stuff on the ppu
-        //TODO: maybe render each scanline individually
-        if self.ppu.show_background() && (next_scannline < self.last_scanline || next_scannline >= self.last_scanline + 8) && next_scannline <= 240 {
+        if next_scannline != self.last_scanline && next_scannline <= 240 {
             self.last_scanline = next_scannline;
-            render_background(&self.ppu, &mut self.frame, next_scannline as usize);
+            if self.ppu.show_background() {
+                render_background(&self.ppu, &mut self.frame, next_scannline as usize);
+            }
             if self.ppu.show_sprites() {
-                render_sprites(&self.ppu, &mut self.frame);
+                render_sprites(&self.ppu, &mut self.frame, next_scannline as usize);
             }
         }
 
