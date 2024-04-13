@@ -14,6 +14,7 @@ use crate::ppu::palette::SystemPalette;
 use crate::ppu::scroll::ScrollRegister;
 use crate::ppu::sprite::Sprite;
 use crate::ppu::status::StatusRegister;
+use crate::rendering::get_sprite_palette;
 use crate::rom::Mirroring;
 
 //TODO: Sprite overflow
@@ -75,7 +76,7 @@ impl PPU {
     pub fn tick(&mut self, cycles: u8) -> u16  {
         self.cycles += cycles as usize;
         if self.cycles >= 341 {
-            if self.is_sprite_0_hit(self.cycles) {
+            if self.is_sprite_0_hit(self.scan_line as usize) {
                 self.status_register.set_sprite_zero_hit(true);
             }
 
@@ -99,9 +100,24 @@ impl PPU {
     }
 
     //TODO: check transparency and the whole sprite instead of just top left
-    fn is_sprite_0_hit(&self, cycle: usize) -> bool {
+    fn is_sprite_0_hit(&self, scanline: usize) -> bool {
         let sprite_0 = Sprite::new(&self.oam_data).unwrap();
-        (sprite_0.get_y() == self.scan_line as usize) && sprite_0.get_x() <= cycle && self.mask_register.show_sprites()
+        if self.mask_register.show_sprites() && !((self.scan_line as usize) < sprite_0.get_y() || (self.scan_line as usize >= sprite_0.get_y() + 8)) {
+            let bank = self.control_register.get_sprite_pattern_table_address() as usize;
+            let tile = &self.chr_rom[(bank + sprite_0.get_pattern_index() * 16)..(bank + sprite_0.get_pattern_index() * 16 + 16)];
+            let line = scanline - sprite_0.get_y();
+            let mut upper = tile[line];
+            let mut lowwer = tile[line + 8];
+            for _ in (0..8).rev() {
+                let color_idx = (1 & lowwer) << 1 | (1 & upper);
+                upper >>= 1;
+                lowwer >>= 1;
+                if color_idx != 0 {
+                    return true;
+                }
+            }
+        }
+        false
     }
 
     fn increment_vram_addr(&mut self) {
