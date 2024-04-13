@@ -58,7 +58,7 @@ impl<'a> Bus<'a> {
                 render_background(&self.ppu, &mut self.frame, next_scannline as usize);
             }
             if self.ppu.show_sprites() {
-                render_sprites(&self.ppu, &mut self.frame, next_scannline as usize);
+                render_sprites(&mut self.ppu, &mut self.frame, next_scannline as usize);
             }
         }
 

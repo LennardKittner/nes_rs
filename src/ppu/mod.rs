@@ -12,9 +12,7 @@ use crate::ppu::control::ControlRegister;
 use crate::ppu::mask::MaskRegister;
 use crate::ppu::palette::SystemPalette;
 use crate::ppu::scroll::ScrollRegister;
-use crate::ppu::sprite::Sprite;
 use crate::ppu::status::StatusRegister;
-use crate::rendering::get_sprite_palette;
 use crate::rom::Mirroring;
 
 //TODO: Sprite overflow
@@ -76,10 +74,6 @@ impl PPU {
     pub fn tick(&mut self, cycles: u8) -> u16  {
         self.cycles += cycles as usize;
         if self.cycles >= 341 {
-            if self.is_sprite_0_hit(self.scan_line as usize) {
-                self.status_register.set_sprite_zero_hit(true);
-            }
-
             self.cycles -= 341;
             self.scan_line += 1;
 
@@ -94,30 +88,10 @@ impl PPU {
                 self.outstanding_interrupt = false;
                 self.status_register.set_vertical_blank(false);
                 self.status_register.set_sprite_zero_hit(false);
+                self.status_register.set_sprite_overflow(false);
             }
         }
         self.scan_line
-    }
-
-    //TODO: check transparency and the whole sprite instead of just top left
-    fn is_sprite_0_hit(&self, scanline: usize) -> bool {
-        let sprite_0 = Sprite::new(&self.oam_data).unwrap();
-        if self.mask_register.show_sprites() && !((self.scan_line as usize) < sprite_0.get_y() || (self.scan_line as usize >= sprite_0.get_y() + 8)) {
-            let bank = self.control_register.get_sprite_pattern_table_address() as usize;
-            let tile = &self.chr_rom[(bank + sprite_0.get_pattern_index() * 16)..(bank + sprite_0.get_pattern_index() * 16 + 16)];
-            let line = scanline - sprite_0.get_y();
-            let mut upper = tile[line];
-            let mut lowwer = tile[line + 8];
-            for _ in (0..8).rev() {
-                let color_idx = (1 & lowwer) << 1 | (1 & upper);
-                upper >>= 1;
-                lowwer >>= 1;
-                if color_idx != 0 {
-                    return true;
-                }
-            }
-        }
-        false
     }
 
     fn increment_vram_addr(&mut self) {
@@ -278,6 +252,14 @@ impl PPU {
 
     pub fn get_color_from_current_system_palette(&self, idx: usize) -> (u8, u8, u8) {
         self.system_palette.get_palette(self.mask_register.get_emphasis_index() as usize)[idx]
+    }
+
+    pub fn set_sprite_zero_hit(&mut self) {
+        self.status_register.set_sprite_zero_hit(true);
+    }
+
+    pub fn set_sprite_overflow(&mut self) {
+        self.status_register.set_sprite_overflow(true);
     }
 }
 

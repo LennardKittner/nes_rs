@@ -42,6 +42,10 @@ impl StatusRegister {
         self.contains(Self::SPRITE_OVERFLOW)
     }
 
+    pub fn set_sprite_overflow(&mut self, overflow: bool) {
+        self.set(Self::SPRITE_OVERFLOW, overflow);
+    }
+
     pub fn sprite_zero_hit(&self) -> bool {
         self.contains(Self::SPRITE_ZERO_HIT)
     }

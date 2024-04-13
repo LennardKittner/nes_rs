@@ -5,10 +5,11 @@ pub struct Sprite {
     pattern_index: u8,
     attributes: u8,
     x_pos: u8,
+    sprite_zero: bool,
 }
 
 impl Sprite {
-    pub fn new(raw: &[u8]) -> Option<Self> {
+    pub fn new(raw: &[u8], sprite_zero: bool) -> Option<Self> {
         if raw.len() < 4 {
             None
         } else {
@@ -17,6 +18,7 @@ impl Sprite {
                 pattern_index: raw[1],
                 attributes: raw[2],
                 x_pos: raw[3],
+                sprite_zero,
             })
         }
     }
@@ -47,5 +49,9 @@ impl Sprite {
 
     pub fn get_palette_index(&self) -> usize {
         (self.attributes & 0b11) as usize
+    }
+    
+    pub fn is_sprite_zero(&self) -> bool {
+        self.sprite_zero
     }
 }

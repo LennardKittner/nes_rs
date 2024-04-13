@@ -1,6 +1,7 @@
 pub mod frame;
 mod rect;
 
+use itertools::Itertools;
 use crate::ppu::palette::SystemPalette;
 use crate::ppu::PPU;
 use crate::ppu::sprite::Sprite;
@@ -50,7 +51,7 @@ pub fn write_tile(frame: &mut Frame, x_pos: usize, y_pos: usize, tile: &[u8], pa
     }
 }
 
-pub fn render(ppu: &PPU, frame: &mut Frame, scanline: usize) {
+pub fn render(ppu: &mut PPU, frame: &mut Frame, scanline: usize) {
     if ppu.show_background() {
         render_background(ppu, frame, scanline);
     }
@@ -59,20 +60,25 @@ pub fn render(ppu: &PPU, frame: &mut Frame, scanline: usize) {
     }
 }
 
+//TODO: sprite zero hit changes overtime
 //TODO: sprite y + 1?
+//TODO: sprites some times not rendered correctly
 //TODO: more precise drawing
 // real NES: At any given pixel, if the frontmost opaque sprite's priority bit is true (1), an opaque background pixel is drawn in front of it.
 // Emulation: At any given pixel, only if all opaque sprite's priority bits are true (1), an opaque background pixel is drawn in front of them.
-pub fn render_sprites(ppu: &PPU, frame: &mut Frame, scanline: usize) {
+pub fn render_sprites(ppu: &mut PPU, frame: &mut Frame, scanline: usize) {
     let scanline = scanline as u8;
     let sprites = (0..ppu.oam_data.len()).step_by(4).rev().filter_map(|idx| {
         let raw = &ppu.oam_data[idx..idx+4];
-        if raw[0] >= 240 || scanline < raw[0] || scanline >= raw[0] + 8 {
+        if raw[0] >= 240 || scanline < raw[0] || scanline >= (raw[0] + 8) {
             None
         } else {
-            Sprite::new(raw)
+            Sprite::new(raw, idx == 0)
         }
-    });
+    }).collect_vec();
+    
+    let mut sprites_drawn = 0;
+    
     for sprite in sprites {
         let palette = get_sprite_palette(ppu, sprite.get_palette_index());
         let bank = ppu.control_register.get_sprite_pattern_table_address() as usize;
@@ -80,12 +86,19 @@ pub fn render_sprites(ppu: &PPU, frame: &mut Frame, scanline: usize) {
         let line = scanline as usize - sprite.get_y();
         let mut upper = tile[line];
         let mut lowwer = tile[line + 8];
+        if sprites_drawn == 8 {
+            ppu.set_sprite_overflow();
+            break;
+        }
         for x in (0..8).rev() {
             let color_idx = (1 & lowwer) << 1 | (1 & upper);
             upper >>= 1;
             lowwer >>= 1;
             if color_idx == 0 {
                 continue;
+            }
+            if sprite.is_sprite_zero() {
+                ppu.set_sprite_zero_hit();
             }
 
             let rgb = ppu.get_color_from_current_system_palette(palette[color_idx as usize] as usize);
@@ -96,6 +109,7 @@ pub fn render_sprites(ppu: &PPU, frame: &mut Frame, scanline: usize) {
                 (true, true) => draw_sprite_pixel(frame, ppu, sprite.get_x() + 7 - x, sprite.get_y() + 7 - line, sprite.draw_over_background(), rgb),
             }
         }
+        sprites_drawn += 1;
     }
 }
 
