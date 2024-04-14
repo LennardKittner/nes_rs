@@ -60,8 +60,6 @@ pub fn render(ppu: &mut PPU, frame: &mut Frame, scanline: usize) {
     }
 }
 
-//TODO: sprite zero hit changes overtime
-//TODO: sprite y + 1?
 //TODO: sprites some times not rendered correctly
 //TODO: more precise drawing
 // real NES: At any given pixel, if the frontmost opaque sprite's priority bit is true (1), an opaque background pixel is drawn in front of it.
@@ -70,15 +68,15 @@ pub fn render_sprites(ppu: &mut PPU, frame: &mut Frame, scanline: usize) {
     let scanline = scanline as u8;
     let sprites = (0..ppu.oam_data.len()).step_by(4).rev().filter_map(|idx| {
         let raw = &ppu.oam_data[idx..idx+4];
-        if raw[0] >= 240 || scanline < raw[0] || scanline >= (raw[0] + 8) {
+        if raw[0] + 1 >= 240 || scanline < raw[0] + 1 || scanline >= (raw[0] + 1 + 8) {
             None
         } else {
             Sprite::new(raw, idx == 0)
         }
     }).collect_vec();
-    
+
     let mut sprites_drawn = 0;
-    
+
     for sprite in sprites {
         let palette = get_sprite_palette(ppu, sprite.get_palette_index());
         let bank = ppu.control_register.get_sprite_pattern_table_address() as usize;

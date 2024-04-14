@@ -15,7 +15,6 @@ use crate::ppu::scroll::ScrollRegister;
 use crate::ppu::status::StatusRegister;
 use crate::rom::Mirroring;
 
-//TODO: Sprite overflow
 //TODO: 8x16 sprites
 pub struct PPU {
     pub chr_rom: Vec<u8>,
