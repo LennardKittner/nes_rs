@@ -1,8 +1,7 @@
 use crate::controller::Controller;
 use crate::ppu::palette::SystemPalette;
 use crate::ppu::PPU;
-use crate::rendering::frame::Frame;
-use crate::rendering::{render_background, render_sprites};
+use crate::rendering::{frame::Frame, render, scanline::Scanline};
 use crate::rom::Rom;
 
 pub struct Bus<'a> {
@@ -10,6 +9,7 @@ pub struct Bus<'a> {
     prg_rom: Vec<u8>,
     ppu: PPU,
     frame: Frame,
+    current_scanline: Scanline,
     last_scanline: u16,
     cycles: usize,
     graphics_callback: Box<dyn FnMut(&PPU, &Frame) + 'a>,
@@ -29,6 +29,7 @@ impl<'a> Bus<'a> {
             cycles: 0,
             ppu,
             frame: Frame::new(),
+            current_scanline: Scanline::new(),
             last_scanline: 0,
             graphics_callback: Box::from(graphics_callback),
             controller_callback: Box::from(controller_callback),
@@ -53,13 +54,10 @@ impl<'a> Bus<'a> {
 
         //TODO: flickering
         if next_scannline != self.last_scanline && next_scannline <= 240 {
+            render(&mut self.ppu, &mut self.current_scanline, next_scannline as usize);
+            self.current_scanline.write_scanline(&mut self.frame, next_scannline as usize);
+            self.current_scanline.clear();
             self.last_scanline = next_scannline;
-            if self.ppu.show_background() {
-                render_background(&self.ppu, &mut self.frame, next_scannline as usize);
-            }
-            if self.ppu.show_sprites() {
-                render_sprites(&mut self.ppu, &mut self.frame, next_scannline as usize);
-            }
         }
 
         if !vblank_before && vblank_after {
