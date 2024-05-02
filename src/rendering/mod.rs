@@ -60,15 +60,14 @@ pub fn render(ppu: &mut PPU, frame: &mut Frame, scanline: usize) {
     }
 }
 
-//TODO: sprites some times not rendered correctly
 //TODO: more precise drawing
 // real NES: At any given pixel, if the frontmost opaque sprite's priority bit is true (1), an opaque background pixel is drawn in front of it.
 // Emulation: At any given pixel, only if all opaque sprite's priority bits are true (1), an opaque background pixel is drawn in front of them.
-pub fn render_sprites(ppu: &mut PPU, frame: &mut Frame, scanline: usize) {
+pub fn render_sprites<'a, GF>(ppu: &mut PPU, frame: &mut Frame, scanline: usize) {
     let scanline = scanline as u8;
     let sprites = (0..ppu.oam_data.len()).step_by(4).rev().filter_map(|idx| {
         let raw = &ppu.oam_data[idx..idx+4];
-        if raw[0] + 1 >= 240 || scanline < raw[0] + 1 || scanline >= (raw[0] + 1 + 8) {
+        if raw[0] >= 239 || scanline < raw[0] + 1 || scanline >= (raw[0] + 1 + 8) {
             None
         } else {
             Sprite::new(raw, idx == 0)
@@ -80,10 +79,15 @@ pub fn render_sprites(ppu: &mut PPU, frame: &mut Frame, scanline: usize) {
     for sprite in sprites {
         let palette = get_sprite_palette(ppu, sprite.get_palette_index());
         let bank = ppu.control_register.get_sprite_pattern_table_address() as usize;
-        let tile = &ppu.chr_rom[(bank + sprite.get_pattern_index() * 16)..(bank + sprite.get_pattern_index() * 16 + 16)];
-        let line = scanline as usize - sprite.get_y();
-        let mut upper = tile[line];
-        let mut lowwer = tile[line + 8];
+        let tile = ppu.chr_rom[(bank + sprite.get_pattern_index() * 16)..(bank + sprite.get_pattern_index() * 16 + 16)].to_vec();
+        let sprite_line = if sprite.is_vertical_flip() {
+            7 - (scanline as usize - sprite.get_y())
+        } else {
+            scanline as usize - sprite.get_y()
+        };
+        
+        let mut upper = tile[sprite_line];
+        let mut lowwer = tile[sprite_line + 8];
         if sprites_drawn == 8 {
             ppu.set_sprite_overflow();
             break;
@@ -100,11 +104,10 @@ pub fn render_sprites(ppu: &mut PPU, frame: &mut Frame, scanline: usize) {
             }
 
             let rgb = ppu.get_color_from_current_system_palette(palette[color_idx as usize] as usize);
-            match (sprite.is_horizontal_flip(), sprite.is_vertical_flip()) {
-                (false, false) => draw_sprite_pixel(frame, ppu, x + sprite.get_x(), line + sprite.get_y(), sprite.draw_over_background(), rgb),
-                (true, false) => draw_sprite_pixel(frame, ppu, sprite.get_x() + 7 - x, line + sprite.get_y(), sprite.draw_over_background(), rgb),
-                (false, true) => draw_sprite_pixel(frame, ppu, x + sprite.get_x(), sprite.get_y() + 7 - line, sprite.draw_over_background(), rgb),
-                (true, true) => draw_sprite_pixel(frame, ppu, sprite.get_x() + 7 - x, sprite.get_y() + 7 - line, sprite.draw_over_background(), rgb),
+            if sprite.is_horizontal_flip() {
+                draw_sprite_pixel(frame, ppu, sprite.get_x() + 7 - x, scanline as usize, sprite.draw_over_background(), rgb);
+            } else {
+                draw_sprite_pixel(frame, ppu, x + sprite.get_x(), scanline as usize, sprite.draw_over_background(), rgb);
             }
         }
         sprites_drawn += 1;
