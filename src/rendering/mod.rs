@@ -54,9 +54,9 @@ pub fn write_tile(frame: &mut Frame, x_pos: usize, y_pos: usize, tile: &[u8], pa
     }
 }
 
-pub fn render(ppu: &mut PPU, scanline: &mut Scanline, scanline_pos: usize) {
+pub fn render<'a>(ppu: &mut PPU, scanline: &mut Scanline, scanline_pos: usize) {
     if ppu.show_background() {
-        render_background(ppu, scanline, scanline_pos);
+        render_background_current_scanline(ppu, scanline);
     }
     if ppu.show_sprites() {
         render_sprites(ppu, scanline, scanline_pos);
@@ -121,23 +121,99 @@ pub fn render_sprites(ppu: &mut PPU, scanline: &mut Scanline, scanline_pos: usiz
     }
 }
 
-pub fn render_background(ppu: &PPU, scanline: &mut Scanline, scanline_pos: usize) {
-    let mut scroll_x = ppu.get_scroll_x() as usize;
-    let scroll_y = ppu.get_scroll_y() as usize;
+pub fn render_background_current_scanline(ppu: &mut PPU, scanline: &mut Scanline) {
+    render_bg(ppu, scanline);
+}
 
-    let (main_name_table, second_name_table) = match (&ppu.mirroring, ppu.control_register.get_nametable_base()) {
-        (Mirroring::VERTICAL, 0x2000) | (Mirroring::VERTICAL, 0x2800) | (Mirroring::HORIZONTAL, 0x2000) | (Mirroring::HORIZONTAL, 0x2400) => (&ppu.vram[0..0x400], &ppu.vram[0x400..0x800]),
-        (Mirroring::VERTICAL, 0x2400) | (Mirroring::VERTICAL, 0x2C00) | (Mirroring::HORIZONTAL, 0x2800) | (Mirroring::HORIZONTAL, 0x2C00) => (&ppu.vram[0x400..0x800], &ppu.vram[0..0x400]),
+//TODO: maybe extract rendering loop
+//TODO: remove nametable bits form status
+fn render_bg(ppu: &mut PPU, scanline: &mut Scanline) {
+    let (main_name_table, second_name_table) = match (&ppu.mirroring, ppu.address_register.get_name_table()) {
+        (Mirroring::VERTICAL, 0b00) | (Mirroring::VERTICAL, 0b10) | (Mirroring::HORIZONTAL, 0b00) | (Mirroring::HORIZONTAL, 0b01) => {
+            (&ppu.vram[0..0x400], &ppu.vram[0x400..0x800])
+        },
+        (Mirroring::VERTICAL, 0b01) | (Mirroring::VERTICAL, 0b11) | (Mirroring::HORIZONTAL, 0b10) | (Mirroring::HORIZONTAL, 0b11) => {
+            (&ppu.vram[0x400..0x800], &ppu.vram[0..0x400])
+        },
         (_, _) => panic!("Unsupported mirroring mode: {:?}", ppu.mirroring),
     };
 
-    render_name_table(ppu, scanline, main_name_table, Rect::new(scroll_x, scroll_y, 256, 240), -(scroll_x as isize), -(scroll_y as isize), scanline_pos);
-    if scroll_x > 0 {
-        render_name_table(ppu, scanline, second_name_table, Rect::new(0, 0, scroll_x, 240), (256 - scroll_x) as isize, 0, scanline_pos);
+    let bank = ppu.control_register.get_background_pattern_table_address();
+    let attribute_table = &main_name_table[0x3C0..0x400];
+    let line = ppu.address_register.get_inner_tile_y_offset();
+
+    let tile_x = ppu.address_register.get_tile_x();
+    let tile_y = ppu.address_register.get_tile_y();
+    
+    let shift_x = ppu.get_scroll_x() as usize;
+
+    for tile_x in tile_x..32 {
+        let tile_idx = main_name_table[32 * tile_y + tile_x] as u16;
+
+        let tile = &ppu.chr_rom[(bank + tile_idx * 16) as usize..(bank + tile_idx * 16 + 16) as usize];
+        if !ppu.show_background_left() && tile_x == 0 {
+            continue;
+        }
+
+        let palette = get_bg_palette(ppu, attribute_table, tile_x, tile_y);
+        let mut upper = tile[line];
+        let mut lower = tile[line + 8];
+
+        for x in (0..8).rev() {
+            let color_idx = (1 & lower) << 1 | (1 & upper);
+            upper >>= 1;
+            lower >>= 1;
+
+            let pixel_x = tile_x * 8 + x;
+
+            if pixel_x > shift_x {
+                let rgb = ppu.get_color_from_current_system_palette(palette[color_idx as usize] as usize);
+                scanline.data[pixel_x - shift_x].background_color = BackgroundColor {
+                    color: rgb,
+                    transparent: color_idx == 0,
+                };
+            }
+        }
     }
-    if scroll_y > 0 {
-        render_name_table(ppu, scanline, second_name_table, Rect::new(0, 0, 256, scroll_y), 0, (240 - scroll_y) as isize, scanline_pos);
+    
+
+    ppu.address_register.vertical_name_table_overflow();
+    let attribute_table = &second_name_table[0x3C0..0x400];
+    for tile_x in 0..(tile_x+1) {
+        let tile_idx = second_name_table[32 * tile_y + tile_x] as u16;
+
+        let tile = &ppu.chr_rom[(bank + tile_idx * 16) as usize..(bank + tile_idx * 16 + 16) as usize];
+        if !ppu.show_background_left() && tile_x == 0 {
+            continue;
+        }
+
+        let palette = get_bg_palette(ppu, attribute_table, tile_x, tile_y);
+        let mut upper = tile[line];
+        let mut lower = tile[line + 8];
+
+        for x in (0..8).rev() {
+            let color_idx = (1 & lower) << 1 | (1 & upper);
+            upper >>= 1;
+            lower >>= 1;
+
+            let pixel_x = tile_x * 8 + x;
+
+            if pixel_x <= shift_x && pixel_x + (256 - shift_x) < 256 {
+                let rgb = ppu.get_color_from_current_system_palette(palette[color_idx as usize] as usize);
+                scanline.data[pixel_x + (256 - shift_x)].background_color = BackgroundColor {
+                    color: rgb,
+                    transparent: color_idx == 0,
+                };
+            }
+        }
     }
+    ppu.address_register.vertical_name_table_overflow();
+    
+    if line == 7 {
+        ppu.address_register.set_tile_y((tile_y+1) as u8);
+        ppu.address_register.horizontal_name_table_overflow();
+    }
+    ppu.address_register.set_inner_tile_y_offset((line+1) as u8);
 }
 
 fn render_name_table(ppu: &PPU, scanline: &mut Scanline, name_table: &[u8], view_port: Rect, shift_x: isize, shift_y: isize, scanline_pos: usize) {

@@ -1,4 +1,3 @@
-use crate::ppu::palette::SystemPalette;
 use crate::rendering::write_tile;
 
 pub struct Frame {

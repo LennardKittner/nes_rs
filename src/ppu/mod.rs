@@ -5,6 +5,7 @@ pub mod scroll;
 pub mod status;
 pub mod sprite;
 pub mod palette;
+mod t_register;
 
 use crate::bus::PollInterrupt;
 use crate::ppu::addr::AddressRegister;
@@ -13,6 +14,7 @@ use crate::ppu::mask::MaskRegister;
 use crate::ppu::palette::SystemPalette;
 use crate::ppu::scroll::ScrollRegister;
 use crate::ppu::status::StatusRegister;
+use crate::ppu::t_register::TRegister;
 use crate::rom::Mirroring;
 
 //TODO: 8x16 sprites
@@ -27,9 +29,11 @@ pub struct PPU {
     mask_register : MaskRegister,
     status_register: StatusRegister,
     scroll_register: ScrollRegister,
-    address_register: AddressRegister,
+    pub address_register: AddressRegister,
+    pub temporary_address_register: TRegister,
     pub mirroring: Mirroring,
     internal_data_buffer: u8,
+    write_toggle: bool,
 
     scan_line: u16,
     cycles: usize,
@@ -63,7 +67,9 @@ impl PPU {
             scroll_register: ScrollRegister::new(),
             mirroring,
             address_register: AddressRegister::new(),
+            temporary_address_register: TRegister::new(),
             internal_data_buffer: 0,
+            write_toggle: false,
             scan_line: 0,
             cycles: 0,
             outstanding_interrupt: false
@@ -73,6 +79,11 @@ impl PPU {
     pub fn tick(&mut self, cycles: u8) -> u16  {
         self.cycles += cycles as usize;
         if self.cycles >= 341 {
+
+            if self.show_background() {
+                self.address_register.load_x_from(&self.temporary_address_register);
+            }
+            
             self.cycles -= 341;
             self.scan_line += 1;
 
@@ -88,6 +99,9 @@ impl PPU {
                 self.status_register.set_vertical_blank(false);
                 self.status_register.set_sprite_zero_hit(false);
                 self.status_register.set_sprite_overflow(false);
+                if self.show_background() {
+                    self.address_register.load_y_from(&self.temporary_address_register);
+                }
             }
         }
         self.scan_line
@@ -104,9 +118,9 @@ impl PPU {
     // Vertical:
     //   [ A ] [ B ]
     //   [ a ] [ b ]
-    fn mirror_vram_addr(&self, addr: u16) -> u16 {
+    pub fn mirror_vram_addr(&self, addr: u16) -> u16 {
         let mirrored_vram = addr & 0b10_1111_1111_1111; // mirror down 0x3000-0x3eff to 0x2000 - 0x2eff
-        let vram_index = mirrored_vram - 0x2000; // to vram vector
+        let vram_index = mirrored_vram.wrapping_sub(0x2000); // to vram vector
         let name_table = vram_index / 0x400; // to name table index
         match (&self.mirroring, name_table) {
             (Mirroring::VERTICAL, 2) |
@@ -123,14 +137,13 @@ impl PPU {
     }
 
     pub fn write_to_data(&mut self, data: u8) {
-        let addr = self.address_register.get();
-        match addr {
+        match self.address_register.data {
             0x0000..=0x1FFF => print!("Attempt to write to Cartridge ROM space"),
-            0x2000..=0x2FFF => self.vram[self.mirror_vram_addr(addr) as usize] = data,
-            0x3000..=0x3EFF => print!("address space 0x3000..0x3EFF is not expected to be used, requested = {}", addr),
-            0x3F10 | 0x3F14 | 0x3F18 | 0x3F1C => self.palette_table[(addr - 0x10 - 0x3F00) as usize] = data,
-            0x3F00..=0x3FFF => self.palette_table[(self.address_to_pattern_table_index(addr)) as usize] = data,
-            _               => print!("unexpected access to mirrored space, requested = {}", addr),
+            0x2000..=0x2FFF => self.vram[self.mirror_vram_addr(self.address_register.data) as usize] = data,
+            0x3000..=0x3EFF => print!("address space 0x3000..0x3EFF is not expected to be used, requested = {}", self.address_register.data),
+            0x3F10 | 0x3F14 | 0x3F18 | 0x3F1C => self.palette_table[(self.address_register.data - 0x10 - 0x3F00) as usize] = data,
+            0x3F00..=0x3FFF => self.palette_table[(self.address_to_pattern_table_index(self.address_register.data)) as usize] = data,
+            _               => print!("unexpected access to mirrored space, requested = {}", self.address_register.data),
         }
         self.address_register.increment(self.control_register.get_vram_increment());
     }
@@ -144,7 +157,7 @@ impl PPU {
     }
 
     pub fn read_data(&mut self) -> u8 {
-        let addr = self.address_register.get();
+        let addr = self.address_register.data;
         self.increment_vram_addr();
 
         match addr {
@@ -166,10 +179,15 @@ impl PPU {
     }
 
     pub fn write_to_addr(&mut self, value: u8) {
-        self.address_register.update(value);
+        self.temporary_address_register.update_addr_write(value, self.write_toggle);
+        if self.write_toggle {
+            self.address_register.update_from(&self.temporary_address_register);
+        }
+        self.write_toggle = !self.write_toggle;
     }
 
     pub fn write_to_ctrl(&mut self, value: u8) {
+        self.temporary_address_register.update_ctrl_write(value);
         let before_nmi_status = self.control_register.generate_nmi();
         self.control_register.update(value);
         if !before_nmi_status && self.control_register.generate_nmi() && self.status_register.vertical_blank() {
@@ -183,14 +201,14 @@ impl PPU {
 
     pub fn read_status(&mut self) -> u8 {
         let status = self.status_register.bits();
-        self.scroll_register.reset_letch();
-        self.address_register.reset_latch();
+        self.write_toggle = false;
         self.status_register.set_vertical_blank(false);
         status
     }
 
     pub fn write_to_scroll(&mut self, value: u8) {
-        self.scroll_register.update(value);
+        self.temporary_address_register.update_scroll_write(value, self.write_toggle);
+        self.scroll_register.update(&mut self.write_toggle ,value);
     }
 
     pub fn write_to_oam_addr(&mut self, value: u8) {
@@ -290,7 +308,7 @@ pub mod test {
         ppu.write_to_addr(0x05);
 
         ppu.read_data(); //load_into_buffer
-        assert_eq!(ppu.address_register.get(), 0x2306);
+        assert_eq!(ppu.address_register.data, 0x2306);
         assert_eq!(ppu.read_data(), 0x66);
     }
 

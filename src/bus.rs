@@ -52,7 +52,6 @@ impl<'a> Bus<'a> {
         let next_scannline = self.ppu.tick(cycles *3);
         let vblank_after = self.ppu.is_in_vertical_blank();
 
-        //TODO: flickering
         if next_scannline != self.last_scanline && next_scannline <= 240 {
             render(&mut self.ppu, &mut self.current_scanline, next_scannline as usize);
             self.current_scanline.write_scanline(&mut self.frame, next_scannline as usize);
@@ -143,10 +142,7 @@ impl Mem for Bus<'_> {
                 let mirror_down_addr = addr & 0b00000111_11111111;
                 self.cpu_vram[mirror_down_addr as usize] = data;
             }
-            0x2000 => {
-                //println!("wrote {:X} to control register", {data});
-                self.ppu.write_to_ctrl(data)
-            },
+            0x2000 => self.ppu.write_to_ctrl(data),
             0x2001 => self.ppu.write_to_mask(data),
             0x2002 => panic!("write to PPU status register"),
             0x2003 => self.ppu.write_to_addr(data),
