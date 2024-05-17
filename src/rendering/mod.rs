@@ -126,7 +126,6 @@ pub fn render_background_current_scanline(ppu: &mut PPU, scanline: &mut Scanline
 }
 
 //TODO: maybe extract rendering loop
-//TODO: remove nametable bits form status
 fn render_bg(ppu: &mut PPU, scanline: &mut Scanline) {
     let (main_name_table, second_name_table) = match (&ppu.mirroring, ppu.address_register.get_name_table()) {
         (Mirroring::VERTICAL, 0b00) | (Mirroring::VERTICAL, 0b10) | (Mirroring::HORIZONTAL, 0b00) | (Mirroring::HORIZONTAL, 0b01) => {
@@ -144,7 +143,7 @@ fn render_bg(ppu: &mut PPU, scanline: &mut Scanline) {
 
     let tile_x = ppu.address_register.get_tile_x();
     let tile_y = ppu.address_register.get_tile_y();
-    
+
     let shift_x = ppu.get_scroll_x() as usize;
 
     for tile_x in tile_x..32 {
@@ -175,7 +174,7 @@ fn render_bg(ppu: &mut PPU, scanline: &mut Scanline) {
             }
         }
     }
-    
+
 
     ppu.address_register.vertical_name_table_overflow();
     let attribute_table = &second_name_table[0x3C0..0x400];
@@ -208,7 +207,7 @@ fn render_bg(ppu: &mut PPU, scanline: &mut Scanline) {
         }
     }
     ppu.address_register.vertical_name_table_overflow();
-    
+
     if line == 7 {
         ppu.address_register.set_tile_y((tile_y+1) as u8);
         ppu.address_register.horizontal_name_table_overflow();
