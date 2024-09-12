@@ -1,6 +1,7 @@
 
 const NMI_VECTOR: u16 = 0xFFFA;
 const RESET_VECTOR: u16 = 0xFFFC;
+#[allow(dead_code)]
 const BRK_IRQ_VECTOR: u16 = 0xFFFE;
 
 pub const NMI_INTERRUPT: Interrupt = Interrupt {
@@ -9,12 +10,14 @@ pub const NMI_INTERRUPT: Interrupt = Interrupt {
     cycles: 2,
 };
 
+#[allow(dead_code)]
 pub const IRQ_INTERRUPT: Interrupt = Interrupt {
     interrupt_vector: BRK_IRQ_VECTOR,
     b_flag: false,
     cycles: 7,
 };
 
+#[allow(dead_code)]
 pub const BRK_INTERRUPT: Interrupt = Interrupt {
     interrupt_vector: BRK_IRQ_VECTOR,
     b_flag: true,

@@ -20,7 +20,9 @@ static SYSTEM_PALETTE: [(u8, u8, u8); 64] = [
 const PALETTE_SIZE_E: usize = 64;
 const PALETTE_SIZE_B: usize = PALETTE_SIZE_E * 3;
 const NUMBER_PALETTES: usize = 8;
+#[allow(dead_code)]
 const SYSTEM_PALETTE_SIZE_B: usize = PALETTE_SIZE_B * NUMBER_PALETTES;
+#[allow(dead_code)]
 const SYSTEM_PALETTE_SIZE_E: usize = PALETTE_SIZE_E * NUMBER_PALETTES;
 
 pub type Pallet = [(u8, u8, u8); PALETTE_SIZE_E];

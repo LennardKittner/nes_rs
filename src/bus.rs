@@ -4,6 +4,9 @@ use crate::ppu::PPU;
 use crate::rendering::{frame::Frame, render, scanline::Scanline};
 use crate::rom::Rom;
 
+type GraphicsCallback<'a> = Box<dyn FnMut(&PPU, &Frame) + 'a>;
+type ControllerCallback<'a> = Box<dyn FnMut(&mut Controller, &mut Controller) + 'a>;
+
 pub struct Bus<'a> {
     cpu_vram: [u8; 2048],
     prg_rom: Vec<u8>,
@@ -12,8 +15,8 @@ pub struct Bus<'a> {
     current_scanline: Scanline,
     last_scanline: u16,
     cycles: usize,
-    graphics_callback: Box<dyn FnMut(&PPU, &Frame) + 'a>,
-    controller_callback: Box<dyn FnMut(&mut Controller, &mut Controller) + 'a>,
+    graphics_callback: GraphicsCallback<'a>,
+    controller_callback: ControllerCallback<'a>,
     controller_1: Controller,
     controller_2: Controller,
 }
