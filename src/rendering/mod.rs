@@ -1,8 +1,6 @@
 pub mod frame;
-mod rect;
 pub mod scanline;
 
-use std::ops::Neg;
 use itertools::Itertools;
 use crate::ppu::palette::SystemPalette;
 use crate::ppu::PPU;
