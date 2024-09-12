@@ -173,7 +173,7 @@ fn render_bg(ppu: &mut PPU, scanline: &mut Scanline) {
     }
 
 
-    ppu.address_register.vertical_name_table_overflow();
+
     let attribute_table = &second_name_table[0x3C0..0x400];
     for tile_x in 0..(tile_x+1) {
         let tile_idx = second_name_table[32 * tile_y + tile_x] as u16;
@@ -203,11 +203,16 @@ fn render_bg(ppu: &mut PPU, scanline: &mut Scanline) {
             }
         }
     }
-    ppu.address_register.vertical_name_table_overflow();
+
 
     if line == 7 {
+        if tile_y == 29 {
+            ppu.address_register.set_tile_y(0);
+            ppu.address_register.vertical_name_table_overflow();
+        } else if tile_y == 31 {
+            ppu.address_register.set_tile_y(0);
+        }
         ppu.address_register.set_tile_y((tile_y+1) as u8);
-        ppu.address_register.horizontal_name_table_overflow();
     }
     ppu.address_register.set_inner_tile_y_offset((line+1) as u8);
 }

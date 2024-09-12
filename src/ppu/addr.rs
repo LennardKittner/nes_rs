@@ -82,7 +82,7 @@ impl AddressRegister {
     }
 
     pub fn load_y_from(&mut self, t: &TRegister) {
-        let tmp = (self.data & !0b111_1011_1110_0000) | (t.data & 0b111_1011_1110_0000);
+        let tmp = (self.data & !0b0111_0011_1110_0000) | (t.data & 0b111_1011_1110_0000);
         self.data = tmp;
     }
 }
