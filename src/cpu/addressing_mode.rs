@@ -51,7 +51,7 @@ impl AddressingMode {
     }
 
     pub fn get_operand_address(&self, cpu: &mut CPU) -> Option<u16> {
-        let operand_location = cpu.program_counter + 1;
+        let operand_location = cpu.program_counter.wrapping_add(1);
         match self {
             AddressingMode::Immediate => Some(operand_location),
             AddressingMode::ZeroPage => Some(cpu.mem_read(operand_location) as u16),

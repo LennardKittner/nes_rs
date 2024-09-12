@@ -424,6 +424,6 @@ impl OpCode {
         if self.bonus_cycle_on_page_cross && self.mode.access_crosses_page_border(cpu) {
             cpu.additional_cycles += 1;
         }
-        cpu.program_counter += self.size;
+        cpu.program_counter = cpu.program_counter.wrapping_add(self.size);
     }
 }
