@@ -8,7 +8,6 @@ use crate::ppu::palette::SystemPalette;
 use crate::ppu::PPU;
 use crate::ppu::sprite::Sprite;
 use crate::rendering::frame::Frame;
-use crate::rendering::rect::Rect;
 use crate::rendering::scanline::{BackgroundColor, Scanline, SpriteColor};
 use crate::rom::Mirroring;
 
@@ -213,43 +212,4 @@ fn render_bg(ppu: &mut PPU, scanline: &mut Scanline) {
         ppu.address_register.horizontal_name_table_overflow();
     }
     ppu.address_register.set_inner_tile_y_offset((line+1) as u8);
-}
-
-fn render_name_table(ppu: &PPU, scanline: &mut Scanline, name_table: &[u8], view_port: Rect, shift_x: isize, shift_y: isize, scanline_pos: usize) {
-    let bank = ppu.control_register.get_background_pattern_table_address();
-    let attribute_table = &name_table[0x3C0..0x400];
-
-    let shifted_scanline_pos = scanline_pos.wrapping_add_signed(shift_y.neg()) % 256;
-
-    for i in (shifted_scanline_pos / 8 * 32)..(shifted_scanline_pos / 8 * 32 + 32) {
-        let tile_idx = name_table[i] as u16;
-        let tile_x = i % 32;
-        let tile_y = i / 32;
-        let line = shifted_scanline_pos % 8;
-        let tile = &ppu.chr_rom[(bank + tile_idx * 16) as usize..(bank + tile_idx * 16 + 16) as usize];
-        if !ppu.show_background_left() && tile_x == 0 {
-            continue;
-        }
-
-        let palette = get_bg_palette(ppu, attribute_table, tile_x, tile_y);
-        let mut upper = tile[line];
-        let mut lower = tile[line + 8];
-
-        for x in (0..8).rev() {
-            let color_idx = (1 & lower) << 1 | (1 & upper);
-            upper >>= 1;
-            lower >>= 1;
-
-            let pixel_x = tile_x * 8 + x;
-            let pixel_y = tile_y * 8 + line;
-
-            if pixel_x >= view_port.x1 && pixel_x < view_port.x2 && pixel_y >= view_port.y1 && pixel_y < view_port.y2 {
-                let rgb = ppu.get_color_from_current_system_palette(palette[color_idx as usize] as usize);
-                scanline.data[(shift_x + pixel_x as isize) as usize].background_color = BackgroundColor {
-                    color: rgb,
-                    transparent: color_idx == 0,
-                };
-            }
-        }
-    }
 }
