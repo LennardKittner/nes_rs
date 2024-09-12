@@ -51,7 +51,7 @@ pub fn write_tile(frame: &mut Frame, x_pos: usize, y_pos: usize, tile: &[u8], pa
     }
 }
 
-pub fn render<'a>(ppu: &mut PPU, scanline: &mut Scanline, scanline_pos: usize) {
+pub fn render(ppu: &mut PPU, scanline: &mut Scanline, scanline_pos: usize) {
     if ppu.show_background() {
         render_background_current_scanline(ppu, scanline);
     }
