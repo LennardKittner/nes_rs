@@ -94,7 +94,7 @@ fn main() {
     };
 
     let palette = if let Some(path) = palette_path {
-        read_palette_table(path).unwrap_or(SystemPalette::new())
+        read_palette_table(path).unwrap_or_default()
     } else {
         SystemPalette::new()
     };

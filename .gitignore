@@ -14,3 +14,8 @@ target/
 *.pdb
 
 **/*.nes
+
+.DS_Store
+log.txt
+*.pal
+.idea/

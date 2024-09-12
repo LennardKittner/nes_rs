@@ -79,3 +79,9 @@ impl SystemPalette {
         self.palettes[palette_idx][color_idx]
     }
 }
+
+impl Default for SystemPalette {
+    fn default() -> Self {
+        SystemPalette::new()
+    }
+}
