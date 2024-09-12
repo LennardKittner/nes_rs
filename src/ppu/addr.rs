@@ -1,13 +1,17 @@
 use crate::ppu::t_register::TRegister;
 
 pub struct AddressRegister {
-    pub data: u16
+    pub data: u16,
+    /// Used for pattern table accesses.
+    /// Does not use t register.
+    pub data_alt: u16
 }
 
 impl AddressRegister {
     pub fn new() -> Self {
         AddressRegister {
             data: 0,
+            data_alt: 0,
         }
     }
 
@@ -26,6 +30,15 @@ impl AddressRegister {
         // mirror down address above 0x3FFF
         if self.data > 0x3FFF {
             self.data &= 0b11_1111_1111_1111;
+        }
+    }
+
+    pub fn increment_alt(&mut self, inc: u8) {
+        self.data_alt = self.data_alt.wrapping_add(inc as u16);
+
+        // mirror down address above 0x3FFF
+        if self.data_alt > 0x3FFF {
+            self.data_alt &= 0b11_1111_1111_1111;
         }
     }
 

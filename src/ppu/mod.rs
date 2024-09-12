@@ -141,11 +141,19 @@ impl PPU {
             0x0000..=0x1FFF => print!("Attempt to write to Cartridge ROM space"),
             0x2000..=0x2FFF => self.vram[self.mirror_vram_addr(self.address_register.data) as usize] = data,
             0x3000..=0x3EFF => print!("address space 0x3000..0x3EFF is not expected to be used, requested = {}", self.address_register.data),
-            0x3F10 | 0x3F14 | 0x3F18 | 0x3F1C => self.palette_table[(self.address_register.data - 0x10 - 0x3F00) as usize] = data,
-            0x3F00..=0x3FFF => self.palette_table[(self.address_to_pattern_table_index(self.address_register.data)) as usize] = data,
+            0x3F10 | 0x3F14 | 0x3F18 | 0x3F1C => (),
+            0x3F00..=0x3FFF => (),
             _               => print!("unexpected access to mirrored space, requested = {}", self.address_register.data),
         }
         self.address_register.increment(self.control_register.get_vram_increment());
+
+        // I am unsure why but using the address register that uses the t register to access the pallet table causes problems.
+        match self.address_register.data_alt {
+            0x3F10 | 0x3F14 | 0x3F18 | 0x3F1C => self.palette_table[(self.address_register.data_alt - 0x10 - 0x3F00) as usize] = data,
+            0x3F00..=0x3FFF => self.palette_table[(self.address_to_pattern_table_index(self.address_register.data_alt)) as usize] = data,
+            _               => (),
+        }
+        self.address_register.increment_alt(self.control_register.get_vram_increment());
     }
 
     pub fn read_palette_table(&self, idx: usize) -> u8 {
@@ -183,6 +191,13 @@ impl PPU {
         if self.write_toggle {
             self.address_register.update_from(&self.temporary_address_register);
         }
+
+        self.address_register.data_alt = if self.write_toggle {
+            (self.address_register.data_alt & 0xFF00) | value as u16
+        } else {
+            (self.address_register.data_alt & 0x00FF) | ((value as u16) << 8)
+        };
+
         self.write_toggle = !self.write_toggle;
     }
 
