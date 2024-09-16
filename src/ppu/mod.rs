@@ -140,7 +140,7 @@ impl PPU {
         match self.address_register.data {
             0x0000..=0x1FFF => println!("Attempt to write to Cartridge ROM space"),
             0x2000..=0x2FFF => self.vram[self.mirror_vram_addr(self.address_register.data) as usize] = data,
-            0x3000..=0x3EFF => print!("address space 0x3000..0x3EFF is not expected to be used, requested = {}", self.address_register.data),
+            0x3000..=0x3EFF => self.vram[self.mirror_vram_addr(self.address_register.data - 0x1000) as usize] = data,
             0x3F10 | 0x3F14 | 0x3F18 | 0x3F1C => (),
             0x3F00..=0x3FFF => (),
             _               => println!("unexpected access to mirrored space, requested = {:x}", self.address_register.data),
@@ -179,7 +179,11 @@ impl PPU {
                 self.internal_data_buffer = self.vram[self.mirror_vram_addr(addr) as usize];
                 result
             },
-            0x3000..=0x3EFF => panic!("address space 0x3000..0x3EFF is not expected to be used, requested = {}", addr),
+            0x3000..=0x3EFF => {
+                let result = self.internal_data_buffer;
+                self.internal_data_buffer = self.vram[self.mirror_vram_addr(addr - 0x1000) as usize];
+                result
+            },
             0x3F10 | 0x3F14 | 0x3F18 | 0x3F1C =>  self.read_palette_table((addr - 0x10 - 0x3F00) as usize),
             0x3F00..=0x3FFF => self.read_palette_table((addr - 0x3F00) as usize),
             _               => panic!("unexpected access to mirrored space, requested = {}", addr),
