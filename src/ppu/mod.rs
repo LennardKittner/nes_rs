@@ -138,12 +138,12 @@ impl PPU {
 
     pub fn write_to_data(&mut self, data: u8) {
         match self.address_register.data {
-            0x0000..=0x1FFF => print!("Attempt to write to Cartridge ROM space"),
+            0x0000..=0x1FFF => println!("Attempt to write to Cartridge ROM space"),
             0x2000..=0x2FFF => self.vram[self.mirror_vram_addr(self.address_register.data) as usize] = data,
             0x3000..=0x3EFF => print!("address space 0x3000..0x3EFF is not expected to be used, requested = {}", self.address_register.data),
             0x3F10 | 0x3F14 | 0x3F18 | 0x3F1C => (),
             0x3F00..=0x3FFF => (),
-            _               => print!("unexpected access to mirrored space, requested = {}", self.address_register.data),
+            _               => println!("unexpected access to mirrored space, requested = {:x}", self.address_register.data),
         }
         self.address_register.increment(self.control_register.get_vram_increment());
 
