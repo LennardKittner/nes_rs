@@ -259,7 +259,7 @@ impl PPU {
     }
 
     pub fn get_scroll_y(&self) -> u8 {
-        self.scroll_register.get_scroll_y()
+        self.address_register.get_tile_y() as u8
     }
 
     pub fn get_universal_background_color(&self) -> u8 {
