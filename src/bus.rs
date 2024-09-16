@@ -97,6 +97,8 @@ const RAM_MIRRORS_END: u16 = 0x1FFF;
 const PPU_REGISTERS_MIRRORS_END: u16 = 0x3FFF;
 const CARTRIDGE_ROM_START: u16 = 0x8000;
 const CARTRIDGE_ROM_END: u16 = 0xFFFF;
+const APU_REGISTERS_START: u16 = 0x4000;
+const APU_REGISTERS_END: u16 = 0x4013;
 
 impl PollInterrupt for Bus<'_> {
     fn poll_nmi_status(&mut self) -> bool {
@@ -123,6 +125,7 @@ impl Mem for Bus<'_> {
                 let mirror_down_addr = addr & 0b00100000_00000111;
                 self.mem_read(mirror_down_addr)
             }
+            APU_REGISTERS_START..=APU_REGISTERS_END => 0,
             0x4016 => {
                 (self.controller_callback)(&mut self.controller_1, &mut self.controller_2);
                 self.controller_1.read()
@@ -133,7 +136,7 @@ impl Mem for Bus<'_> {
             },
             CARTRIDGE_ROM_START..=CARTRIDGE_ROM_END => self.read_prg_rom(addr),
             _ => {
-                // println!("Ignoring mem read at {addr}");
+                println!("Ignoring mem read at {addr}");
                 0
             }
         }
@@ -157,6 +160,7 @@ impl Mem for Bus<'_> {
                 let mirror_down_addr = addr & 0b00100000_00000111;
                 self.mem_write(mirror_down_addr, data);
             }
+            APU_REGISTERS_START..=APU_REGISTERS_END => (),
             0x4014 => {
                 // https://wiki.nesdev.com/w/index.php/PPU_programmer_reference#OAM_DMA_.28.244014.29_.3E_write
                 // https://www.nesdev.org/wiki/PPU_OAM#DMA
@@ -173,13 +177,15 @@ impl Mem for Bus<'_> {
                     self.tick(2);
                 }
             }
+            0x4015 => {/*APU*/}
             0x4016 => {
                 self.controller_1.write(data);
                 self.controller_2.write(data);
             }
-            CARTRIDGE_ROM_START..=CARTRIDGE_ROM_END => panic!("Attempt to write to Cartridge ROM space"),
+            0x4017 => {/*APU*/}
+            CARTRIDGE_ROM_START..=CARTRIDGE_ROM_END => println!("Attempt to write to Cartridge ROM space at {:x}", addr),
             _ => {
-                // println!("Ignoring mem write at 0x{addr:X}");
+                println!("Ignoring mem write at 0x{addr:X}");
             }
         }
     }
