@@ -1,5 +1,4 @@
 use std::time::{Duration, Instant};
-use sdl2::keyboard::Keycode::I;
 use crate::controller::Controller;
 use crate::ppu::palette::SystemPalette;
 use crate::ppu::PPU;

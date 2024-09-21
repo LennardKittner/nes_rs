@@ -1,4 +1,3 @@
-use crate::ppu::palette::Pallet;
 use crate::rendering::write_tile;
 
 
