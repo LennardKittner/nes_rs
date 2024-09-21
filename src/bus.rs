@@ -136,7 +136,7 @@ impl Mem for Bus<'_> {
             },
             CARTRIDGE_ROM_START..=CARTRIDGE_ROM_END => self.read_prg_rom(addr),
             _ => {
-                println!("Ignoring mem read at {addr}");
+                println!("Ignoring mem read at {addr:x}");
                 0
             }
         }
