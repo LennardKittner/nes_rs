@@ -1,4 +1,4 @@
-use crate::rendering::frame::Frame;
+use crate::rendering::frame::{Frame, SCREEN_WIDTH};
 
 #[derive(Debug, Copy, Clone)]
 pub struct SpriteColor {
@@ -39,7 +39,7 @@ impl ScanlinePixel {
 
 #[derive(Debug)]
 pub struct Scanline {
-    pub data: [ScanlinePixel; Frame::WIDTH]
+    pub data: [ScanlinePixel; SCREEN_WIDTH]
 }
 
 impl Scanline {
@@ -47,7 +47,7 @@ impl Scanline {
 
     pub const fn new() -> Scanline {
         Scanline {
-            data: [ScanlinePixel::new(); Frame::WIDTH],
+            data: [ScanlinePixel::new(); SCREEN_WIDTH],
         }
     }
     

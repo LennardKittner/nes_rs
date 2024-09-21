@@ -1,10 +1,15 @@
+use std::time::{Duration, Instant};
+use sdl2::keyboard::Keycode::I;
 use crate::controller::Controller;
 use crate::ppu::palette::SystemPalette;
 use crate::ppu::PPU;
 use crate::rendering::{frame::Frame, render, scanline::Scanline};
+use crate::rendering::fps_frame::FPSFrame;
+use crate::rolling_avg::RollingAvg;
 use crate::rom::Rom;
 
-type GraphicsCallback<'a> = Box<dyn FnMut(&PPU, &Frame) + 'a>;
+const FRAME_DURATION: Duration = Duration::from_nanos(16666667);
+type GraphicsCallback<'a> = Box<dyn FnMut(&PPU, &Frame, &FPSFrame) + 'a>;
 type ControllerCallback<'a> = Box<dyn FnMut(&mut Controller, &mut Controller) + 'a>;
 
 pub struct Bus<'a> {
@@ -12,6 +17,7 @@ pub struct Bus<'a> {
     prg_rom: Vec<u8>,
     ppu: PPU,
     frame: Frame,
+    fps_frame: FPSFrame,
     current_scanline: Scanline,
     last_scanline: u16,
     cycles: usize,
@@ -19,11 +25,15 @@ pub struct Bus<'a> {
     controller_callback: ControllerCallback<'a>,
     controller_1: Controller,
     controller_2: Controller,
+    last_frame: Instant,
+    rendering_overhead: RollingAvg<u64>,
+    fps: RollingAvg<f64>,
+    frame_counter: u64,
 }
 
 impl<'a> Bus<'a> {
     pub fn new<GF, C1F>(rom: Rom, system_palette: SystemPalette, graphics_callback: GF, controller_callback: C1F) -> Bus<'a>
-        where GF: FnMut(&PPU, &Frame) + 'a, C1F: FnMut(&mut Controller, &mut Controller) + 'a
+        where GF: FnMut(&PPU, &Frame, &FPSFrame) + 'a, C1F: FnMut(&mut Controller, &mut Controller) + 'a
     {
         let ppu = PPU::new(rom.chr_rom, rom.screen_mirroring, system_palette);
         Bus {
@@ -31,13 +41,18 @@ impl<'a> Bus<'a> {
             prg_rom: rom.prg_rom,
             cycles: 0,
             ppu,
-            frame: Frame::new(),
+            frame: Frame::default(),
+            fps_frame: FPSFrame::new(0, 0xA, [0x0F, 0x30, 0x21, 0x0F]),
             current_scanline: Scanline::new(),
             last_scanline: 0,
             graphics_callback: Box::from(graphics_callback),
             controller_callback: Box::from(controller_callback),
             controller_1: Controller::new(),
             controller_2: Controller::new(),
+            last_frame: Instant::now(),
+            rendering_overhead: RollingAvg::new(60),
+            fps: RollingAvg::new(60),
+            frame_counter: 0,
         }
     }
 
@@ -52,19 +67,44 @@ impl<'a> Bus<'a> {
     pub fn tick(&mut self, cycles: u8) {
         self.cycles += cycles as usize;
         let vblank_before = self.ppu.is_in_vertical_blank();
-        let next_scannline = self.ppu.tick(cycles *3);
+        let next_scanline = self.ppu.tick(cycles *3);
         let vblank_after = self.ppu.is_in_vertical_blank();
 
-        if next_scannline != self.last_scanline && next_scannline <= 240 {
-            render(&mut self.ppu, &mut self.current_scanline, next_scannline as usize);
-            self.current_scanline.write_scanline(&mut self.frame, next_scannline as usize);
+        if next_scanline != self.last_scanline && next_scanline <= 240 {
+            render(&mut self.ppu, &mut self.current_scanline, next_scanline as usize);
+            self.current_scanline.write_scanline(&mut self.frame, next_scanline as usize);
             self.current_scanline.clear();
-            self.last_scanline = next_scannline;
+            self.last_scanline = next_scanline;
         }
 
         if !vblank_before && vblank_after {
-            (self.graphics_callback)(&self.ppu, &self.frame);
+            let avg_overhead = Duration::from_nanos(self.rendering_overhead.avg().unwrap_or(0));
+            let sleep_duration = FRAME_DURATION
+                .checked_sub(self.last_frame.elapsed())
+                .and_then(|d|
+                    d.checked_sub(avg_overhead))
+                .unwrap_or(Duration::ZERO);
+
+            if sleep_duration > Duration::ZERO {
+                spin_sleep::sleep(sleep_duration );
+            }
+
+            let fps = 1.0 / self.last_frame.elapsed().as_secs_f64();
+            self.fps.push(fps);
+            if self.frame_counter % 60 == 0 {
+                let avg = self.fps.avg().unwrap_or_default() as usize;
+                self.fps_frame.update(&self.ppu.chr_rom, 1, avg, self.ppu.get_universal_background_color());
+            }
+
+            let rendering_start = Instant::now();
+            (self.graphics_callback)(&self.ppu, &self.frame, &self.fps_frame);
             (self.controller_callback)(&mut self.controller_1, &mut self.controller_2);
+            let overhead = rendering_start.elapsed().as_nanos() as u64;
+            if self.frame_counter > 300 { // skip initial high overhead
+                self.rendering_overhead.push(overhead);
+            }
+            self.last_frame = Instant::now();
+            self.frame_counter += 1;
         }
     }
 }

@@ -1,11 +1,12 @@
 pub mod frame;
 pub mod scanline;
+pub mod fps_frame;
 
 use itertools::Itertools;
 use crate::ppu::palette::SystemPalette;
 use crate::ppu::PPU;
 use crate::ppu::sprite::Sprite;
-use crate::rendering::frame::Frame;
+use crate::rendering::frame::{Frame, SCREEN_WIDTH};
 use crate::rendering::scanline::{BackgroundColor, Scanline, SpriteColor};
 use crate::rom::Mirroring;
 
@@ -107,7 +108,7 @@ pub fn render_sprites(ppu: &mut PPU, scanline: &mut Scanline, scanline_pos: usiz
             } else {
                 x + sprite.get_x()
             };
-            if x_pos < Frame::WIDTH {
+            if x_pos < SCREEN_WIDTH {
                 scanline.data[x_pos].sprite_color = SpriteColor {
                     color: rgb,
                     behind_background: !sprite.draw_over_background(),

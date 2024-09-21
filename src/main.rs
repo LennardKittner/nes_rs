@@ -12,6 +12,7 @@ use nes_rs::cpu::CPU;
 use nes_rs::rendering::frame::Frame;
 use nes_rs::ppu::PPU;
 use nes_rs::ppu::palette::SystemPalette;
+use nes_rs::rendering::fps_frame::FPSFrame;
 use nes_rs::rom::Rom;
 
 fn main() {
@@ -41,6 +42,10 @@ fn main() {
     let creator = canvas.texture_creator();
     let mut texture = creator
         .create_texture_target(PixelFormatEnum::RGB24, 256, 240)
+        .unwrap();
+
+    let mut fps_texture = creator
+        .create_texture_target(PixelFormatEnum::RGB24, 48, 8)
         .unwrap();
 
     let bytes: Vec<u8> = std::fs::read(rom_path).unwrap();
@@ -100,10 +105,14 @@ fn main() {
     };
 
     let bus = Bus::new(rom, palette,
-        move |_: &PPU, frame: &Frame | {
-            texture.update(None, &frame.data, 256 * 3).unwrap();
+        move |_: &PPU, frame: &Frame, fps_frame: &FPSFrame | {
+            texture.update(None, &frame.data, frame.width * 3).unwrap();
+
+            fps_texture.update(None, &fps_frame.frame.data, fps_frame.frame.width * 3).unwrap();
 
             canvas.copy(&texture, None, None).unwrap();
+            canvas.copy(&fps_texture, None, Some(sdl2::rect::Rect::new(5, 5, 48, 8))).unwrap();
+
             canvas.present();
             }, poll_controller_input);
 

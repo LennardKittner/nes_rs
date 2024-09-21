@@ -3,7 +3,7 @@ use itertools::Itertools;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::PixelFormatEnum;
-use nes_rs::rendering::frame::{Frame, render_tile};
+use nes_rs::rendering::frame::Frame;
 use nes_rs::rom::Rom;
 
 fn main() {
@@ -34,9 +34,9 @@ fn main() {
     let bytes: Vec<u8> = std::fs::read(path).unwrap();
     let rom = Rom::new(&bytes).unwrap();
 
-    let mut frame = Frame::new();
-    for i in 0..512 {
-        render_tile(&mut frame, (i % 32) * 8, (i / 32) * 8, &rom.chr_rom, 0, i);
+    let mut frame = Frame::default();
+    for i in 0..(rom.chr_rom.len() / 16) {
+        frame.render_tile((i % 32) * 8, (i / 32) * 8, &rom.chr_rom, 0, i, &[0x0F, 0x30, 0x21, 0x0F]);
     }
 
     texture.update(None, &frame.data, 256 * 3).unwrap();
