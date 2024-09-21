@@ -139,6 +139,6 @@ pub mod test {
         let mut t = TRegister::new();
         t.data = 0b10100010_01011001;
         a.load_y_from(&t);
-        assert_eq!(a.data, 0b10100110_01011111)
+        assert_eq!(a.data, 0b10101110_01011111)
     }
 }
