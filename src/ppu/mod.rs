@@ -35,7 +35,7 @@ pub struct PPU {
     internal_data_buffer: u8,
     write_toggle: bool,
 
-    scan_line: u16,
+    pub scan_line: u16,
     cycles: usize,
 
     outstanding_interrupt: bool,
