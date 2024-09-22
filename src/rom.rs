@@ -1,7 +1,8 @@
 use std::fs::File;
 use std::io::Read;
+use crate::mappers::{create_mapper, Mapper};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Copy, Clone)]
 #[allow(non_camel_case_types)]
 pub enum Mirroring {
     VERTICAL,
@@ -10,9 +11,7 @@ pub enum Mirroring {
 }
 
 pub struct Rom {
-    pub prg_rom: Vec<u8>,
-    pub chr_rom: Vec<u8>,
-    pub mapper: u8,
+    mapper: Box<dyn Mapper>,
     pub screen_mirroring: Mirroring
 }
 
@@ -35,7 +34,7 @@ impl Rom {
         if &raw[0..4] != NES_TAG.as_bytes() {
             return Err("File is not in iNES file format".to_string());
         }
-        let mapper = (raw[7] & 0b1111_0000) | (raw[6] >> 4);
+        let mapper_idx = (raw[7] & 0b1111_0000) | (raw[6] >> 4);
         let ines_ver = (raw[7] >> 2) & 0b11;
         if ines_ver != 0 {
             return Err("iNES2.0 format is not supported".to_string());
@@ -56,12 +55,36 @@ impl Rom {
 
         let prg_rom_start = HEADER_SIZE + if skip_trainer { 512 } else { 0 };
         let chr_rom_start = prg_rom_start + prg_rom_size;
+        let mapper = create_mapper(mapper_idx, &raw[prg_rom_start..(prg_rom_start + prg_rom_size)], &raw[chr_rom_start..(chr_rom_start + chr_rom_size)]);
         Ok(Rom {
-            prg_rom: raw[prg_rom_start..(prg_rom_start + prg_rom_size)].to_vec(),
-            chr_rom: raw[chr_rom_start..(chr_rom_start + chr_rom_size)].to_vec(),
             mapper,
             screen_mirroring,
         })
+    }
+
+    pub fn prg_rom_len(&self) -> usize {
+        self.mapper.prg_rom_len()
+    }
+    pub fn chr_rom_len(&self) -> usize {
+        self.mapper.chr_rom_len()
+    }
+    pub fn read_prg_rom(&self, address: u16) -> u8 {
+        self.mapper.read_prg_rom(address)
+    }
+    pub fn read_chr_rom(&self, address: u16) -> u8 {
+        self.mapper.read_chr_rom(address)
+    }
+    pub fn read_chr_rom_bank(&self, bank: u16, address: u16) -> u8 {
+        self.mapper.read_chr_rom_bank(bank, address)
+    }
+    pub fn read_tile_chr_rom(&self, address: u16) -> &[u8] {
+        self.mapper.read_tile_chr_rom(address)
+    }
+    pub fn read_tile_chr_rom_bank(&self, bank: u16, address: u16) -> &[u8] {
+        self.mapper.read_tile_chr_rom_bank(bank, address)
+    }
+    pub fn get_current_chr_rom(&self) -> &[u8] {
+        self.mapper.get_current_chr_rom()
     }
 }
 

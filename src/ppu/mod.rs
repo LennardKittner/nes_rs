@@ -19,9 +19,8 @@ use crate::rom::Mirroring;
 
 //TODO: 8x16 sprites
 pub struct PPU {
-    pub chr_rom: Vec<u8>,
     palette_table: [u8; 32],
-    pub system_palette: SystemPalette,
+    system_palette: SystemPalette,
     pub vram: [u8; 2048],
     pub oam_addr: u8,
     pub oam_data: [u8; 256],
@@ -31,7 +30,7 @@ pub struct PPU {
     scroll_register: ScrollRegister,
     pub address_register: AddressRegister,
     pub temporary_address_register: TRegister,
-    pub mirroring: Mirroring,
+    mirroring: Mirroring,
     internal_data_buffer: u8,
     write_toggle: bool,
 
@@ -53,9 +52,8 @@ impl PollInterrupt for PPU {
 }
 
 impl PPU {
-    pub fn new(chr_rom: Vec<u8>, mirroring: Mirroring, system_palette: SystemPalette) -> Self {
+    pub fn new(mirroring: Mirroring, system_palette: SystemPalette) -> Self {
         PPU {
-            chr_rom,
             palette_table: [0; 32],
             system_palette,
             vram: [0; 2048],
@@ -164,14 +162,14 @@ impl PPU {
         palette
     }
 
-    pub fn read_data(&mut self) -> u8 {
+    pub fn read_data(&mut self, chr_rom: &[u8]) -> u8 {
         let addr = self.address_register.data;
         self.increment_vram_addr();
 
         match addr {
             0x0000..=0x1FFF => {
                 let result = self.internal_data_buffer;
-                self.internal_data_buffer = self.chr_rom[addr as usize];
+                self.internal_data_buffer = chr_rom[addr as usize];
                 result
             },
             0x2000..=0x2FFF => {
@@ -304,7 +302,7 @@ pub mod test {
     use super::*;
 
     pub fn new_empty_rom() -> PPU {
-        PPU::new(vec![0; 2048], Mirroring::HORIZONTAL, SystemPalette::new())
+        PPU::new(Mirroring::HORIZONTAL, SystemPalette::new())
     }
 
     #[test]
@@ -326,9 +324,9 @@ pub mod test {
         ppu.write_to_addr(0x23);
         ppu.write_to_addr(0x05);
 
-        ppu.read_data(); //load_into_buffer
+        ppu.read_data(&vec![0; 2048]); //load_into_buffer
         assert_eq!(ppu.address_register.data, 0x2306);
-        assert_eq!(ppu.read_data(), 0x66);
+        assert_eq!(ppu.read_data(&vec![0; 2048]), 0x66);
     }
 
     #[test]
@@ -341,9 +339,9 @@ pub mod test {
         ppu.write_to_addr(0x21);
         ppu.write_to_addr(0xff);
 
-        ppu.read_data(); //load_into_buffer
-        assert_eq!(ppu.read_data(), 0x66);
-        assert_eq!(ppu.read_data(), 0x77);
+        ppu.read_data(&vec![0; 2048]); //load_into_buffer
+        assert_eq!(ppu.read_data(&vec![0; 2048]), 0x66);
+        assert_eq!(ppu.read_data(&vec![0; 2048]), 0x77);
     }
 
     #[test]
@@ -357,10 +355,10 @@ pub mod test {
         ppu.write_to_addr(0x21);
         ppu.write_to_addr(0xff);
 
-        ppu.read_data(); //load_into_buffer
-        assert_eq!(ppu.read_data(), 0x66);
-        assert_eq!(ppu.read_data(), 0x77);
-        assert_eq!(ppu.read_data(), 0x88);
+        ppu.read_data(&vec![0; 2048]); //load_into_buffer
+        assert_eq!(ppu.read_data(&vec![0; 2048]), 0x66);
+        assert_eq!(ppu.read_data(&vec![0; 2048]), 0x77);
+        assert_eq!(ppu.read_data(&vec![0; 2048]), 0x88);
     }
 
     // Horizontal: https://wiki.nesdev.com/w/index.php/Mirroring
@@ -382,14 +380,14 @@ pub mod test {
         ppu.write_to_addr(0x20);
         ppu.write_to_addr(0x05);
 
-        ppu.read_data(); //load into buffer
-        assert_eq!(ppu.read_data(), 0x66); //read from A
+        ppu.read_data(&vec![0; 2048]); //load into buffer
+        assert_eq!(ppu.read_data(&vec![0; 2048]), 0x66); //read from A
 
         ppu.write_to_addr(0x2C);
         ppu.write_to_addr(0x05);
 
-        ppu.read_data(); //load into buffer
-        assert_eq!(ppu.read_data(), 0x77); //read from b
+        ppu.read_data(&vec![0; 2048]); //load into buffer
+        assert_eq!(ppu.read_data(&vec![0; 2048]), 0x77); //read from b
     }
 
     // Vertical: https://wiki.nesdev.com/w/index.php/Mirroring
@@ -397,7 +395,7 @@ pub mod test {
     //   [0x2800 a ] [0x2C00 b ]
     #[test]
     fn test_vram_vertical_mirror() {
-        let mut ppu = PPU::new(vec![0; 2048], Mirroring::VERTICAL, SystemPalette::new());
+        let mut ppu = PPU::new(Mirroring::VERTICAL, SystemPalette::new());
 
         ppu.write_to_addr(0x20);
         ppu.write_to_addr(0x05);
@@ -412,14 +410,14 @@ pub mod test {
         ppu.write_to_addr(0x28);
         ppu.write_to_addr(0x05);
 
-        ppu.read_data(); //load into buffer
-        assert_eq!(ppu.read_data(), 0x66); //read from a
+        ppu.read_data(&vec![0; 2048]); //load into buffer
+        assert_eq!(ppu.read_data(&vec![0; 2048]), 0x66); //read from a
 
         ppu.write_to_addr(0x24);
         ppu.write_to_addr(0x05);
 
-        ppu.read_data(); //load into buffer
-        assert_eq!(ppu.read_data(), 0x77); //read from B
+        ppu.read_data(&vec![0; 2048]); //load into buffer
+        assert_eq!(ppu.read_data(&vec![0; 2048]), 0x77); //read from B
     }
 
     #[test]
@@ -431,16 +429,16 @@ pub mod test {
         ppu.write_to_addr(0x23);
         ppu.write_to_addr(0x05);
 
-        ppu.read_data(); //load_into_buffer
-        assert_ne!(ppu.read_data(), 0x66);
+        ppu.read_data(&vec![0; 2048]); //load_into_buffer
+        assert_ne!(ppu.read_data(&vec![0; 2048]), 0x66);
 
         ppu.read_status();
 
         ppu.write_to_addr(0x23);
         ppu.write_to_addr(0x05);
 
-        ppu.read_data(); //load_into_buffer
-        assert_eq!(ppu.read_data(), 0x66);
+        ppu.read_data(&vec![0; 2048]); //load_into_buffer
+        assert_eq!(ppu.read_data(&vec![0; 2048]), 0x66);
     }
 
     #[test]
@@ -452,8 +450,8 @@ pub mod test {
         ppu.write_to_addr(0x63); //0x6305 -> 0x2305
         ppu.write_to_addr(0x05);
 
-        ppu.read_data(); //load into_buffer
-        assert_eq!(ppu.read_data(), 0x66);
+        ppu.read_data(&vec![0; 2048]); //load into_buffer
+        assert_eq!(ppu.read_data(&vec![0; 2048]), 0x66);
         // assert_eq!(ppu.addr.read(), 0x0306)
     }
 

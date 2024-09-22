@@ -13,7 +13,7 @@ type ControllerCallback<'a> = Box<dyn FnMut(&mut Controller, &mut Controller) + 
 
 pub struct Bus<'a> {
     cpu_vram: [u8; 2048],
-    prg_rom: Vec<u8>,
+    rom: Rom,
     ppu: PPU,
     frame: Frame,
     fps_frame: FPSFrame,
@@ -34,10 +34,10 @@ impl<'a> Bus<'a> {
     pub fn new<GF, C1F>(rom: Rom, system_palette: SystemPalette, graphics_callback: GF, controller_callback: C1F) -> Bus<'a>
         where GF: FnMut(&PPU, &Frame, &FPSFrame) + 'a, C1F: FnMut(&mut Controller, &mut Controller) + 'a
     {
-        let ppu = PPU::new(rom.chr_rom, rom.screen_mirroring, system_palette);
+        let ppu = PPU::new(rom.screen_mirroring, system_palette);
         Bus {
             cpu_vram: [0; 2048],
-            prg_rom: rom.prg_rom,
+            rom,
             cycles: 0,
             ppu,
             frame: Frame::default(),
@@ -57,10 +57,10 @@ impl<'a> Bus<'a> {
 
     fn read_prg_rom(&self, addr: u16) -> u8 {
         let mut addr = addr - 0x8000;
-        if self.prg_rom.len() == 0x4000 && addr >= 0x4000 {
+        if self.rom.prg_rom_len() == 0x4000 && addr >= 0x4000 {
             addr %= 0x4000;
         }
-        self.prg_rom[addr as usize]
+        self.rom.read_prg_rom(addr)
     }
 
     pub fn tick(&mut self, cycles: u8) {
@@ -70,7 +70,7 @@ impl<'a> Bus<'a> {
         let vblank_after = self.ppu.is_in_vertical_blank();
 
         if next_scanline != self.last_scanline && next_scanline <= 240 {
-            render(&mut self.ppu, &mut self.current_scanline, next_scanline as usize);
+            render(&mut self.ppu, &self.rom, &mut self.current_scanline, next_scanline as usize);
             self.current_scanline.write_scanline(&mut self.frame, next_scanline as usize);
             self.current_scanline.clear();
             self.last_scanline = next_scanline;
@@ -92,7 +92,7 @@ impl<'a> Bus<'a> {
             self.fps.push(fps);
             if self.frame_counter % 60 == 0 {
                 let avg = self.fps.avg().unwrap_or_default() as usize;
-                self.fps_frame.update(&self.ppu.chr_rom, 1, avg, self.ppu.get_universal_background_color());
+                self.fps_frame.update(&self.rom, 1, avg, self.ppu.get_universal_background_color());
             }
 
             let rendering_start = Instant::now();
@@ -159,7 +159,7 @@ impl Mem for Bus<'_> {
             }
             0x2002 => self.ppu.read_status(),
             0x2004 => self.ppu.read_oam_data(),
-            0x2007 => self.ppu.read_data(),
+            0x2007 => self.ppu.read_data(self.rom.get_current_chr_rom()),
             0x2008..=PPU_REGISTERS_MIRRORS_END => {
                 let mirror_down_addr = addr & 0b00100000_00000111;
                 self.mem_read(mirror_down_addr)

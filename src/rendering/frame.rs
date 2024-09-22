@@ -1,5 +1,5 @@
 use crate::rendering::write_tile;
-
+use crate::rom::Rom;
 
 pub const SCREEN_WIDTH: usize = 256;
 pub const SCREEN_HEIGHT: usize = 240;
@@ -37,13 +37,10 @@ impl Frame {
             (0, 0, 0)
         }
     }
-    pub fn render_tile(&mut self, x_pos: usize, y_pos:usize, chr_rom: &[u8], bank: usize, tile_n: usize, pallet: &[u8; 4]) {
+    pub fn render_tile(&mut self, x_pos: usize, y_pos:usize, rom: &Rom, bank: usize, tile_n: usize, pallet: &[u8; 4]) {
         assert!(bank <= 1);
-        let bank_address = bank * 0x1000;
-
-        let tile = &chr_rom[(bank_address + tile_n * 16)..(bank_address + tile_n * 16 + 16)];
-
-        write_tile(self, x_pos, y_pos, tile, pallet);
+        let tile = rom.read_tile_chr_rom_bank(bank as u16, tile_n as u16 * 16);
+        write_tile(self, x_pos, y_pos, &tile, pallet);
     }
 }
 

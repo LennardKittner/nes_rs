@@ -35,8 +35,8 @@ fn main() {
     let rom = Rom::new(&bytes).unwrap();
 
     let mut frame = Frame::default();
-    for i in 0..(rom.chr_rom.len() / 16) {
-        frame.render_tile((i % 32) * 8, (i / 32) * 8, &rom.chr_rom, 0, i, &[0x0F, 0x30, 0x21, 0x0F]);
+    for i in 0..(rom.chr_rom_len() / 16) {
+        frame.render_tile((i % 32) * 8, (i / 32) * 8, &rom, 0, i, &[0x0F, 0x30, 0x21, 0x0F]);
     }
 
     texture.update(None, &frame.data, 256 * 3).unwrap();

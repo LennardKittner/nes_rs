@@ -8,7 +8,7 @@ use crate::ppu::PPU;
 use crate::ppu::sprite::Sprite;
 use crate::rendering::frame::{Frame, SCREEN_WIDTH};
 use crate::rendering::scanline::{BackgroundColor, Scanline, SpriteColor};
-use crate::rom::Mirroring;
+use crate::rom::{Mirroring, Rom};
 
 pub fn get_bg_palette(ppu: &PPU, attribute_table: &[u8], x_pos: usize, y_pos: usize) -> [u8; 4] {
     let attribute_table_idx = y_pos / 4 * 8 + x_pos / 4;
@@ -52,16 +52,16 @@ pub fn write_tile(frame: &mut Frame, x_pos: usize, y_pos: usize, tile: &[u8], pa
     }
 }
 
-pub fn render(ppu: &mut PPU, scanline: &mut Scanline, scanline_pos: usize) {
+pub fn render(ppu: &mut PPU, rom: &Rom, scanline: &mut Scanline, scanline_pos: usize) {
     if ppu.show_background() {
-        render_background_current_scanline(ppu, scanline);
+        render_bg(ppu, rom, scanline);
     }
     if ppu.show_sprites() {
-        render_sprites(ppu, scanline, scanline_pos);
+        render_sprites(ppu, rom, scanline, scanline_pos);
     }
 }
 
-pub fn render_sprites(ppu: &mut PPU, scanline: &mut Scanline, scanline_pos: usize) {
+pub fn render_sprites(ppu: &mut PPU, rom: &Rom, scanline: &mut Scanline, scanline_pos: usize) {
     let scanline_pos = scanline_pos as u8;
     let sprites = (0..ppu.oam_data.len()).step_by(4).filter_map(|idx| {
         let raw = &ppu.oam_data[idx..idx+4];
@@ -79,7 +79,7 @@ pub fn render_sprites(ppu: &mut PPU, scanline: &mut Scanline, scanline_pos: usiz
     for sprite in sprites.iter().take(8).rev() {
         let palette = get_sprite_palette(ppu, sprite.get_palette_index());
         let bank = ppu.control_register.get_sprite_pattern_table_address() as usize;
-        let tile = ppu.chr_rom[(bank + sprite.get_pattern_index() * 16)..(bank + sprite.get_pattern_index() * 16 + 16)].to_vec();
+        let tile = rom.read_tile_chr_rom((bank + sprite.get_pattern_index() * 16) as u16);
         let sprite_line = if sprite.is_vertical_flip() {
             7 - (scanline_pos as usize - sprite.get_y())
         } else {
@@ -119,20 +119,16 @@ pub fn render_sprites(ppu: &mut PPU, scanline: &mut Scanline, scanline_pos: usiz
     }
 }
 
-pub fn render_background_current_scanline(ppu: &mut PPU, scanline: &mut Scanline) {
-    render_bg(ppu, scanline);
-}
-
 //TODO: maybe extract rendering loop
-fn render_bg(ppu: &mut PPU, scanline: &mut Scanline) {
-    let (main_name_table, second_name_table) = match (&ppu.mirroring, ppu.address_register.get_name_table()) {
+fn render_bg(ppu: &mut PPU, rom: &Rom, scanline: &mut Scanline) {
+    let (main_name_table, second_name_table) = match (rom.screen_mirroring, ppu.address_register.get_name_table()) {
         (Mirroring::VERTICAL, 0b00) | (Mirroring::VERTICAL, 0b10) | (Mirroring::HORIZONTAL, 0b00) | (Mirroring::HORIZONTAL, 0b01) => {
             (&ppu.vram[0..0x400], &ppu.vram[0x400..0x800])
         },
         (Mirroring::VERTICAL, 0b01) | (Mirroring::VERTICAL, 0b11) | (Mirroring::HORIZONTAL, 0b10) | (Mirroring::HORIZONTAL, 0b11) => {
             (&ppu.vram[0x400..0x800], &ppu.vram[0..0x400])
         },
-        (_, _) => panic!("Unsupported mirroring mode: {:?}", ppu.mirroring),
+        (_, _) => panic!("Unsupported mirroring mode: {:?}", rom.screen_mirroring),
     };
 
     let bank = ppu.control_register.get_background_pattern_table_address();
@@ -147,7 +143,7 @@ fn render_bg(ppu: &mut PPU, scanline: &mut Scanline) {
     for tile_x in tile_x..32 {
         let tile_idx = main_name_table[32 * tile_y + tile_x] as u16;
 
-        let tile = &ppu.chr_rom[(bank + tile_idx * 16) as usize..(bank + tile_idx * 16 + 16) as usize];
+        let tile = rom.read_tile_chr_rom(bank + tile_idx * 16);
         if !ppu.show_background_left() && tile_x == 0 {
             continue;
         }
@@ -177,7 +173,7 @@ fn render_bg(ppu: &mut PPU, scanline: &mut Scanline) {
     for tile_x in 0..(tile_x+1) {
         let tile_idx = second_name_table[32 * tile_y + tile_x] as u16;
 
-        let tile = &ppu.chr_rom[(bank + tile_idx * 16) as usize..(bank + tile_idx * 16 + 16) as usize];
+        let tile = &rom.read_tile_chr_rom(bank + tile_idx * 16);
         if !ppu.show_background_left() && tile_x == 0 {
             continue;
         }
