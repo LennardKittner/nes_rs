@@ -1,8 +1,8 @@
 use crate::mappers::Mapper;
 
 pub struct NROMMapper {
-    pub prg_rom: Vec<u8>,
-    pub chr_rom: Vec<u8>,
+    prg_rom: Vec<u8>,
+    chr_rom: Vec<u8>,
 }
 
 impl NROMMapper {
@@ -38,4 +38,5 @@ impl Mapper for NROMMapper {
     fn get_current_chr_rom(&self) -> &[u8] {
         &self.chr_rom
     }
+    fn register_write(&mut self, _address: u16, _value: u8) {}
 }

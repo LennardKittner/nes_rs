@@ -134,8 +134,8 @@ pub trait Mem {
 const RAM: u16 = 0x0000;
 const RAM_MIRRORS_END: u16 = 0x1FFF;
 const PPU_REGISTERS_MIRRORS_END: u16 = 0x3FFF;
-const CARTRIDGE_ROM_START: u16 = 0x8000;
-const CARTRIDGE_ROM_END: u16 = 0xFFFF;
+const CARTRIDGE_START: u16 = 0x8000;
+const CARTRIDGE_END: u16 = 0xFFFF;
 const APU_REGISTERS_START: u16 = 0x4000;
 const APU_REGISTERS_END: u16 = 0x4013;
 
@@ -173,7 +173,7 @@ impl Mem for Bus<'_> {
                 (self.controller_callback)(&mut self.controller_1, &mut self.controller_2);
                 self.controller_2.read()
             },
-            CARTRIDGE_ROM_START..=CARTRIDGE_ROM_END => self.read_prg_rom(addr),
+            CARTRIDGE_START..=CARTRIDGE_END => self.read_prg_rom(addr),
             _ => {
                 println!("Ignoring mem read at {addr:x}");
                 0
@@ -222,7 +222,7 @@ impl Mem for Bus<'_> {
                 self.controller_2.write(data);
             }
             0x4017 => {/*APU*/}
-            CARTRIDGE_ROM_START..=CARTRIDGE_ROM_END => println!("Attempt to write to Cartridge ROM space at {:x}", addr),
+            CARTRIDGE_START..=CARTRIDGE_END => self.rom.mapper_register_write(addr, data),
             _ => {
                 println!("Ignoring mem write at 0x{addr:X}");
             }

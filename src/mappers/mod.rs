@@ -13,6 +13,7 @@ pub trait Mapper {
     fn read_tile_chr_rom(&self, address: u16) -> &[u8];
     fn read_tile_chr_rom_bank(&self, bank: u16, address: u16) -> &[u8];
     fn get_current_chr_rom(&self) -> &[u8];
+    fn register_write(&mut self, address: u16, value: u8);
 }
 
 pub fn create_mapper(idx: u8, prg_rom: &[u8], chr_rom: &[u8]) -> Box<dyn Mapper> {

@@ -86,6 +86,9 @@ impl Rom {
     pub fn get_current_chr_rom(&self) -> &[u8] {
         self.mapper.get_current_chr_rom()
     }
+    pub fn mapper_register_write(&mut self, address: u16, value: u8) {
+        self.mapper.register_write(address, value);
+    }
 }
 
 //TODO: tests
