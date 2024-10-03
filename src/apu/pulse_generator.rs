@@ -5,7 +5,7 @@ use crate::apu::timer::Timer;
 #[derive(Debug, Eq, Copy, Clone, PartialEq)]
 pub enum PulseGeneratorID {
     ONE,
-    TWO
+    TWO,
 }
 
 pub struct PulseGenerator {
@@ -22,10 +22,8 @@ pub struct PulseGenerator {
 
 impl PulseGenerator {
     const LENGTH_COUNTER_TABLE: [u8; 32] = [
-        10, 254, 20,  2, 40,  4, 80,  6,
-        160, 8, 60, 10, 14, 12, 26, 14,
-        12, 16, 24, 18, 48, 20, 96, 22,
-        192, 24, 72, 26, 16, 28, 32, 30
+        10, 254, 20, 2, 40, 4, 80, 6, 160, 8, 60, 10, 14, 12, 26, 14, 12, 16, 24, 18, 48, 20, 96,
+        22, 192, 24, 72, 26, 16, 28, 32, 30,
     ];
 
     const DUTY_PATTERNS: [[u8; 8]; 4] = [
@@ -88,7 +86,10 @@ impl PulseGenerator {
             if self.timer.tick(1) {
                 self.duty_position = (self.duty_position + 1) % 8;
             }
-            if self.length_counter_value > 0 && !self.length_counter_halt && self.length_counter_enabled {
+            if self.length_counter_value > 0
+                && !self.length_counter_halt
+                && self.length_counter_enabled
+            {
                 self.length_counter_value -= 1;
             }
             self.timer.data = self.sweep_unit.tick(self.timer.data);
@@ -104,7 +105,11 @@ impl PulseGenerator {
             return 0.0;
         }
 
-        (if patter[self.duty_position] == 1 { 1f32 } else { 0f32 } * self.envelope_generator.get_volume_normalized())
+        (if patter[self.duty_position] == 1 {
+            1f32
+        } else {
+            0f32
+        } * self.envelope_generator.get_volume_normalized())
     }
 
     pub fn set_sweep_parameters(&mut self, enabled: bool, negate: bool, shift: u8, period: u8) {
@@ -114,7 +119,12 @@ impl PulseGenerator {
         self.sweep_unit.set_divider_period(period);
     }
 
-    pub fn set_envelope_parameters(&mut self, envelope_loop: bool, constant_volume: bool, volume_envelope: u8) {
+    pub fn set_envelope_parameters(
+        &mut self,
+        envelope_loop: bool,
+        constant_volume: bool,
+        volume_envelope: u8,
+    ) {
         self.envelope_generator.set_loop_envelope(envelope_loop);
         self.envelope_generator.set_constant_volume(constant_volume);
         self.envelope_generator.set_start(true);

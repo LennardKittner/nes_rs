@@ -1,12 +1,12 @@
-use std::time::{Duration, Instant};
 use crate::apu::APU;
 use crate::controller::Controller;
 use crate::ppu::palette::SystemPalette;
 use crate::ppu::PPU;
-use crate::rendering::{frame::Frame, render, scanline::Scanline};
 use crate::rendering::fps_frame::FPSFrame;
+use crate::rendering::{frame::Frame, render, scanline::Scanline};
 use crate::rolling_avg::RollingAvg;
 use crate::rom::Rom;
+use std::time::{Duration, Instant};
 
 const FRAME_DURATION: Duration = Duration::from_nanos(16666667);
 type GraphicsCallback<'a> = Box<dyn FnMut(&PPU, &Frame, &FPSFrame) + 'a>;
@@ -16,7 +16,7 @@ pub struct Bus<'a> {
     cpu_vram: [u8; 2048],
     rom: Rom,
     ppu: PPU,
-    apu :APU,
+    apu: APU,
     frame: Frame,
     fps_frame: FPSFrame,
     current_scanline: Scanline,
@@ -33,8 +33,15 @@ pub struct Bus<'a> {
 }
 
 impl<'a> Bus<'a> {
-    pub fn new<GF, C1F>(rom: Rom, system_palette: SystemPalette, graphics_callback: GF, controller_callback: C1F) -> Bus<'a>
-        where GF: FnMut(&PPU, &Frame, &FPSFrame) + 'a, C1F: FnMut(&mut Controller, &mut Controller) + 'a
+    pub fn new<GF, C1F>(
+        rom: Rom,
+        system_palette: SystemPalette,
+        graphics_callback: GF,
+        controller_callback: C1F,
+    ) -> Bus<'a>
+    where
+        GF: FnMut(&PPU, &Frame, &FPSFrame) + 'a,
+        C1F: FnMut(&mut Controller, &mut Controller) + 'a,
     {
         let ppu = PPU::new(rom.screen_mirroring, system_palette);
         Bus {
@@ -57,7 +64,7 @@ impl<'a> Bus<'a> {
             frame_counter: 0,
         }
     }
-    
+
     pub fn get_sound(&mut self) -> f32 {
         self.apu.next_sample()
     }
@@ -77,8 +84,14 @@ impl<'a> Bus<'a> {
         let vblank_after = self.ppu.is_in_vertical_blank();
 
         if next_scanline != self.last_scanline && next_scanline <= 240 {
-            render(&mut self.ppu, &self.rom, &mut self.current_scanline, next_scanline as usize);
-            self.current_scanline.write_scanline(&mut self.frame, next_scanline as usize);
+            render(
+                &mut self.ppu,
+                &self.rom,
+                &mut self.current_scanline,
+                next_scanline as usize,
+            );
+            self.current_scanline
+                .write_scanline(&mut self.frame, next_scanline as usize);
             self.current_scanline.clear();
             self.last_scanline = next_scanline;
         }
@@ -87,26 +100,27 @@ impl<'a> Bus<'a> {
             let avg_overhead = Duration::from_nanos(self.rendering_overhead.avg().unwrap_or(0));
             let sleep_duration = FRAME_DURATION
                 .checked_sub(self.last_frame.elapsed())
-                .and_then(|d|
-                    d.checked_sub(avg_overhead))
+                .and_then(|d| d.checked_sub(avg_overhead))
                 .unwrap_or(Duration::ZERO);
 
             if sleep_duration > Duration::ZERO {
-                spin_sleep::sleep(sleep_duration );
+                spin_sleep::sleep(sleep_duration);
             }
 
             let fps = 1.0 / self.last_frame.elapsed().as_secs_f64();
             self.fps.push(fps);
             if self.frame_counter % 60 == 0 {
                 let avg = self.fps.avg().unwrap_or_default() as usize;
-                self.fps_frame.update(&self.rom, 1, avg, self.ppu.get_universal_background_color());
+                self.fps_frame
+                    .update(&self.rom, 1, avg, self.ppu.get_universal_background_color());
             }
 
             let rendering_start = Instant::now();
             (self.graphics_callback)(&self.ppu, &self.frame, &self.fps_frame);
             (self.controller_callback)(&mut self.controller_1, &mut self.controller_2);
             let overhead = rendering_start.elapsed().as_nanos() as u64;
-            if self.frame_counter > 300 { // skip initial high overhead
+            if self.frame_counter > 300 {
+                // skip initial high overhead
                 self.rendering_overhead.push(overhead);
             }
             self.last_frame = Instant::now();
@@ -176,11 +190,11 @@ impl Mem for Bus<'_> {
             0x4016 => {
                 (self.controller_callback)(&mut self.controller_1, &mut self.controller_2);
                 self.controller_1.read()
-            },
+            }
             0x4017 => {
                 (self.controller_callback)(&mut self.controller_1, &mut self.controller_2);
                 self.controller_2.read()
-            },
+            }
             CARTRIDGE_START..=CARTRIDGE_END => self.read_prg_rom(addr),
             _ => {
                 println!("Ignoring mem read at {addr:x}");
@@ -250,7 +264,8 @@ impl Mem for Bus<'_> {
                 }
                 let start_address = (data as u16) << 8;
                 for i in 0..256 {
-                    self.ppu.oam_data[self.ppu.oam_addr as usize] = self.mem_read(start_address + i as u16);
+                    self.ppu.oam_data[self.ppu.oam_addr as usize] =
+                        self.mem_read(start_address + i as u16);
                     self.ppu.oam_addr = self.ppu.oam_addr.wrapping_add(1);
                     self.tick(2);
                 }

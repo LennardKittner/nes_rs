@@ -1,4 +1,3 @@
-
 const NMI_VECTOR: u16 = 0xFFFA;
 const RESET_VECTOR: u16 = 0xFFFC;
 #[allow(dead_code)]

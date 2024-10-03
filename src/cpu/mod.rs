@@ -1,15 +1,15 @@
-use crate::bus::{Bus, PollInterrupt, Mem};
-use crate::cpu::addressing_mode::{AddressingMode, page_cross};
+use crate::bus::{Bus, Mem, PollInterrupt};
+use crate::cpu::addressing_mode::{page_cross, AddressingMode};
 use crate::cpu::interrupts::{Interrupt, NMI_INTERRUPT, RESET_INTERRUPT};
 use crate::cpu::opcodes::CPU_INSTRUCTIONS;
 use crate::ppu::palette::SystemPalette;
 use crate::rom::Rom;
 
-pub mod opcodes;
+pub mod addressing_mode;
 #[cfg(test)]
 mod cpu_tests;
 mod interrupts;
-pub mod addressing_mode;
+pub mod opcodes;
 
 // 7  bit  0
 // ---- ----
@@ -26,14 +26,14 @@ pub mod addressing_mode;
 #[derive(Copy, Clone)]
 #[repr(u8)]
 enum Flags {
-    Carry             = 0b0000_0001,
-    Zero              = 0b0000_0010,
+    Carry = 0b0000_0001,
+    Zero = 0b0000_0010,
     InterruptDisabled = 0b0000_0100,
-    DecimalMode       = 0b0000_1000,
-    B1                = 0b0001_0000,
-    B2                = 0b0010_0000,
-    Overflow          = 0b0100_0000,
-    Negative          = 0b1000_0000,
+    DecimalMode = 0b0000_1000,
+    B1 = 0b0001_0000,
+    B2 = 0b0010_0000,
+    Overflow = 0b0100_0000,
+    Negative = 0b1000_0000,
 }
 
 #[allow(non_snake_case)]
@@ -65,7 +65,7 @@ impl CPU<'_> {
     const INITIAL_STATUS: u8 = 0x24;
 
     pub fn new(rom: Rom) -> Self {
-        CPU::new_with_bus(Bus::new(rom, SystemPalette::new(), | _, _, _ | {}, | _, _ | {}))
+        CPU::new_with_bus(Bus::new(rom, SystemPalette::new(), |_, _, _| {}, |_, _| {}))
     }
 
     pub fn new_with_bus(bus: Bus) -> CPU {
@@ -110,7 +110,7 @@ impl CPU<'_> {
 
     pub fn run_with_callback<F>(&mut self, mut callback: F)
     where
-        F: FnMut(&mut CPU)
+        F: FnMut(&mut CPU),
     {
         loop {
             if self.bus.poll_nmi_status() {
@@ -197,7 +197,11 @@ impl CPU<'_> {
 
     fn branch(&mut self, condition: bool, target: u16) {
         if condition {
-            self.additional_cycles += 1 + if page_cross(self.program_counter, target) { 1 } else { 0 };
+            self.additional_cycles += 1 + if page_cross(self.program_counter, target) {
+                1
+            } else {
+                0
+            };
             self.program_counter = target;
         }
     }
@@ -272,7 +276,11 @@ impl CPU<'_> {
         let (result, carry2) = result.overflowing_add(self.get_flag(Flags::Carry) as u8);
         self.register_a = result;
         self.update_flag(Flags::Carry, carry1 | carry2);
-        self.update_flag(Flags::Overflow, (neg1 & neg2 & (self.register_a & 0b1000_0000 == 0)) || (!neg1 & !neg2 & (self.register_a & 0b1000_0000 != 0)));
+        self.update_flag(
+            Flags::Overflow,
+            (neg1 & neg2 & (self.register_a & 0b1000_0000 == 0))
+                || (!neg1 & !neg2 & (self.register_a & 0b1000_0000 != 0)),
+        );
         self.update_zero_and_negative_flags(self.register_a);
     }
 
@@ -441,7 +449,10 @@ impl CPU<'_> {
     }
 
     fn jmp(&mut self, mode: &AddressingMode) {
-        self.program_counter = mode.get_operand_address(self).unwrap().wrapping_sub(CPU_INSTRUCTIONS[0x4C].size); //because after this call the program_counter will be incremented by the size of the instruction
+        self.program_counter = mode
+            .get_operand_address(self)
+            .unwrap()
+            .wrapping_sub(CPU_INSTRUCTIONS[0x4C].size); //because after this call the program_counter will be incremented by the size of the instruction
     }
 
     fn jsr(&mut self, mode: &AddressingMode) {
@@ -523,7 +534,11 @@ impl CPU<'_> {
         if *mode == AddressingMode::Accumulator {
             let carry = self.register_a & 0b0000_0001 != 0;
             self.register_a = self.register_a.wrapping_shr(1);
-            self.register_a |= if self.get_flag(Flags::Carry) { 0b1000_0000 } else { 0 };
+            self.register_a |= if self.get_flag(Flags::Carry) {
+                0b1000_0000
+            } else {
+                0
+            };
             self.update_flag(Flags::Carry, carry);
             self.update_zero_and_negative_flags(self.register_a);
             self.register_a
@@ -532,7 +547,11 @@ impl CPU<'_> {
             let mut value = self.mem_read(addr);
             let carry = value & 0b0000_0001 != 0;
             value = value.wrapping_shr(1);
-            value |= if self.get_flag(Flags::Carry) { 0b1000_0000 } else { 0 };
+            value |= if self.get_flag(Flags::Carry) {
+                0b1000_0000
+            } else {
+                0
+            };
             self.update_flag(Flags::Carry, carry);
             self.update_flag(Flags::Negative, value & 0b1000_0000 != 0);
             self.mem_write(addr, value);

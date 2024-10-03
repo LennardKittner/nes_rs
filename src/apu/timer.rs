@@ -54,7 +54,7 @@
 // }
 pub struct Timer {
     pub timer_limit: u16,
-    pub data: u16
+    pub data: u16,
 }
 
 impl Timer {
@@ -66,13 +66,13 @@ impl Timer {
     }
 
     pub fn tick(&mut self, cycles: u8) -> bool {
-         if self.data >= cycles as u16 {
+        if self.data >= cycles as u16 {
             self.data -= cycles as u16;
             false
         } else {
             let remaining = cycles as u16 - self.data;
             self.data = self.timer_limit.saturating_sub(remaining);
-             true
+            true
         }
     }
 }

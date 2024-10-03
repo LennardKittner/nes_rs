@@ -1,6 +1,6 @@
+use crate::mappers::{create_mapper, Mapper};
 use std::fs::File;
 use std::io::Read;
-use crate::mappers::{create_mapper, Mapper};
 
 #[derive(Debug, PartialEq, Copy, Clone)]
 #[allow(non_camel_case_types)]
@@ -12,7 +12,7 @@ pub enum Mirroring {
 
 pub struct Rom {
     mapper: Box<dyn Mapper>,
-    pub screen_mirroring: Mirroring
+    pub screen_mirroring: Mirroring,
 }
 
 const NES_TAG: &str = "NES\x1A";
@@ -55,7 +55,11 @@ impl Rom {
 
         let prg_rom_start = HEADER_SIZE + if skip_trainer { 512 } else { 0 };
         let chr_rom_start = prg_rom_start + prg_rom_size;
-        let mapper = create_mapper(mapper_idx, &raw[prg_rom_start..(prg_rom_start + prg_rom_size)], &raw[chr_rom_start..(chr_rom_start + chr_rom_size)]);
+        let mapper = create_mapper(
+            mapper_idx,
+            &raw[prg_rom_start..(prg_rom_start + prg_rom_size)],
+            &raw[chr_rom_start..(chr_rom_start + chr_rom_size)],
+        );
         Ok(Rom {
             mapper,
             screen_mirroring,

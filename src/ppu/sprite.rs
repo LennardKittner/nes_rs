@@ -1,4 +1,3 @@
-
 #[derive(Debug)]
 pub struct Sprite {
     y_pos: u8,
@@ -50,7 +49,7 @@ impl Sprite {
     pub fn get_palette_index(&self) -> usize {
         (self.attributes & 0b11) as usize
     }
-    
+
     pub fn is_sprite_zero(&self) -> bool {
         self.sprite_zero
     }

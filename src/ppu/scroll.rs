@@ -1,13 +1,10 @@
-
 pub struct ScrollRegister {
-    scroll_x: u8
+    scroll_x: u8,
 }
 
 impl ScrollRegister {
     pub fn new() -> Self {
-        Self {
-            scroll_x: 0,
-        }
+        Self { scroll_x: 0 }
     }
 
     pub fn update(&mut self, write_toggle: &mut bool, data: u8) {

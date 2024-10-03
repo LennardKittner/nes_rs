@@ -1,14 +1,14 @@
+pub mod fps_frame;
 pub mod frame;
 pub mod scanline;
-pub mod fps_frame;
 
-use itertools::Itertools;
 use crate::ppu::palette::SystemPalette;
-use crate::ppu::PPU;
 use crate::ppu::sprite::Sprite;
+use crate::ppu::PPU;
 use crate::rendering::frame::{Frame, SCREEN_WIDTH};
 use crate::rendering::scanline::{BackgroundColor, Scanline, SpriteColor};
 use crate::rom::{Mirroring, Rom};
+use itertools::Itertools;
 
 pub fn get_bg_palette(ppu: &PPU, attribute_table: &[u8], x_pos: usize, y_pos: usize) -> [u8; 4] {
     let attribute_table_idx = y_pos / 4 * 8 + x_pos / 4;
@@ -23,7 +23,12 @@ pub fn get_bg_palette(ppu: &PPU, attribute_table: &[u8], x_pos: usize, y_pos: us
     };
 
     let palette_start = (1 + palette_idx * 4) as usize;
-    [ppu.get_universal_background_color(), ppu.read_palette_table(palette_start), ppu.read_palette_table(palette_start+1), ppu.read_palette_table(palette_start+2)]
+    [
+        ppu.get_universal_background_color(),
+        ppu.read_palette_table(palette_start),
+        ppu.read_palette_table(palette_start + 1),
+        ppu.read_palette_table(palette_start + 2),
+    ]
 }
 
 pub fn get_sprite_palette(ppu: &PPU, palette_idx: usize) -> [u8; 4] {
@@ -63,14 +68,17 @@ pub fn render(ppu: &mut PPU, rom: &Rom, scanline: &mut Scanline, scanline_pos: u
 
 pub fn render_sprites(ppu: &mut PPU, rom: &Rom, scanline: &mut Scanline, scanline_pos: usize) {
     let scanline_pos = scanline_pos as u8;
-    let sprites = (0..ppu.oam_data.len()).step_by(4).filter_map(|idx| {
-        let raw = &ppu.oam_data[idx..idx+4];
-        if raw[0] >= 239 || scanline_pos < raw[0] + 1 || scanline_pos >= (raw[0] + 1 + 8) {
-            None
-        } else {
-            Sprite::new(raw, idx == 0)
-        }
-    }).collect_vec();
+    let sprites = (0..ppu.oam_data.len())
+        .step_by(4)
+        .filter_map(|idx| {
+            let raw = &ppu.oam_data[idx..idx + 4];
+            if raw[0] >= 239 || scanline_pos < raw[0] + 1 || scanline_pos >= (raw[0] + 1 + 8) {
+                None
+            } else {
+                Sprite::new(raw, idx == 0)
+            }
+        })
+        .collect_vec();
 
     if sprites.len() > 8 {
         ppu.set_sprite_overflow();
@@ -102,7 +110,8 @@ pub fn render_sprites(ppu: &mut PPU, rom: &Rom, scanline: &mut Scanline, scanlin
                 ppu.set_sprite_zero_hit();
             }
 
-            let rgb = ppu.get_color_from_current_system_palette(palette[color_idx as usize] as usize);
+            let rgb =
+                ppu.get_color_from_current_system_palette(palette[color_idx as usize] as usize);
             let x_pos = if sprite.is_horizontal_flip() {
                 sprite.get_x() + 7 - x
             } else {
@@ -121,15 +130,18 @@ pub fn render_sprites(ppu: &mut PPU, rom: &Rom, scanline: &mut Scanline, scanlin
 
 //TODO: maybe extract rendering loop
 fn render_bg(ppu: &mut PPU, rom: &Rom, scanline: &mut Scanline) {
-    let (main_name_table, second_name_table) = match (rom.screen_mirroring, ppu.address_register.get_name_table()) {
-        (Mirroring::VERTICAL, 0b00) | (Mirroring::VERTICAL, 0b10) | (Mirroring::HORIZONTAL, 0b00) | (Mirroring::HORIZONTAL, 0b01) => {
-            (&ppu.vram[0..0x400], &ppu.vram[0x400..0x800])
-        },
-        (Mirroring::VERTICAL, 0b01) | (Mirroring::VERTICAL, 0b11) | (Mirroring::HORIZONTAL, 0b10) | (Mirroring::HORIZONTAL, 0b11) => {
-            (&ppu.vram[0x400..0x800], &ppu.vram[0..0x400])
-        },
-        (_, _) => panic!("Unsupported mirroring mode: {:?}", rom.screen_mirroring),
-    };
+    let (main_name_table, second_name_table) =
+        match (rom.screen_mirroring, ppu.address_register.get_name_table()) {
+            (Mirroring::VERTICAL, 0b00)
+            | (Mirroring::VERTICAL, 0b10)
+            | (Mirroring::HORIZONTAL, 0b00)
+            | (Mirroring::HORIZONTAL, 0b01) => (&ppu.vram[0..0x400], &ppu.vram[0x400..0x800]),
+            (Mirroring::VERTICAL, 0b01)
+            | (Mirroring::VERTICAL, 0b11)
+            | (Mirroring::HORIZONTAL, 0b10)
+            | (Mirroring::HORIZONTAL, 0b11) => (&ppu.vram[0x400..0x800], &ppu.vram[0..0x400]),
+            (_, _) => panic!("Unsupported mirroring mode: {:?}", rom.screen_mirroring),
+        };
 
     let bank = ppu.control_register.get_background_pattern_table_address();
     let attribute_table = &main_name_table[0x3C0..0x400];
@@ -160,7 +172,8 @@ fn render_bg(ppu: &mut PPU, rom: &Rom, scanline: &mut Scanline) {
             let pixel_x = tile_x * 8 + x;
 
             if pixel_x > shift_x {
-                let rgb = ppu.get_color_from_current_system_palette(palette[color_idx as usize] as usize);
+                let rgb =
+                    ppu.get_color_from_current_system_palette(palette[color_idx as usize] as usize);
                 scanline.data[pixel_x - shift_x].background_color = BackgroundColor {
                     color: rgb,
                     transparent: color_idx == 0,
@@ -170,7 +183,7 @@ fn render_bg(ppu: &mut PPU, rom: &Rom, scanline: &mut Scanline) {
     }
 
     let attribute_table = &second_name_table[0x3C0..0x400];
-    for tile_x in 0..(tile_x+1) {
+    for tile_x in 0..(tile_x + 1) {
         let tile_idx = second_name_table[32 * tile_y + tile_x] as u16;
 
         let tile = &rom.read_tile_chr_rom(bank + tile_idx * 16);
@@ -190,7 +203,8 @@ fn render_bg(ppu: &mut PPU, rom: &Rom, scanline: &mut Scanline) {
             let pixel_x = tile_x * 8 + x;
 
             if pixel_x <= shift_x && pixel_x + (256 - shift_x) < 256 {
-                let rgb = ppu.get_color_from_current_system_palette(palette[color_idx as usize] as usize);
+                let rgb =
+                    ppu.get_color_from_current_system_palette(palette[color_idx as usize] as usize);
                 scanline.data[pixel_x + (256 - shift_x)].background_color = BackgroundColor {
                     color: rgb,
                     transparent: color_idx == 0,
@@ -202,13 +216,15 @@ fn render_bg(ppu: &mut PPU, rom: &Rom, scanline: &mut Scanline) {
     if line == 7 {
         if tile_y == 29 {
             ppu.address_register.set_tile_y(0);
-            if ppu.scan_line < 239 { // Don't switch name tables on the last scanline
+            if ppu.scan_line < 239 {
+                // Don't switch name tables on the last scanline
                 ppu.address_register.vertical_name_table_overflow();
             }
         } else if tile_y == 31 {
             ppu.address_register.set_tile_y(0);
         }
-        ppu.address_register.set_tile_y((tile_y+1) as u8);
+        ppu.address_register.set_tile_y((tile_y + 1) as u8);
     }
-    ppu.address_register.set_inner_tile_y_offset((line+1) as u8);
+    ppu.address_register
+        .set_inner_tile_y_offset((line + 1) as u8);
 }

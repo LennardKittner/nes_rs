@@ -8,10 +8,10 @@ pub struct CNROMMapper {
 
 impl CNROMMapper {
     pub fn new(prg_rom: Vec<u8>, chr_rom: Vec<u8>) -> Self {
-        Self { 
-            prg_rom, 
+        Self {
+            prg_rom,
             chr_rom,
-            current_bank_offset: 0
+            current_bank_offset: 0,
         }
     }
 }

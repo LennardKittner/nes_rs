@@ -1,10 +1,10 @@
-use std::env;
 use itertools::Itertools;
+use nes_rs::rendering::frame::Frame;
+use nes_rs::rom::Rom;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::PixelFormatEnum;
-use nes_rs::rendering::frame::Frame;
-use nes_rs::rom::Rom;
+use std::env;
 
 fn main() {
     let args = env::args().collect_vec();
@@ -13,7 +13,7 @@ fn main() {
         return;
     }
     let path = &args[1];
-    
+
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
     let window = video_subsystem
@@ -36,7 +36,14 @@ fn main() {
 
     let mut frame = Frame::default();
     for i in 0..(rom.chr_rom_len() / 16) {
-        frame.render_tile((i % 32) * 8, (i / 32) * 8, &rom, 0, i, &[0x0F, 0x30, 0x21, 0x0F]);
+        frame.render_tile(
+            (i % 32) * 8,
+            (i / 32) * 8,
+            &rom,
+            0,
+            i,
+            &[0x0F, 0x30, 0x21, 0x0F],
+        );
     }
 
     texture.update(None, &frame.data, 256 * 3).unwrap();

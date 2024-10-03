@@ -1,19 +1,31 @@
-use std::collections::HashMap;
-use std::{env, io};
-use std::fs::File;
-use std::io::Read;
 use itertools::Itertools;
-use sdl2::event::Event;
-use sdl2::keyboard::Keycode;
-use sdl2::pixels::PixelFormatEnum;
 use nes_rs::bus::Bus;
 use nes_rs::controller::{Controller, ControllerButtons};
 use nes_rs::cpu::CPU;
-use nes_rs::rendering::frame::Frame;
-use nes_rs::ppu::PPU;
 use nes_rs::ppu::palette::SystemPalette;
+use nes_rs::ppu::PPU;
 use nes_rs::rendering::fps_frame::FPSFrame;
+use nes_rs::rendering::frame::Frame;
 use nes_rs::rom::Rom;
+use sdl2::audio::{AudioCallback, AudioSpecDesired};
+use sdl2::event::Event;
+use sdl2::keyboard::Keycode;
+use sdl2::pixels::PixelFormatEnum;
+use std::collections::HashMap;
+use std::fs::File;
+use std::io::Read;
+use std::{env, io};
+
+struct AudioWrapper {
+    func: Box<dyn FnMut(&mut [f32]) + Send>,
+}
+
+impl AudioCallback for AudioWrapper {
+    type Channel = f32;
+    fn callback(&mut self, out: &mut [f32]) {
+        (self.func)(out);
+    }
+}
 
 fn main() {
     let args = env::args().collect_vec();
@@ -28,9 +40,14 @@ fn main() {
     }
 
     let sdl_context = sdl2::init().unwrap();
+    let audio_subsystem = sdl_context.audio().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
     let window = video_subsystem
-        .window(&format!("NESrs -- {rom_path}"), (256.0 * 3.0) as u32, (240.0 * 3.0) as u32)
+        .window(
+            &format!("NESrs -- {rom_path}"),
+            (256.0 * 3.0) as u32,
+            (240.0 * 3.0) as u32,
+        )
         .position_centered()
         .build()
         .unwrap();
@@ -71,32 +88,39 @@ fn main() {
     key_map_2.insert(Keycode::O, ControllerButtons::SELECT);
     key_map_2.insert(Keycode::P, ControllerButtons::START);
 
-    let poll_controller_input = move |controller_1: &mut Controller, controller_2: &mut Controller| {
-        for event in event_pump.poll_iter() {
-            match event {
-                Event::Quit { .. }
-                | Event::KeyDown {
-                    keycode: Some(Keycode::Escape),
-                    ..
-                } => std::process::exit(0),
-                Event::KeyDown { keycode: Some(keycode), .. } => {
-                    if let Some(key) = key_map_1.get(&keycode) {
-                        controller_1.set_button_state(true, *key);
-                    } else if let Some(key) = key_map_2.get(&keycode) {
-                        controller_2.set_button_state(true, *key);
+    let poll_controller_input =
+        move |controller_1: &mut Controller, controller_2: &mut Controller| {
+            for event in event_pump.poll_iter() {
+                match event {
+                    Event::Quit { .. }
+                    | Event::KeyDown {
+                        keycode: Some(Keycode::Escape),
+                        ..
+                    } => std::process::exit(0),
+                    Event::KeyDown {
+                        keycode: Some(keycode),
+                        ..
+                    } => {
+                        if let Some(key) = key_map_1.get(&keycode) {
+                            controller_1.set_button_state(true, *key);
+                        } else if let Some(key) = key_map_2.get(&keycode) {
+                            controller_2.set_button_state(true, *key);
+                        }
                     }
-                }
-                Event::KeyUp { keycode: Some(keycode), .. } => {
-                    if let Some(key) = key_map_1.get(&keycode) {
-                        controller_1.set_button_state(false, *key);
-                    } else if let Some(key) = key_map_2.get(&keycode) {
-                        controller_2.set_button_state(false, *key);
+                    Event::KeyUp {
+                        keycode: Some(keycode),
+                        ..
+                    } => {
+                        if let Some(key) = key_map_1.get(&keycode) {
+                            controller_1.set_button_state(false, *key);
+                        } else if let Some(key) = key_map_2.get(&keycode) {
+                            controller_2.set_button_state(false, *key);
+                        }
                     }
+                    _ => { /* do nothing */ }
                 }
-                _ => { /* do nothing */ }
             }
-        }
-    };
+        };
 
     let palette = if let Some(path) = palette_path {
         read_palette_table(path).unwrap_or_default()
@@ -104,17 +128,43 @@ fn main() {
         SystemPalette::new()
     };
 
-    let bus = Bus::new(rom, palette,
-        move |_: &PPU, frame: &Frame, fps_frame: &FPSFrame | {
+    let desired_spec = AudioSpecDesired {
+        freq: Some(44100),
+        channels: Some(1),
+        samples: None,
+    };
+
+    let audio_device = audio_subsystem
+        .open_playback(None, &desired_spec, |spec| AudioWrapper {
+            func: Box::new(|out: &mut [f32]| {
+                for x in out {
+                    *x = 1.0;
+                }
+            }),
+        })
+        .unwrap();
+
+    audio_device.resume();
+
+    let bus = Bus::new(
+        rom,
+        palette,
+        move |_: &PPU, frame: &Frame, fps_frame: &FPSFrame| {
             texture.update(None, &frame.data, frame.width * 3).unwrap();
 
-            fps_texture.update(None, &fps_frame.frame.data, fps_frame.frame.width * 3).unwrap();
+            fps_texture
+                .update(None, &fps_frame.frame.data, fps_frame.frame.width * 3)
+                .unwrap();
 
             canvas.copy(&texture, None, None).unwrap();
-            canvas.copy(&fps_texture, None, Some(sdl2::rect::Rect::new(5, 5, 48, 8))).unwrap();
+            canvas
+                .copy(&fps_texture, None, Some(sdl2::rect::Rect::new(5, 5, 48, 8)))
+                .unwrap();
 
             canvas.present();
-            }, poll_controller_input);
+        },
+        poll_controller_input,
+    );
 
     let mut cpu = CPU::new_with_bus(bus);
     cpu.reset();

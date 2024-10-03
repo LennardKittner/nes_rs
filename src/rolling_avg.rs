@@ -1,5 +1,5 @@
-use std::cmp::min;
 use num::{FromPrimitive, Num, ToPrimitive};
+use std::cmp::min;
 
 pub struct RollingAvg<T: Num + Clone + Copy + FromPrimitive> {
     buffer: Vec<T>,
@@ -14,14 +14,14 @@ impl<T: Num + Clone + Copy + FromPrimitive + ToPrimitive> RollingAvg<T> {
             buffer: vec![T::zero(); size],
             index: 0,
             count: 0,
-            size
+            size,
         }
     }
 
     pub fn push(&mut self, value: T) {
         self.buffer[self.index] = value;
         self.index = (self.index + 1) % self.size;
-        self.count = min(self.count+1, self.size);
+        self.count = min(self.count + 1, self.size);
     }
 
     pub fn avg(&self) -> Option<T> {

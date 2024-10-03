@@ -1,13 +1,10 @@
-
 pub struct TRegister {
     pub data: u16,
 }
 
 impl TRegister {
     pub fn new() -> Self {
-        TRegister {
-            data: 0
-        }
+        TRegister { data: 0 }
     }
 
     pub fn update_addr_write(&mut self, data: u8, write_toggle: bool) {
@@ -22,7 +19,7 @@ impl TRegister {
     pub fn update_ctrl_write(&mut self, data: u8) {
         self.data = (self.data & !(0b11 << 10)) | (((data & 0b11) as u16) << 10);
     }
-    
+
     pub fn update_scroll_write(&mut self, data: u8, write_toggle: bool) {
         if !write_toggle {
             self.data = (self.data & !0b11111) | ((data & 0b11111000) as u16 >> 3);
@@ -36,9 +33,9 @@ impl TRegister {
     }
 }
 
-impl Default for TRegister { 
+impl Default for TRegister {
     fn default() -> Self {
-        Self::new() 
+        Self::new()
     }
 }
 

@@ -1,5 +1,5 @@
-use lazy_static::lazy_static;
 use crate::cpu::{AddressingMode, CPU};
+use lazy_static::lazy_static;
 
 lazy_static! {
     pub static ref CPU_INSTRUCTIONS: [OpCode; 256] = #[allow(clippy::redundant_closure)] { // clippy suggests to use the function reference directly, but this causes an error.
@@ -355,7 +355,7 @@ fn test_size() {
 fn test_for_duplicate_opcodes() {
     use std::collections::HashSet;
     let mut set = HashSet::new();
-    for opcode in CPU_INSTRUCTIONS.iter().map(| opcode| opcode.code) {
+    for opcode in CPU_INSTRUCTIONS.iter().map(|opcode| opcode.code) {
         if set.contains(&opcode) {
             panic!("Duplicate opcode 0x{opcode:x}")
         } else {
@@ -363,7 +363,6 @@ fn test_for_duplicate_opcodes() {
         }
     }
 }
-
 
 #[test]
 fn test_for_missing_opcodes() {
@@ -379,7 +378,10 @@ fn test_for_missing_opcodes() {
 fn test_opcode_matches_key() {
     for i in 0..0xFF {
         if CPU_INSTRUCTIONS[i].code != i as u8 {
-            panic!("Opcode 0x{:x} does not match key 0x{:x}", CPU_INSTRUCTIONS[i].code, i)
+            panic!(
+                "Opcode 0x{:x} does not match key 0x{:x}",
+                CPU_INSTRUCTIONS[i].code, i
+            )
         }
     }
 }
@@ -392,7 +394,7 @@ pub struct OpCode {
     pub cycles: u8,
     pub bonus_cycle_on_page_cross: bool,
     pub mode: AddressingMode,
-    operation: Operation
+    operation: Operation,
 }
 
 #[derive(Clone, Copy)]
@@ -403,7 +405,15 @@ pub enum Operation {
 }
 
 impl OpCode {
-    fn new(code: u8, name: &'static str, size: u16, cycles: u8, bonus_cycle_on_page_cross: bool, mode: AddressingMode, operation: Operation) -> Self {
+    fn new(
+        code: u8,
+        name: &'static str,
+        size: u16,
+        cycles: u8,
+        bonus_cycle_on_page_cross: bool,
+        mode: AddressingMode,
+        operation: Operation,
+    ) -> Self {
         OpCode {
             code,
             mnemonics: name,

@@ -4,7 +4,7 @@ pub struct AddressRegister {
     pub data: u16,
     /// Used for pattern table accesses.
     /// Does not use t register.
-    pub data_alt: u16
+    pub data_alt: u16,
 }
 
 impl AddressRegister {
@@ -113,13 +113,37 @@ pub mod test {
     fn test_tile_y_test() {
         let mut a = AddressRegister::new();
         a.data = 0b111010011100000;
-        println!("1 x: {} y: {} yi: {} nt: {}", a.get_tile_x(), a.get_tile_y(), a.get_inner_tile_y_offset(), a.get_name_table());
+        println!(
+            "1 x: {} y: {} yi: {} nt: {}",
+            a.get_tile_x(),
+            a.get_tile_y(),
+            a.get_inner_tile_y_offset(),
+            a.get_name_table()
+        );
         a.set_tile_y((7 + 1) as u8);
-        println!("2 x: {} y: {} yi: {} nt: {}", a.get_tile_x(), a.get_tile_y(), a.get_inner_tile_y_offset(), a.get_name_table());
+        println!(
+            "2 x: {} y: {} yi: {} nt: {}",
+            a.get_tile_x(),
+            a.get_tile_y(),
+            a.get_inner_tile_y_offset(),
+            a.get_name_table()
+        );
         a.horizontal_name_table_overflow();
-        println!("3 x: {} y: {} yi: {} nt: {}", a.get_tile_x(), a.get_tile_y(), a.get_inner_tile_y_offset(), a.get_name_table());
+        println!(
+            "3 x: {} y: {} yi: {} nt: {}",
+            a.get_tile_x(),
+            a.get_tile_y(),
+            a.get_inner_tile_y_offset(),
+            a.get_name_table()
+        );
         a.set_inner_tile_y_offset((7 + 1) as u8);
-        println!("4 x: {} y: {} yi: {} nt: {}", a.get_tile_x(), a.get_tile_y(), a.get_inner_tile_y_offset(), a.get_name_table());
+        println!(
+            "4 x: {} y: {} yi: {} nt: {}",
+            a.get_tile_x(),
+            a.get_tile_y(),
+            a.get_inner_tile_y_offset(),
+            a.get_name_table()
+        );
     }
 
     #[test]

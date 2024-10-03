@@ -33,14 +33,14 @@ impl Controller {
             button_state: ControllerButtons::empty(),
         }
     }
-    
+
     pub fn write(&mut self, data: u8) {
         self.strobe = data & 1 == 1;
         if self.strobe {
             self.button_index = 0;
         }
     }
-    
+
     pub fn read(&mut self) -> u8 {
         if self.button_index > 7 {
             return 1;
@@ -51,12 +51,11 @@ impl Controller {
         }
         response
     }
-    
+
     pub fn set_button_state(&mut self, pressed: bool, button: ControllerButtons) {
         self.button_state.set(button, pressed);
     }
 }
-
 
 #[cfg(test)]
 mod test {
@@ -81,7 +80,7 @@ mod test {
         controller.set_button_state(true, ControllerButtons::LEFT);
         controller.set_button_state(true, ControllerButtons::SELECT);
         controller.set_button_state(true, ControllerButtons::B);
-        
+
         for _ in 0..=4 {
             assert_eq!(controller.read(), 0);
             assert_eq!(controller.read(), 1);

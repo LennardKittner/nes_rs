@@ -1,11 +1,10 @@
-use std::fs;
 use itertools::Itertools;
 use nes_rs::bus::{Bus, Mem};
 use nes_rs::cpu::CPU;
 use nes_rs::ppu::palette::SystemPalette;
 use nes_rs::rom::Rom;
 use nes_rs::trace::trace;
-
+use std::fs;
 
 fn test_rom() -> Rom {
     Rom::load_from_disk("./nestest.nes").unwrap()
@@ -15,15 +14,16 @@ fn test_rom() -> Rom {
 #[test]
 #[should_panic(expected = "APU not implemented")]
 fn test_against_nes_test_log_no_ppu() {
-    let bus = Bus::new(test_rom(), SystemPalette::new(), | _, _, _ | {}, | _, _ | {});
+    let bus = Bus::new(test_rom(), SystemPalette::new(), |_, _, _| {}, |_, _| {});
     let mut cpu = CPU::new_with_bus(bus);
     cpu.reset();
     cpu.program_counter = 0xC000;
     let mut line_num = 0;
     let file_content = fs::read_to_string("./nestest.log").unwrap();
-    let test_file = file_content.lines().map(|line| {
-        line.split(" PPU").collect_vec()[0]
-    }).collect_vec();
+    let test_file = file_content
+        .lines()
+        .map(|line| line.split(" PPU").collect_vec()[0])
+        .collect_vec();
 
     cpu.run_with_callback(|cpu| {
         if cpu.program_counter == 0xC68B {
@@ -37,7 +37,7 @@ fn test_against_nes_test_log_no_ppu() {
 
 #[test]
 fn test_format_trace() {
-    let mut bus = Bus::new(test_rom(), SystemPalette::new(), | _, _, _ | {}, | _, _ | {});
+    let mut bus = Bus::new(test_rom(), SystemPalette::new(), |_, _, _| {}, |_, _| {});
     bus.mem_write(100, 0xA2);
     bus.mem_write(101, 0x01);
     bus.mem_write(102, 0xCA);
@@ -70,7 +70,7 @@ fn test_format_trace() {
 
 #[test]
 fn test_mem_access() {
-    let mut bus = Bus::new(test_rom(), SystemPalette::new(), | _, _, _ | {}, | _, _ | {});
+    let mut bus = Bus::new(test_rom(), SystemPalette::new(), |_, _, _| {}, |_, _| {});
     // ORA ($33), Y
     bus.mem_write(100, 0x11);
     bus.mem_write(101, 0x33);

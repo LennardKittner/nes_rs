@@ -57,7 +57,7 @@ impl StatusRegister {
     pub fn vertical_blank(&self) -> bool {
         self.contains(Self::VERTICAL_BLANK)
     }
-    
+
     pub fn set_vertical_blank(&mut self, v_blank: bool) {
         self.set(Self::VERTICAL_BLANK, v_blank);
     }

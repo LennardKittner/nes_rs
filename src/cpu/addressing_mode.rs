@@ -43,10 +43,10 @@ impl AddressingMode {
                 let lo = cpu.mem_read(base as u16);
                 let hi = cpu.mem_read(base.wrapping_add(1) as u16);
                 let deref_base = (hi as u16) << 8 | (lo as u16);
-                let deref =  deref_base.wrapping_add(cpu.register_y as u16);
+                let deref = deref_base.wrapping_add(cpu.register_y as u16);
                 page_cross(deref_base, deref)
             }
-            _ => panic!("")
+            _ => panic!(""),
         }
     }
 
@@ -83,7 +83,7 @@ impl AddressingMode {
                 } else {
                     Some(cpu.mem_read_u16(address))
                 }
-            },
+            }
             AddressingMode::Indirect_X => {
                 let base = cpu.mem_read(operand_location);
                 let ptr = base.wrapping_add(cpu.register_x);
@@ -107,8 +107,7 @@ impl AddressingMode {
                     Some(cpu.program_counter + (offset as u16))
                 }
             }
-            AddressingMode::Accumulator |
-            AddressingMode::NonAddressing => None,
+            AddressingMode::Accumulator | AddressingMode::NonAddressing => None,
         }
     }
 }

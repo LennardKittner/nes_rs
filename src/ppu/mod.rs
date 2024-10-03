@@ -1,10 +1,10 @@
 pub mod addr;
 pub mod control;
 pub mod mask;
-pub mod scroll;
-pub mod status;
-pub mod sprite;
 pub mod palette;
+pub mod scroll;
+pub mod sprite;
+pub mod status;
 mod t_register;
 
 use crate::bus::PollInterrupt;
@@ -25,7 +25,7 @@ pub struct PPU {
     pub oam_addr: u8,
     pub oam_data: [u8; 256],
     pub control_register: ControlRegister,
-    mask_register : MaskRegister,
+    mask_register: MaskRegister,
     status_register: StatusRegister,
     scroll_register: ScrollRegister,
     pub address_register: AddressRegister,
@@ -70,18 +70,18 @@ impl PPU {
             write_toggle: false,
             scan_line: 0,
             cycles: 0,
-            outstanding_interrupt: false
+            outstanding_interrupt: false,
         }
     }
 
-    pub fn tick(&mut self, cycles: u8) -> u16  {
+    pub fn tick(&mut self, cycles: u8) -> u16 {
         self.cycles += cycles as usize;
         if self.cycles >= 341 {
-
             if self.show_background() {
-                self.address_register.load_x_from(&self.temporary_address_register);
+                self.address_register
+                    .load_x_from(&self.temporary_address_register);
             }
-            
+
             self.cycles -= 341;
             self.scan_line += 1;
 
@@ -98,15 +98,20 @@ impl PPU {
                 self.status_register.set_sprite_zero_hit(false);
                 self.status_register.set_sprite_overflow(false);
                 if self.show_background() {
-                    self.address_register.load_y_from(&self.temporary_address_register);
+                    self.address_register
+                        .load_y_from(&self.temporary_address_register);
                 }
             }
+        }
+        if self.control_register.get_sprite_size() == 16 {
+            println!("Sprite size: 16");
         }
         self.scan_line
     }
 
     fn increment_vram_addr(&mut self) {
-        self.address_register.increment(self.control_register.get_vram_increment());
+        self.address_register
+            .increment(self.control_register.get_vram_increment());
     }
 
     // Horizontal:
@@ -121,12 +126,10 @@ impl PPU {
         let vram_index = mirrored_vram.wrapping_sub(0x2000); // to vram vector
         let name_table = vram_index / 0x400; // to name table index
         match (&self.mirroring, name_table) {
-            (Mirroring::VERTICAL, 2) |
-            (Mirroring::VERTICAL, 3) => vram_index - 0x800,
-            (Mirroring::HORIZONTAL, 1) |
-            (Mirroring::HORIZONTAL, 2) => vram_index - 0x400,
+            (Mirroring::VERTICAL, 2) | (Mirroring::VERTICAL, 3) => vram_index - 0x800,
+            (Mirroring::HORIZONTAL, 1) | (Mirroring::HORIZONTAL, 2) => vram_index - 0x400,
             (Mirroring::HORIZONTAL, 3) => vram_index - 0x800,
-            _ => vram_index
+            _ => vram_index,
         }
     }
 
@@ -137,21 +140,37 @@ impl PPU {
     pub fn write_to_data(&mut self, data: u8) {
         match self.address_register.data {
             0x0000..=0x1FFF => println!("Attempt to write to Cartridge ROM space"),
-            0x2000..=0x2FFF => self.vram[self.mirror_vram_addr(self.address_register.data) as usize] = data,
-            0x3000..=0x3EFF => self.vram[self.mirror_vram_addr(self.address_register.data - 0x1000) as usize] = data,
+            0x2000..=0x2FFF => {
+                self.vram[self.mirror_vram_addr(self.address_register.data) as usize] = data
+            }
+            0x3000..=0x3EFF => {
+                self.vram[self.mirror_vram_addr(self.address_register.data - 0x1000) as usize] =
+                    data
+            }
             0x3F10 | 0x3F14 | 0x3F18 | 0x3F1C => (),
             0x3F00..=0x3FFF => (),
-            _               => println!("unexpected access to mirrored space, requested = {:x}", self.address_register.data),
+            _ => println!(
+                "unexpected access to mirrored space, requested = {:x}",
+                self.address_register.data
+            ),
         }
-        self.address_register.increment(self.control_register.get_vram_increment());
+        self.address_register
+            .increment(self.control_register.get_vram_increment());
 
         // I am unsure why but using the address register that uses the t register to access the pallet table causes problems.
         match self.address_register.data_alt {
-            0x3F10 | 0x3F14 | 0x3F18 | 0x3F1C => self.palette_table[(self.address_register.data_alt - 0x10 - 0x3F00) as usize] = data,
-            0x3F00..=0x3FFF => self.palette_table[(self.address_to_pattern_table_index(self.address_register.data_alt)) as usize] = data,
-            _               => (),
+            0x3F10 | 0x3F14 | 0x3F18 | 0x3F1C => {
+                self.palette_table[(self.address_register.data_alt - 0x10 - 0x3F00) as usize] = data
+            }
+            0x3F00..=0x3FFF => {
+                self.palette_table[(self
+                    .address_to_pattern_table_index(self.address_register.data_alt))
+                    as usize] = data
+            }
+            _ => (),
         }
-        self.address_register.increment_alt(self.control_register.get_vram_increment());
+        self.address_register
+            .increment_alt(self.control_register.get_vram_increment());
     }
 
     pub fn read_palette_table(&self, idx: usize) -> u8 {
@@ -171,27 +190,32 @@ impl PPU {
                 let result = self.internal_data_buffer;
                 self.internal_data_buffer = chr_rom[addr as usize];
                 result
-            },
+            }
             0x2000..=0x2FFF => {
                 let result = self.internal_data_buffer;
                 self.internal_data_buffer = self.vram[self.mirror_vram_addr(addr) as usize];
                 result
-            },
+            }
             0x3000..=0x3EFF => {
                 let result = self.internal_data_buffer;
-                self.internal_data_buffer = self.vram[self.mirror_vram_addr(addr - 0x1000) as usize];
+                self.internal_data_buffer =
+                    self.vram[self.mirror_vram_addr(addr - 0x1000) as usize];
                 result
-            },
-            0x3F10 | 0x3F14 | 0x3F18 | 0x3F1C =>  self.read_palette_table((addr - 0x10 - 0x3F00) as usize),
+            }
+            0x3F10 | 0x3F14 | 0x3F18 | 0x3F1C => {
+                self.read_palette_table((addr - 0x10 - 0x3F00) as usize)
+            }
             0x3F00..=0x3FFF => self.read_palette_table((addr - 0x3F00) as usize),
-            _               => panic!("unexpected access to mirrored space, requested = {}", addr),
+            _ => panic!("unexpected access to mirrored space, requested = {}", addr),
         }
     }
 
     pub fn write_to_addr(&mut self, value: u8) {
-        self.temporary_address_register.update_addr_write(value, self.write_toggle);
+        self.temporary_address_register
+            .update_addr_write(value, self.write_toggle);
         if self.write_toggle {
-            self.address_register.update_from(&self.temporary_address_register);
+            self.address_register
+                .update_from(&self.temporary_address_register);
         }
 
         self.address_register.data_alt = if self.write_toggle {
@@ -207,7 +231,10 @@ impl PPU {
         self.temporary_address_register.update_ctrl_write(value);
         let before_nmi_status = self.control_register.generate_nmi();
         self.control_register.update(value);
-        if !before_nmi_status && self.control_register.generate_nmi() && self.status_register.vertical_blank() {
+        if !before_nmi_status
+            && self.control_register.generate_nmi()
+            && self.status_register.vertical_blank()
+        {
             self.outstanding_interrupt = true;
         }
     }
@@ -224,8 +251,9 @@ impl PPU {
     }
 
     pub fn write_to_scroll(&mut self, value: u8) {
-        self.temporary_address_register.update_scroll_write(value, self.write_toggle);
-        self.scroll_register.update(&mut self.write_toggle ,value);
+        self.temporary_address_register
+            .update_scroll_write(value, self.write_toggle);
+        self.scroll_register.update(&mut self.write_toggle, value);
     }
 
     pub fn write_to_oam_addr(&mut self, value: u8) {
@@ -285,7 +313,8 @@ impl PPU {
     }
 
     pub fn get_color_from_current_system_palette(&self, idx: usize) -> (u8, u8, u8) {
-        self.system_palette.get_palette(self.mask_register.get_emphasis_index() as usize)[idx]
+        self.system_palette
+            .get_palette(self.mask_register.get_emphasis_index() as usize)[idx]
     }
 
     pub fn set_sprite_zero_hit(&mut self) {

@@ -1,11 +1,11 @@
 use crate::apu::pulse_generator::{PulseGenerator, PulseGeneratorID};
 use crate::apu::ring_buffer::RingBuffer;
 
-mod pulse_generator;
-mod timer;
-mod sweep_unit;
 mod envelope;
+mod pulse_generator;
 mod ring_buffer;
+mod sweep_unit;
+mod timer;
 
 pub struct APU {
     pulse_generator1: PulseGenerator,
@@ -14,12 +14,11 @@ pub struct APU {
 }
 
 impl APU {
-
     pub fn new() -> APU {
         Self {
             pulse_generator1: PulseGenerator::new(PulseGeneratorID::ONE),
             pulse_generator2: PulseGenerator::new(PulseGeneratorID::TWO),
-            ring_buffer: RingBuffer::new(), 
+            ring_buffer: RingBuffer::new(),
         }
     }
 
@@ -54,8 +53,10 @@ impl APU {
     /// IF-D NT21
     /// DMC interrupt (I), frame interrupt (F), DMC active (D), length counter > 0 (N/T/2/1)
     pub fn set_status(&mut self, value: u8) {
-        self.pulse_generator1.set_length_counter_enabled(value & 0b0000_0001 != 0);
-        self.pulse_generator2.set_length_counter_enabled(value & 0b0000_0010 != 0);
+        self.pulse_generator1
+            .set_length_counter_enabled(value & 0b0000_0001 != 0);
+        self.pulse_generator2
+            .set_length_counter_enabled(value & 0b0000_0010 != 0);
         //todo!()
     }
 
@@ -71,7 +72,8 @@ impl APU {
         self.pulse_generator1.set_duty((value & 0b1100_0000) >> 6);
         let l = value & 0b0010_0000 != 0;
         self.pulse_generator1.set_length_counter_halt(l);
-        self.pulse_generator1.set_envelope_parameters(l, value & 0b0001_0000 != 0, value & 0x0F);
+        self.pulse_generator1
+            .set_envelope_parameters(l, value & 0b0001_0000 != 0, value & 0x0F);
     }
 
     /// DDLC VVVV
@@ -80,7 +82,8 @@ impl APU {
         self.pulse_generator2.set_duty((value & 0b1100_0000) >> 6);
         let l = value & 0b0010_0000 != 0;
         self.pulse_generator2.set_length_counter_halt(l);
-        self.pulse_generator2.set_envelope_parameters(l, value & 0b0001_0000 != 0, value & 0x0F);
+        self.pulse_generator2
+            .set_envelope_parameters(l, value & 0b0001_0000 != 0, value & 0x0F);
     }
 
     /// EPPP NSSS
@@ -90,7 +93,7 @@ impl APU {
             value & 0b1000_0000 != 0,
             value & 0b0000_1000 != 0,
             value & 0b0000_0111,
-            (value & 0b0111_0000) >> 4
+            (value & 0b0111_0000) >> 4,
         )
     }
 
@@ -101,7 +104,7 @@ impl APU {
             value & 0b1000_0000 != 0,
             value & 0b0000_1000 != 0,
             value & 0b0000_0111,
-            (value & 0b0111_0000) >> 4
+            (value & 0b0111_0000) >> 4,
         )
     }
 

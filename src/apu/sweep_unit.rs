@@ -19,7 +19,7 @@ impl SweepUnit {
             negate: false,
             shift: 0,
             reload: false,
-            pulse_generator_id
+            pulse_generator_id,
         }
     }
 
@@ -56,7 +56,7 @@ impl SweepUnit {
                 current_time
             } else {
                 self.calculate_period(current_time)
-            }
+            };
         }
 
         if self.reload {

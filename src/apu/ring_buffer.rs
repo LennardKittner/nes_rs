@@ -1,11 +1,10 @@
-
-pub struct RingBuffer<T :Default + Copy, const BUFFER_SIZE: usize> {
+pub struct RingBuffer<T: Default + Copy, const BUFFER_SIZE: usize> {
     buffer: [T; BUFFER_SIZE],
     writer_head: usize,
     reader_head: usize,
 }
 
-impl<T :Default + Copy, const BUFFER_SIZE: usize> RingBuffer<T, BUFFER_SIZE> {
+impl<T: Default + Copy, const BUFFER_SIZE: usize> RingBuffer<T, BUFFER_SIZE> {
     pub fn new() -> RingBuffer<T, BUFFER_SIZE> {
         RingBuffer {
             buffer: [T::default(); BUFFER_SIZE],

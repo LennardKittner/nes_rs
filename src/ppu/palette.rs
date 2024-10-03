@@ -27,7 +27,6 @@ const SYSTEM_PALETTE_SIZE_E: usize = PALETTE_SIZE_E * NUMBER_PALETTES;
 
 pub type Pallet = [(u8, u8, u8); PALETTE_SIZE_E];
 
-
 // bgr
 // 000 -> normal
 // 001 -> red   = 1
@@ -38,19 +37,19 @@ pub type Pallet = [(u8, u8, u8); PALETTE_SIZE_E];
 // 110 -> blue & green = 6
 // 111 -> all          = 7
 pub struct SystemPalette {
-    palettes: [Pallet; NUMBER_PALETTES]
+    palettes: [Pallet; NUMBER_PALETTES],
 }
 
 impl SystemPalette {
     pub fn new() -> Self {
         SystemPalette {
-            palettes: [SYSTEM_PALETTE; NUMBER_PALETTES]
+            palettes: [SYSTEM_PALETTE; NUMBER_PALETTES],
         }
     }
 
     pub fn from_single_palette(palette: Pallet) -> Self {
         SystemPalette {
-            palettes: [palette; NUMBER_PALETTES]
+            palettes: [palette; NUMBER_PALETTES],
         }
     }
 
@@ -62,17 +61,16 @@ impl SystemPalette {
         for palette_index in 0..(buffer.len() / (PALETTE_SIZE_B)) {
             ((palette_index * PALETTE_SIZE_B)..(palette_index * PALETTE_SIZE_B + PALETTE_SIZE_B))
                 .step_by(3)
-                .map(|i| {
-                    (buffer[i], buffer[i+1], buffer[i+2])
-            }).enumerate()
+                .map(|i| (buffer[i], buffer[i + 1], buffer[i + 2]))
+                .enumerate()
                 .for_each(|(i, rgb)| {
-                system_palette.palettes[palette_index][i] = rgb;
-            });
+                    system_palette.palettes[palette_index][i] = rgb;
+                });
         }
 
         Some(system_palette)
     }
-    
+
     pub fn get_palette(&self, idx: usize) -> Pallet {
         self.palettes[idx]
     }

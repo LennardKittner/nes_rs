@@ -11,12 +11,11 @@ pub struct Frame {
 }
 
 impl Frame {
-
     pub fn new(width: usize, height: usize) -> Self {
         Self {
             data: vec![0; width * height * 3],
             width,
-            height
+            height,
         }
     }
 
@@ -37,7 +36,15 @@ impl Frame {
             (0, 0, 0)
         }
     }
-    pub fn render_tile(&mut self, x_pos: usize, y_pos:usize, rom: &Rom, bank: usize, tile_n: usize, pallet: &[u8; 4]) {
+    pub fn render_tile(
+        &mut self,
+        x_pos: usize,
+        y_pos: usize,
+        rom: &Rom,
+        bank: usize,
+        tile_n: usize,
+        pallet: &[u8; 4],
+    ) {
         assert!(bank <= 1);
         let tile = rom.read_tile_chr_rom_bank(bank as u16, tile_n as u16 * 16);
         write_tile(self, x_pos, y_pos, &tile, pallet);
@@ -49,4 +56,3 @@ impl Default for Frame {
         Self::new(SCREEN_WIDTH, SCREEN_HEIGHT)
     }
 }
-

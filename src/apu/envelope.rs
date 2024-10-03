@@ -14,7 +14,7 @@ pub struct EnvelopeGenerator {
     /// initial divider value
     initial_divider: u8,
     /// represents current volume when not using constant volume mode
-    decay_level_counter: u8
+    decay_level_counter: u8,
 }
 
 impl EnvelopeGenerator {
@@ -48,7 +48,7 @@ impl EnvelopeGenerator {
             self.divider -= 1;
             return;
         }
-        
+
         self.divider = self.initial_divider;
 
         if self.decay_level_counter > 0 {
@@ -85,7 +85,7 @@ impl EnvelopeGenerator {
     pub fn set_start(&mut self, start: bool) {
         self.start = start;
     }
-    
+
     /// get current volume
     pub fn get_volume(&self) -> u8 {
         if self.constant_volume_flag {

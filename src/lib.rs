@@ -1,10 +1,10 @@
-pub mod cpu;
+mod apu;
 pub mod bus;
-pub mod rom;
-pub mod trace;
+pub mod controller;
+pub mod cpu;
+mod mappers;
 pub mod ppu;
 pub mod rendering;
-pub mod controller;
 mod rolling_avg;
-mod mappers;
-mod apu;
+pub mod rom;
+pub mod trace;
