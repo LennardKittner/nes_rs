@@ -7,3 +7,4 @@ pub mod rendering;
 pub mod controller;
 mod rolling_avg;
 mod mappers;
+mod apu;
