@@ -1,4 +1,5 @@
 use std::time::{Duration, Instant};
+use crate::apu::APU;
 use crate::controller::Controller;
 use crate::ppu::palette::SystemPalette;
 use crate::ppu::PPU;
@@ -15,6 +16,7 @@ pub struct Bus<'a> {
     cpu_vram: [u8; 2048],
     rom: Rom,
     ppu: PPU,
+    apu :APU,
     frame: Frame,
     fps_frame: FPSFrame,
     current_scanline: Scanline,
@@ -40,6 +42,7 @@ impl<'a> Bus<'a> {
             rom,
             cycles: 0,
             ppu,
+            apu: APU::new(),
             frame: Frame::default(),
             fps_frame: FPSFrame::new(0, 0xA, [0x0F, 0x30, 0x21, 0x0F]),
             current_scanline: Scanline::new(),
@@ -54,6 +57,10 @@ impl<'a> Bus<'a> {
             frame_counter: 0,
         }
     }
+    
+    pub fn get_sound(&mut self) -> f32 {
+        self.apu.next_sample()
+    }
 
     fn read_prg_rom(&self, addr: u16) -> u8 {
         let mut addr = addr - 0x8000;
@@ -66,7 +73,7 @@ impl<'a> Bus<'a> {
     pub fn tick(&mut self, cycles: u8) {
         self.cycles += cycles as usize;
         let vblank_before = self.ppu.is_in_vertical_blank();
-        let next_scanline = self.ppu.tick(cycles *3);
+        let next_scanline = self.ppu.tick(cycles * 3);
         let vblank_after = self.ppu.is_in_vertical_blank();
 
         if next_scanline != self.last_scanline && next_scanline <= 240 {
@@ -165,6 +172,7 @@ impl Mem for Bus<'_> {
                 self.mem_read(mirror_down_addr)
             }
             APU_REGISTERS_START..=APU_REGISTERS_END => 0,
+            0x4015 => self.apu.get_status(),
             0x4016 => {
                 (self.controller_callback)(&mut self.controller_1, &mut self.controller_2);
                 self.controller_1.read()
@@ -199,7 +207,38 @@ impl Mem for Bus<'_> {
                 let mirror_down_addr = addr & 0b00100000_00000111;
                 self.mem_write(mirror_down_addr, data);
             }
-            APU_REGISTERS_START..=APU_REGISTERS_END => (),
+            //APU:
+
+            // pulse 1
+            0x4000 => self.apu.set_pulse1_DLCV(data),
+            0x4001 => self.apu.set_pulse1_EPNS(data),
+            0x4002 => self.apu.set_pulse1_timer_low(data),
+            0x4003 => self.apu.set_pulse1_LT(data),
+
+            // pulse 2
+            0x4004 => self.apu.set_pulse2_DLCV(data),
+            0x4005 => self.apu.set_pulse2_EPNS(data),
+            0x4006 => self.apu.set_pulse2_timer_low(data),
+            0x4007 => self.apu.set_pulse2_LT(data),
+
+            // triangle
+            0x4008 => self.apu.set_triangle_CR(data),
+            0x4009 => (), // unused
+            0x400A => self.apu.set_triangle_timer_low(data),
+            0x400B => self.apu.set_triangle_LT(data),
+
+            // noise
+            0x400C => self.apu.set_noise_LCV(data),
+            0x400D => (), // unused
+            0x400E => self.apu.set_noise_LP(data),
+            0x400F => self.apu.set_noise_length_counter_load(data),
+
+            // DMC
+            0x4010 => self.apu.set_DMC_ILR(data),
+            0x4011 => self.apu.set_DMC_load_counter(data),
+            0x4012 => self.apu.set_DMC_sample_address(data),
+            0x4013 => self.apu.set_DMC_sample_length(data),
+
             0x4014 => {
                 // https://wiki.nesdev.com/w/index.php/PPU_programmer_reference#OAM_DMA_.28.244014.29_.3E_write
                 // https://www.nesdev.org/wiki/PPU_OAM#DMA
@@ -216,12 +255,12 @@ impl Mem for Bus<'_> {
                     self.tick(2);
                 }
             }
-            0x4015 => {/*APU*/}
+            0x4015 => self.apu.set_status(data),
             0x4016 => {
                 self.controller_1.write(data);
                 self.controller_2.write(data);
             }
-            0x4017 => {/*APU*/}
+            0x4017 => self.apu.set_frame_counter(data),
             CARTRIDGE_START..=CARTRIDGE_END => self.rom.mapper_register_write(addr, data),
             _ => {
                 println!("Ignoring mem write at 0x{addr:X}");
