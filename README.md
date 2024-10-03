@@ -1,6 +1,7 @@
 # nes_rs
 
 ## TODO
+
 - save states
 - replay
 - no std
@@ -9,8 +10,10 @@
 - 8x16 sprites
 - more mappers
 - detect tiles for FPS automatically
+- fix cpu tests
 
 ## Useful Resources
+
 https://bugzmanov.github.io/nes_ebook/chapter_1.html
 
 https://www.nesdev.org/obelisk-6502-guide/reference.html#BNE
