@@ -1,5 +1,15 @@
 # nes_rs
 
+## TODO
+- save states
+- replay
+- no std
+- scaling
+- audio
+- 8x16 sprites
+- more mappers
+- detect tiles for FPS automatically
+
 ## Useful Resources
 https://bugzmanov.github.io/nes_ebook/chapter_1.html
 
