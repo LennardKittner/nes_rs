@@ -1,5 +1,6 @@
 use crate::apu::pulse_generator::{PulseGenerator, PulseGeneratorID};
 use crate::apu::ring_buffer::RingBuffer;
+use crate::bus::PollIRQ;
 
 mod envelope;
 mod pulse_generator;
@@ -7,10 +8,31 @@ mod ring_buffer;
 mod sweep_unit;
 mod timer;
 
+#[derive(Eq, PartialEq)]
+enum FrameCounterMode {
+    MODE5STEP,
+    MODE4STEP,
+}
+
 pub struct APU {
     pulse_generator1: PulseGenerator,
     pulse_generator2: PulseGenerator,
     ring_buffer: RingBuffer<f32, 44100>, // 1s of audio
+    cycle_in_frame: usize,
+    enable_interrupt: bool,
+    frame_counter_mode: FrameCounterMode,
+    outstanding_interrupt: bool,
+}
+
+impl PollIRQ for APU {
+    fn poll_irq(&mut self) -> bool {
+        if self.outstanding_interrupt {
+            self.outstanding_interrupt = false;
+            true
+        } else {
+            false
+        }
+    }
 }
 
 impl APU {
@@ -19,17 +41,89 @@ impl APU {
             pulse_generator1: PulseGenerator::new(PulseGeneratorID::ONE),
             pulse_generator2: PulseGenerator::new(PulseGeneratorID::TWO),
             ring_buffer: RingBuffer::new(),
+            cycle_in_frame: 0,
+            enable_interrupt: false,
+            frame_counter_mode: FrameCounterMode::MODE4STEP,
+            outstanding_interrupt: false,
         }
     }
 
     pub fn tick(&mut self, cycles: u8) {
-        self.pulse_generator1.tick(cycles);
-        self.pulse_generator2.tick(cycles);
-        self.ring_buffer.push(self.get_output());
+        for _ in 0..cycles {
+            self.cycle_in_frame += 1;
+            if self.cycle_in_frame % 2 == 1 {
+                continue;
+            }
+            if self.frame_counter_mode == FrameCounterMode::MODE5STEP {
+                self.tick_5_step()
+            } else {
+                self.tick_4_step()
+            }
+
+            self.pulse_generator1.tick();
+            self.pulse_generator2.tick();
+            self.ring_buffer.push(self.get_output());
+        }
+    }
+
+    fn tick_4_step(&mut self) {
+        match self.cycle_in_frame {
+            c if c >= 14914 => {
+                self.pulse_generator1.tick_half_frame();
+                self.pulse_generator2.tick_half_frame();
+                if self.enable_interrupt {
+                    self.outstanding_interrupt = true;
+                }
+                self.cycle_in_frame = 0;
+            }
+            c if c >= 11185 => {
+                self.pulse_generator1.tick_quarter_frame();
+                self.pulse_generator2.tick_quarter_frame();
+            }
+            c if c >= 7456 => {
+                self.pulse_generator1.tick_half_frame();
+                self.pulse_generator2.tick_half_frame();
+            }
+            c if c >= 3728 => {
+                self.pulse_generator1.tick_quarter_frame();
+                self.pulse_generator2.tick_quarter_frame();
+            }
+            _ => {}
+        }
+    }
+
+    fn tick_5_step(&mut self) {
+        match self.cycle_in_frame {
+            c if c >= 18640 => {
+                self.pulse_generator1.tick_half_frame();
+                self.pulse_generator2.tick_half_frame();
+                self.cycle_in_frame = 0;
+            }
+            c if c >= 14914 => { /* Do Nothing */ }
+            c if c >= 11185 => {
+                self.pulse_generator1.tick_quarter_frame();
+                self.pulse_generator2.tick_quarter_frame();
+            }
+            c if c >= 7456 => {
+                self.pulse_generator1.tick_half_frame();
+                self.pulse_generator2.tick_half_frame();
+            }
+            c if c >= 3728 => {
+                self.pulse_generator1.tick_quarter_frame();
+                self.pulse_generator2.tick_quarter_frame();
+            }
+            _ => {}
+        }
     }
 
     pub fn get_output(&self) -> f32 {
-        self.pulse_generator1.get_output() + self.pulse_generator2.get_output()
+        let pulse1 = self.pulse_generator1.get_output();
+        let pulse2 = self.pulse_generator2.get_output();
+        if pulse1 + pulse2 <= 0f32 {
+            0f32
+        } else {
+            95.88f32 / ((8128f32 / (pulse1 + pulse2)) + 100f32)
+        }
     }
 
     pub fn next_sample(&mut self) -> f32 {
@@ -63,7 +157,12 @@ impl APU {
     /// MI-- ----
     /// Mode (M, 0 = 4-step, 1 = 5-step), IRQ inhibit flag (I)
     pub fn set_frame_counter(&mut self, value: u8) {
-        //todo!()
+        if value & 0b1000_0000 != 0 {
+            self.frame_counter_mode = FrameCounterMode::MODE4STEP;
+        } else {
+            self.frame_counter_mode = FrameCounterMode::MODE5STEP;
+        }
+        self.enable_interrupt = value & 0b0100_0000 == 0;
     }
 
     /// DDLC VVVV

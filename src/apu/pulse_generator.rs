@@ -81,20 +81,23 @@ impl PulseGenerator {
         self.length_counter_value > 0
     }
 
-    pub fn tick(&mut self, cycles: u8) {
-        for i in 0..cycles {
-            if self.timer.tick(1) {
-                self.duty_position = (self.duty_position + 1) % 8;
-            }
-            if self.length_counter_value > 0
-                && !self.length_counter_halt
-                && self.length_counter_enabled
-            {
-                self.length_counter_value -= 1;
-            }
-            self.timer.data = self.sweep_unit.tick(self.timer.data);
-            self.envelope_generator.tick();
+    pub fn tick(&mut self) {
+        if self.timer.tick(1) {
+            self.duty_position = (self.duty_position + 1) % 8;
         }
+    }
+
+    pub fn tick_half_frame(&mut self) {
+        self.tick_quarter_frame();
+        if self.length_counter_value > 0 && !self.length_counter_halt && self.length_counter_enabled
+        {
+            self.length_counter_value -= 1;
+        }
+        self.timer.data = self.sweep_unit.tick(self.timer.data);
+    }
+
+    pub fn tick_quarter_frame(&mut self) {
+        self.envelope_generator.tick();
     }
 
     pub fn get_output(&self) -> f32 {
