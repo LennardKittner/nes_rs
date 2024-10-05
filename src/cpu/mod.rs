@@ -1,6 +1,6 @@
-use crate::bus::{Bus, Mem, PollInterrupt};
+use crate::bus::{Bus, Mem, PollIRQ, PollNMI};
 use crate::cpu::addressing_mode::{page_cross, AddressingMode};
-use crate::cpu::interrupts::{Interrupt, NMI_INTERRUPT, RESET_INTERRUPT};
+use crate::cpu::interrupts::{Interrupt, IRQ_INTERRUPT, NMI_INTERRUPT, RESET_INTERRUPT};
 use crate::cpu::opcodes::CPU_INSTRUCTIONS;
 use crate::ppu::palette::SystemPalette;
 use crate::rom::Rom;
@@ -115,6 +115,9 @@ impl CPU<'_> {
         loop {
             if self.bus.poll_nmi_status() {
                 self.handle_interrupt(NMI_INTERRUPT);
+            }
+            if self.bus.poll_irq() {
+                self.handle_interrupt(IRQ_INTERRUPT);
             }
 
             callback(self);

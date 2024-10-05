@@ -14,6 +14,7 @@ use sdl2::pixels::PixelFormatEnum;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
+use std::sync::Arc;
 use std::{env, io};
 
 struct AudioWrapper {
@@ -134,19 +135,7 @@ fn main() {
         samples: None,
     };
 
-    let audio_device = audio_subsystem
-        .open_playback(None, &desired_spec, |spec| AudioWrapper {
-            func: Box::new(|out: &mut [f32]| {
-                for x in out {
-                    *x = 1.0;
-                }
-            }),
-        })
-        .unwrap();
-
-    audio_device.resume();
-
-    let bus = Bus::new(
+    let mut bus = Bus::new(
         rom,
         palette,
         move |_: &PPU, frame: &Frame, fps_frame: &FPSFrame| {
@@ -166,7 +155,20 @@ fn main() {
         poll_controller_input,
     );
 
+    let apu = Arc::clone(&bus.apu);
+
+    let audio_device = audio_subsystem
+        .open_playback(None, &desired_spec, |spec| AudioWrapper {
+            func: Box::new(move |out: &mut [f32]| {
+                for x in out {
+                    *x = apu.lock().unwrap().next_sample();
+                }
+            }),
+        })
+        .unwrap();
+
     let mut cpu = CPU::new_with_bus(bus);
+    audio_device.resume();
     cpu.reset();
     cpu.run();
 }

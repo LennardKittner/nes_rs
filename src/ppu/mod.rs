@@ -7,7 +7,7 @@ pub mod sprite;
 pub mod status;
 mod t_register;
 
-use crate::bus::PollInterrupt;
+use crate::bus::PollNMI;
 use crate::ppu::addr::AddressRegister;
 use crate::ppu::control::ControlRegister;
 use crate::ppu::mask::MaskRegister;
@@ -40,7 +40,7 @@ pub struct PPU {
     outstanding_interrupt: bool,
 }
 
-impl PollInterrupt for PPU {
+impl PollNMI for PPU {
     fn poll_nmi_status(&mut self) -> bool {
         if self.outstanding_interrupt {
             self.outstanding_interrupt = false;
