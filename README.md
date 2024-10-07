@@ -11,6 +11,7 @@
 - more mappers
 - detect tiles for FPS automatically
 - fix cpu tests
+- iNES2
 
 ## Useful Resources
 
