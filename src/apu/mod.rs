@@ -1,6 +1,7 @@
 use crate::apu::noise_generator::NoiseGenerator;
 use crate::apu::pulse_generator::{PulseGenerator, PulseGeneratorID};
 use crate::apu::ring_buffer::RingBuffer;
+use crate::apu::triangle_generator::TriangleGenerator;
 use crate::bus::PollIRQ;
 
 mod envelope;
@@ -10,6 +11,7 @@ mod pulse_generator;
 mod ring_buffer;
 mod sweep_unit;
 mod timer;
+mod triangle_generator;
 
 #[derive(Eq, PartialEq)]
 enum FrameCounterMode {
@@ -21,6 +23,7 @@ pub struct APU {
     pulse_generator1: PulseGenerator,
     pulse_generator2: PulseGenerator,
     noise_generator: NoiseGenerator,
+    triangle_generator: TriangleGenerator,
     ring_buffer: RingBuffer<f32, 44100>, // 1s of audio
     cycle_in_frame: usize,
     enable_interrupt: bool,
@@ -45,6 +48,7 @@ impl APU {
             pulse_generator1: PulseGenerator::new(PulseGeneratorID::One),
             pulse_generator2: PulseGenerator::new(PulseGeneratorID::Two),
             noise_generator: NoiseGenerator::new(),
+            triangle_generator: TriangleGenerator::new(),
             ring_buffer: RingBuffer::new(),
             cycle_in_frame: 0,
             enable_interrupt: false,
@@ -56,6 +60,7 @@ impl APU {
     pub fn tick(&mut self, cycles: u8) {
         for _ in 0..cycles {
             self.cycle_in_frame += 1;
+            self.triangle_generator.tick(); // tick every cpu cycle
             if self.cycle_in_frame % 2 == 1 {
                 continue;
             }
@@ -72,32 +77,32 @@ impl APU {
         }
     }
 
+    fn tick_all_channels_half_frame(&mut self) {
+        self.pulse_generator1.tick_half_frame();
+        self.pulse_generator2.tick_half_frame();
+        self.noise_generator.tick_half_frame();
+        self.triangle_generator.tick_half_frame();
+    }
+
+    fn tick_all_channels_quater_frame(&mut self) {
+        self.pulse_generator1.tick_quarter_frame();
+        self.pulse_generator2.tick_quarter_frame();
+        self.noise_generator.tick_quarter_frame();
+        self.triangle_generator.tick_quarter_frame();
+    }
+
     fn tick_4_step(&mut self) {
         match self.cycle_in_frame {
             c if c >= 14914 => {
-                self.pulse_generator1.tick_half_frame();
-                self.pulse_generator2.tick_half_frame();
-                self.noise_generator.tick_half_frame();
+                self.tick_all_channels_half_frame();
                 if self.enable_interrupt {
                     self.outstanding_interrupt = true;
                 }
                 self.cycle_in_frame = 0;
             }
-            c if c >= 11185 => {
-                self.pulse_generator1.tick_quarter_frame();
-                self.pulse_generator2.tick_quarter_frame();
-                self.noise_generator.tick_quarter_frame();
-            }
-            c if c >= 7456 => {
-                self.pulse_generator1.tick_half_frame();
-                self.pulse_generator2.tick_half_frame();
-                self.noise_generator.tick_half_frame();
-            }
-            c if c >= 3728 => {
-                self.pulse_generator1.tick_quarter_frame();
-                self.pulse_generator2.tick_quarter_frame();
-                self.noise_generator.tick_quarter_frame();
-            }
+            c if c >= 11185 => self.tick_all_channels_quater_frame(),
+            c if c >= 7456 => self.tick_all_channels_half_frame(),
+            c if c >= 3728 => self.tick_all_channels_quater_frame(),
             _ => {}
         }
     }
@@ -105,27 +110,13 @@ impl APU {
     fn tick_5_step(&mut self) {
         match self.cycle_in_frame {
             c if c >= 18640 => {
-                self.pulse_generator1.tick_half_frame();
-                self.pulse_generator2.tick_half_frame();
-                self.noise_generator.tick_half_frame();
+                self.tick_all_channels_half_frame();
                 self.cycle_in_frame = 0;
             }
             c if c >= 14914 => { /* Do Nothing */ }
-            c if c >= 11185 => {
-                self.pulse_generator1.tick_quarter_frame();
-                self.pulse_generator2.tick_quarter_frame();
-                self.noise_generator.tick_quarter_frame();
-            }
-            c if c >= 7456 => {
-                self.pulse_generator1.tick_half_frame();
-                self.pulse_generator2.tick_half_frame();
-                self.noise_generator.tick_half_frame();
-            }
-            c if c >= 3728 => {
-                self.pulse_generator1.tick_quarter_frame();
-                self.pulse_generator2.tick_quarter_frame();
-                self.noise_generator.tick_quarter_frame();
-            }
+            c if c >= 11185 => self.tick_all_channels_quater_frame(),
+            c if c >= 7456 => self.tick_all_channels_half_frame(),
+            c if c >= 3728 => self.tick_all_channels_quater_frame(),
             _ => {}
         }
     }
@@ -140,12 +131,13 @@ impl APU {
         };
 
         let noise = self.noise_generator.get_output();
-        let triangle = 0f32;
+        let triangle = self.triangle_generator.get_output();
         let dmc = 0f32;
         let tnd_out = if noise <= 0f32 && triangle <= 0f32 && dmc <= 0f32 {
             0f32
         } else {
-            159.79f32 / (1f32 / ((triangle / 8227f32) + (noise / 12241f32) + (dmc / 22638f32)) + 100f32)
+            159.79f32
+                / (1f32 / ((triangle / 8227f32) + (noise / 12241f32) + (dmc / 22638f32)) + 100f32)
         };
 
         pulse_out + tnd_out
@@ -165,6 +157,9 @@ impl APU {
         if self.pulse_generator2.is_active() {
             status |= 0b0000_0010;
         }
+        if self.triangle_generator.is_active() {
+            status |= 0b0000_0100;
+        }
         if self.noise_generator.is_active() {
             status |= 0b0000_1000;
         }
@@ -179,6 +174,8 @@ impl APU {
             .set_length_counter_enabled(value & 0b0000_0001 != 0);
         self.pulse_generator2
             .set_length_counter_enabled(value & 0b0000_0010 != 0);
+        self.triangle_generator
+            .set_length_counter_enabled(value & 0b0000_0100 != 0);
         self.noise_generator
             .set_length_counter_enabled(value & 0b0000_1000 != 0);
         //todo!()
@@ -266,19 +263,25 @@ impl APU {
     /// CRRR RRRR
     /// Length counter halt / linear counter control (C), linear counter load (R)
     pub fn set_triangle_CR(&mut self, value: u8) {
-        //todo!()
+        self.triangle_generator
+            .set_length_counter_halt(value & 0b1000_0000 != 0);
+        self.triangle_generator
+            .set_control_flag(value & 0b1000_0000 != 0);
+        self.triangle_generator
+            .set_counter_reload_value(value & 0b0111_1111);
     }
 
     /// TTTT TTTT
     /// Timer low (T)
     pub fn set_triangle_timer_low(&mut self, value: u8) {
-        //todo!()
+        self.triangle_generator.set_timer_lower(value);
     }
 
     /// LLLL LTTT
     /// Length counter load (L), timer high (T), set linear counter reload flag
     pub fn set_triangle_LT(&mut self, value: u8) {
-        //todo!()
+        self.triangle_generator.set_timer_upper(value & 0b0000_0111);
+        self.triangle_generator.set_length_counter_value(value >> 3);
     }
 
     /// --LC VVVV
