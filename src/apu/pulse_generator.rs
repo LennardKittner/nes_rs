@@ -90,9 +90,7 @@ impl PulseGenerator {
     pub fn get_output(&self) -> f32 {
         let patter = Self::DUTY_PATTERNS[self.duty as usize];
 
-        if self.sweep_unit.should_mute(self.timer.data)
-            || self.length_counter.get_value() == 0 && !self.length_counter.is_halted()
-        {
+        if self.sweep_unit.should_mute(self.timer.data) || self.length_counter.get_value() == 0 {
             return 0f32;
         }
 
