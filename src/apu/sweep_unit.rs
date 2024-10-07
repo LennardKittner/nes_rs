@@ -74,7 +74,7 @@ impl SweepUnit {
         if self.negate {
             //TODO: neg on 16 bit the same as neg on 11 bit?
             result = result.wrapping_neg();
-            if self.pulse_generator_id == PulseGeneratorID::ONE {
+            if self.pulse_generator_id == PulseGeneratorID::One {
                 result = result.wrapping_sub(1);
             }
         }

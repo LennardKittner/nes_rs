@@ -4,8 +4,8 @@ use crate::apu::timer::Timer;
 
 #[derive(Debug, Eq, Copy, Clone, PartialEq)]
 pub enum PulseGeneratorID {
-    ONE,
-    TWO,
+    One,
+    Two,
 }
 
 pub struct PulseGenerator {
@@ -89,8 +89,7 @@ impl PulseGenerator {
 
     pub fn tick_half_frame(&mut self) {
         self.tick_quarter_frame();
-        if self.length_counter_value > 0 && !self.length_counter_halt && self.length_counter_enabled
-        {
+        if self.length_counter_value > 0 && !self.length_counter_halt {
             self.length_counter_value -= 1;
         }
         self.timer.data = self.sweep_unit.tick(self.timer.data);
@@ -103,16 +102,13 @@ impl PulseGenerator {
     pub fn get_output(&self) -> f32 {
         let patter = Self::DUTY_PATTERNS[self.duty as usize];
 
-        //TODO: what about the rest
-        if self.sweep_unit.should_mute(self.timer.data) || self.length_counter_value == 0 {
-            return 0.0;
+        if self.sweep_unit.should_mute(self.timer.data)
+            || self.length_counter_value == 0 && !self.length_counter_halt
+        {
+            return 0f32;
         }
 
-        (if patter[self.duty_position] == 1 {
-            1f32
-        } else {
-            0f32
-        } * self.envelope_generator.get_volume_normalized())
+        patter[self.duty_position] as f32 * self.envelope_generator.get_volume_normalized()
     }
 
     pub fn set_sweep_parameters(&mut self, enabled: bool, negate: bool, shift: u8, period: u8) {

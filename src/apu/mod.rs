@@ -38,8 +38,8 @@ impl PollIRQ for APU {
 impl APU {
     pub fn new() -> APU {
         Self {
-            pulse_generator1: PulseGenerator::new(PulseGeneratorID::ONE),
-            pulse_generator2: PulseGenerator::new(PulseGeneratorID::TWO),
+            pulse_generator1: PulseGenerator::new(PulseGeneratorID::One),
+            pulse_generator2: PulseGenerator::new(PulseGeneratorID::Two),
             ring_buffer: RingBuffer::new(),
             cycle_in_frame: 0,
             enable_interrupt: false,
