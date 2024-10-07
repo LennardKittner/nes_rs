@@ -76,6 +76,8 @@ impl<'a> Bus<'a> {
 
     pub fn tick(&mut self, cycles: u8) {
         self.cycles += cycles as usize;
+        self.apu.lock().unwrap().tick(cycles);
+        
         let vblank_before = self.ppu.is_in_vertical_blank();
         let next_scanline = self.ppu.tick(cycles * 3);
         let vblank_after = self.ppu.is_in_vertical_blank();
