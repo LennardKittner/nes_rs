@@ -1,8 +1,11 @@
+use crate::apu::noise_generator::NoiseGenerator;
 use crate::apu::pulse_generator::{PulseGenerator, PulseGeneratorID};
 use crate::apu::ring_buffer::RingBuffer;
 use crate::bus::PollIRQ;
 
 mod envelope;
+mod length_counter;
+mod noise_generator;
 mod pulse_generator;
 mod ring_buffer;
 mod sweep_unit;
@@ -17,6 +20,7 @@ enum FrameCounterMode {
 pub struct APU {
     pulse_generator1: PulseGenerator,
     pulse_generator2: PulseGenerator,
+    noise_generator: NoiseGenerator,
     ring_buffer: RingBuffer<f32, 44100>, // 1s of audio
     cycle_in_frame: usize,
     enable_interrupt: bool,
@@ -40,6 +44,7 @@ impl APU {
         Self {
             pulse_generator1: PulseGenerator::new(PulseGeneratorID::One),
             pulse_generator2: PulseGenerator::new(PulseGeneratorID::Two),
+            noise_generator: NoiseGenerator::new(),
             ring_buffer: RingBuffer::new(),
             cycle_in_frame: 0,
             enable_interrupt: false,
@@ -62,6 +67,7 @@ impl APU {
 
             self.pulse_generator1.tick();
             self.pulse_generator2.tick();
+            self.noise_generator.tick();
             self.ring_buffer.push(self.get_output());
         }
     }
@@ -71,6 +77,7 @@ impl APU {
             c if c >= 14914 => {
                 self.pulse_generator1.tick_half_frame();
                 self.pulse_generator2.tick_half_frame();
+                self.noise_generator.tick_half_frame();
                 if self.enable_interrupt {
                     self.outstanding_interrupt = true;
                 }
@@ -79,14 +86,17 @@ impl APU {
             c if c >= 11185 => {
                 self.pulse_generator1.tick_quarter_frame();
                 self.pulse_generator2.tick_quarter_frame();
+                self.noise_generator.tick_quarter_frame();
             }
             c if c >= 7456 => {
                 self.pulse_generator1.tick_half_frame();
                 self.pulse_generator2.tick_half_frame();
+                self.noise_generator.tick_half_frame();
             }
             c if c >= 3728 => {
                 self.pulse_generator1.tick_quarter_frame();
                 self.pulse_generator2.tick_quarter_frame();
+                self.noise_generator.tick_quarter_frame();
             }
             _ => {}
         }
@@ -97,20 +107,24 @@ impl APU {
             c if c >= 18640 => {
                 self.pulse_generator1.tick_half_frame();
                 self.pulse_generator2.tick_half_frame();
+                self.noise_generator.tick_half_frame();
                 self.cycle_in_frame = 0;
             }
             c if c >= 14914 => { /* Do Nothing */ }
             c if c >= 11185 => {
                 self.pulse_generator1.tick_quarter_frame();
                 self.pulse_generator2.tick_quarter_frame();
+                self.noise_generator.tick_quarter_frame();
             }
             c if c >= 7456 => {
                 self.pulse_generator1.tick_half_frame();
                 self.pulse_generator2.tick_half_frame();
+                self.noise_generator.tick_half_frame();
             }
             c if c >= 3728 => {
                 self.pulse_generator1.tick_quarter_frame();
                 self.pulse_generator2.tick_quarter_frame();
+                self.noise_generator.tick_quarter_frame();
             }
             _ => {}
         }
@@ -119,11 +133,22 @@ impl APU {
     pub fn get_output(&self) -> f32 {
         let pulse1 = self.pulse_generator1.get_output();
         let pulse2 = self.pulse_generator2.get_output();
-        if pulse1 + pulse2 <= 0f32 {
+        let pulse_out = if pulse1 + pulse2 <= 0f32 {
             0f32
         } else {
             95.88f32 / ((8128f32 / (pulse1 + pulse2)) + 100f32)
-        }
+        };
+
+        let noise = self.noise_generator.get_output();
+        let triangle = 0f32;
+        let dmc = 0f32;
+        let tnd_out = if noise <= 0f32 && triangle <= 0f32 && dmc <= 0f32 {
+            0f32
+        } else {
+            159.79f32 / (1f32 / ((triangle / 8227f32) + (noise / 12241f32) + (dmc / 22638f32)) + 100f32)
+        };
+
+        pulse_out + tnd_out
     }
 
     pub fn next_sample(&mut self) -> f32 {
@@ -140,6 +165,9 @@ impl APU {
         if self.pulse_generator2.is_active() {
             status |= 0b0000_0010;
         }
+        if self.noise_generator.is_active() {
+            status |= 0b0000_1000;
+        }
         //todo!()
         status
     }
@@ -151,6 +179,8 @@ impl APU {
             .set_length_counter_enabled(value & 0b0000_0001 != 0);
         self.pulse_generator2
             .set_length_counter_enabled(value & 0b0000_0010 != 0);
+        self.noise_generator
+            .set_length_counter_enabled(value & 0b0000_1000 != 0);
         //todo!()
     }
 
@@ -251,22 +281,26 @@ impl APU {
         //todo!()
     }
 
-    /// -LC VVVV
+    /// --LC VVVV
     /// Envelope loop / length counter halt (L), constant volume (C), volume/envelope (V)
     pub fn set_noise_LCV(&mut self, value: u8) {
-        //todo!()
+        let l = value & 0b0010_0000 != 0;
+        self.noise_generator.set_length_counter_halt(l);
+        self.noise_generator
+            .set_envelope_parameters(l, value & 0b0001_0000 != 0, value & 0x0F);
     }
 
     /// L--- PPPP
     /// Loop noise (L), noise period (P)
     pub fn set_noise_LP(&mut self, value: u8) {
-        //todo!()
+        self.noise_generator.set_loop_mode(value & 0b1000_0000 != 0);
+        self.noise_generator.set_period(value & 0xF);
     }
 
     /// LLLL L---
     /// Length counter load (L)
     pub fn set_noise_length_counter_load(&mut self, value: u8) {
-        //todo!()
+        self.noise_generator.set_length_counter_value(value >> 3);
     }
 
     /// IL-- RRRR
