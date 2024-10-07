@@ -18,7 +18,9 @@ impl LengthCounter {
     }
 
     pub fn set_length(&mut self, value: u8) {
-        self.value = Self::LENGTH_COUNTER_TABLE[value as usize];
+        if self.enabled {
+            self.value = Self::LENGTH_COUNTER_TABLE[value as usize];
+        }
     }
 
     pub fn set_halt(&mut self, halt: bool) {
