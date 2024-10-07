@@ -1,4 +1,5 @@
 use crate::apu::envelope::EnvelopeGenerator;
+use crate::apu::length_counter::LengthCounter;
 use crate::apu::sweep_unit::SweepUnit;
 use crate::apu::timer::Timer;
 
@@ -13,18 +14,12 @@ pub struct PulseGenerator {
     sweep_unit: SweepUnit,
     pulse_generator_id: PulseGeneratorID,
     envelope_generator: EnvelopeGenerator,
+    length_counter: LengthCounter,
     duty: u8,
     duty_position: usize,
-    length_counter_value: u8,
-    length_counter_halt: bool,
-    length_counter_enabled: bool,
 }
 
 impl PulseGenerator {
-    const LENGTH_COUNTER_TABLE: [u8; 32] = [
-        10, 254, 20, 2, 40, 4, 80, 6, 160, 8, 60, 10, 14, 12, 26, 14, 12, 16, 24, 18, 48, 20, 96,
-        22, 192, 24, 72, 26, 16, 28, 32, 30,
-    ];
 
     const DUTY_PATTERNS: [[u8; 8]; 4] = [
         [0, 1, 0, 0, 0, 0, 0, 0], // 12.5% duty
@@ -38,12 +33,10 @@ impl PulseGenerator {
             timer: Timer::new(),
             sweep_unit: SweepUnit::new(pulse_generator_id),
             envelope_generator: EnvelopeGenerator::new(),
+            length_counter: LengthCounter::new(),
             pulse_generator_id,
             duty: 0,
             duty_position: 0,
-            length_counter_value: 0,
-            length_counter_halt: false,
-            length_counter_enabled: false,
         }
     }
 
@@ -52,19 +45,16 @@ impl PulseGenerator {
     }
 
     pub fn set_length_counter_value(&mut self, value: u8) {
-        self.length_counter_value = Self::LENGTH_COUNTER_TABLE[value as usize];
+        self.length_counter.set_length(value);
         self.envelope_generator.set_start(true);
     }
 
     pub fn set_length_counter_halt(&mut self, halt: bool) {
-        self.length_counter_halt = halt;
+        self.length_counter.set_halt(halt);
     }
 
     pub fn set_length_counter_enabled(&mut self, enabled: bool) {
-        self.length_counter_enabled = enabled;
-        if !enabled {
-            self.length_counter_value = 0;
-        }
+        self.length_counter.set_enabled(enabled);
     }
 
     pub fn set_timer_lower(&mut self, timer: u8) {
@@ -78,7 +68,7 @@ impl PulseGenerator {
     }
 
     pub fn is_active(&self) -> bool {
-        self.length_counter_value > 0
+        self.length_counter.get_value() > 0
     }
 
     pub fn tick(&mut self) {
@@ -89,9 +79,7 @@ impl PulseGenerator {
 
     pub fn tick_half_frame(&mut self) {
         self.tick_quarter_frame();
-        if self.length_counter_value > 0 && !self.length_counter_halt {
-            self.length_counter_value -= 1;
-        }
+        self.length_counter.tick();
         self.timer.data = self.sweep_unit.tick(self.timer.data);
     }
 
@@ -103,7 +91,7 @@ impl PulseGenerator {
         let patter = Self::DUTY_PATTERNS[self.duty as usize];
 
         if self.sweep_unit.should_mute(self.timer.data)
-            || self.length_counter_value == 0 && !self.length_counter_halt
+            || self.length_counter.get_value() == 0 && !self.length_counter.is_halted()
         {
             return 0f32;
         }
