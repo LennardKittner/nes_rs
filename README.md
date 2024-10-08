@@ -12,6 +12,8 @@
 - detect tiles for FPS automatically
 - fix cpu tests
 - iNES2
+- frame skip on fast-forward
+- frame skip on slow hardware
 
 ## Useful Resources
 
@@ -24,3 +26,7 @@ https://www.nesdev.org/wiki/Nesdev_Wiki
 https://www.nesdev.org/undocumented_opcodes.txt
 
 https://www.oxyron.de/html/opcodes02.html
+
+https://forums.nesdev.org/viewtopic.php?t=20019
+
+https://www.nesdev.org/NESDoc.pdf
