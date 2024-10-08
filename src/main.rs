@@ -135,7 +135,7 @@ fn main() {
         samples: None,
     };
 
-    let mut bus = Bus::new(
+    let bus = Bus::new(
         rom,
         palette,
         move |_: &PPU, frame: &Frame, fps_frame: &FPSFrame| {
@@ -155,13 +155,13 @@ fn main() {
         poll_controller_input,
     );
 
-    let apu = Arc::clone(&bus.apu);
+    let audio_buffer = Arc::clone(&bus.audio_ring_buffer);
 
     let audio_device = audio_subsystem
-        .open_playback(None, &desired_spec, |spec| AudioWrapper {
+        .open_playback(None, &desired_spec, |_spec| AudioWrapper {
             func: Box::new(move |out: &mut [f32]| {
                 for x in out {
-                    *x = apu.lock().unwrap().next_sample();
+                    *x = audio_buffer.lock().unwrap().next().unwrap_or(0f32);
                 }
             }),
         })

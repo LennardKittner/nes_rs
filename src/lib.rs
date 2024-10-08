@@ -8,3 +8,4 @@ pub mod rendering;
 mod rolling_avg;
 pub mod rom;
 pub mod trace;
+mod ring_buffer;

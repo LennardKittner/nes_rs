@@ -1,14 +1,15 @@
+use std::sync::{Arc, Mutex};
 use crate::apu::noise_generator::NoiseGenerator;
 use crate::apu::pulse_generator::{PulseGenerator, PulseGeneratorID};
-use crate::apu::ring_buffer::RingBuffer;
 use crate::apu::triangle_generator::TriangleGenerator;
 use crate::bus::PollIRQ;
+use crate::ring_buffer::RingBuffer;
+use crate::bus::AUDIO_BUFFER_SIZE;
 
 mod envelope;
 mod length_counter;
 mod noise_generator;
 mod pulse_generator;
-mod ring_buffer;
 mod sweep_unit;
 mod timer;
 mod triangle_generator;
@@ -24,7 +25,6 @@ pub struct APU {
     pulse_generator2: PulseGenerator,
     noise_generator: NoiseGenerator,
     triangle_generator: TriangleGenerator,
-    ring_buffer: RingBuffer<f32, 44100>, // 1s of audio
     cycle_in_frame: usize,
     enable_interrupt: bool,
     frame_counter_mode: FrameCounterMode,
@@ -49,7 +49,6 @@ impl APU {
             pulse_generator2: PulseGenerator::new(PulseGeneratorID::Two),
             noise_generator: NoiseGenerator::new(),
             triangle_generator: TriangleGenerator::new(),
-            ring_buffer: RingBuffer::new(),
             cycle_in_frame: 0,
             enable_interrupt: false,
             frame_counter_mode: FrameCounterMode::MODE4STEP,
@@ -57,7 +56,7 @@ impl APU {
         }
     }
 
-    pub fn tick(&mut self, cycles: u8) {
+    pub fn tick(&mut self, cycles: u8, ring_buffer: Arc<Mutex<RingBuffer<f32, AUDIO_BUFFER_SIZE>>>) {
         for _ in 0..cycles {
             self.cycle_in_frame += 1;
             self.triangle_generator.tick(); // tick every cpu cycle
@@ -73,7 +72,7 @@ impl APU {
             self.pulse_generator1.tick();
             self.pulse_generator2.tick();
             self.noise_generator.tick();
-            self.ring_buffer.push(self.get_output());
+            ring_buffer.lock().unwrap().push(self.get_output());
         }
     }
 
@@ -141,10 +140,6 @@ impl APU {
         };
 
         pulse_out + tnd_out
-    }
-
-    pub fn next_sample(&mut self) -> f32 {
-        self.ring_buffer.next().unwrap_or(0f32)
     }
 
     /// ---D NT21

@@ -8,8 +8,11 @@ use crate::rolling_avg::RollingAvg;
 use crate::rom::Rom;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+use crate::ring_buffer::RingBuffer;
 
 const FRAME_DURATION: Duration = Duration::from_nanos(16666667);
+
+pub const AUDIO_BUFFER_SIZE: usize = 44100;
 type GraphicsCallback<'a> = Box<dyn FnMut(&PPU, &Frame, &FPSFrame) + 'a>;
 type ControllerCallback<'a> = Box<dyn FnMut(&mut Controller, &mut Controller) + 'a>;
 
@@ -17,7 +20,7 @@ pub struct Bus<'a> {
     cpu_vram: [u8; 2048],
     rom: Rom,
     ppu: PPU,
-    pub apu: Arc<Mutex<APU>>,
+    apu: APU,
     frame: Frame,
     fps_frame: FPSFrame,
     current_scanline: Scanline,
@@ -31,6 +34,7 @@ pub struct Bus<'a> {
     rendering_overhead: RollingAvg<u64>,
     fps: RollingAvg<f64>,
     frame_counter: u64,
+    pub audio_ring_buffer: Arc<Mutex<RingBuffer<f32, AUDIO_BUFFER_SIZE>>>, // 1s of audio
 }
 
 impl<'a> Bus<'a> {
@@ -50,7 +54,7 @@ impl<'a> Bus<'a> {
             rom,
             cycles: 0,
             ppu,
-            apu: Arc::new(Mutex::new(APU::new())),
+            apu: APU::new(),
             frame: Frame::default(),
             fps_frame: FPSFrame::new(0, 0xA, [0x0F, 0x30, 0x21, 0x0F]),
             current_scanline: Scanline::new(),
@@ -63,6 +67,7 @@ impl<'a> Bus<'a> {
             rendering_overhead: RollingAvg::new(60),
             fps: RollingAvg::new(60),
             frame_counter: 0,
+            audio_ring_buffer: Arc::new(Mutex::new(RingBuffer::new())),
         }
     }
 
@@ -76,8 +81,8 @@ impl<'a> Bus<'a> {
 
     pub fn tick(&mut self, cycles: u8) {
         self.cycles += cycles as usize;
-        self.apu.lock().unwrap().tick(cycles);
-        
+        self.apu.tick(cycles, Arc::clone(&self.audio_ring_buffer));
+
         let vblank_before = self.ppu.is_in_vertical_blank();
         let next_scanline = self.ppu.tick(cycles * 3);
         let vblank_after = self.ppu.is_in_vertical_blank();
@@ -171,7 +176,7 @@ impl PollNMI for Bus<'_> {
 
 impl PollIRQ for Bus<'_> {
     fn poll_irq(&mut self) -> bool {
-        self.apu.lock().unwrap().poll_irq()
+        self.apu.poll_irq()
     }
 }
 
@@ -195,7 +200,7 @@ impl Mem for Bus<'_> {
                 self.mem_read(mirror_down_addr)
             }
             APU_REGISTERS_START..=APU_REGISTERS_END => 0,
-            0x4015 => self.apu.lock().unwrap().get_status(),
+            0x4015 => self.apu.get_status(),
             0x4016 => {
                 (self.controller_callback)(&mut self.controller_1, &mut self.controller_2);
                 self.controller_1.read()
@@ -233,34 +238,34 @@ impl Mem for Bus<'_> {
             //APU:
 
             // pulse 1
-            0x4000 => self.apu.lock().unwrap().set_pulse1_DLCV(data),
-            0x4001 => self.apu.lock().unwrap().set_pulse1_EPNS(data),
-            0x4002 => self.apu.lock().unwrap().set_pulse1_timer_low(data),
-            0x4003 => self.apu.lock().unwrap().set_pulse1_LT(data),
+            0x4000 => self.apu.set_pulse1_DLCV(data),
+            0x4001 => self.apu.set_pulse1_EPNS(data),
+            0x4002 => self.apu.set_pulse1_timer_low(data),
+            0x4003 => self.apu.set_pulse1_LT(data),
 
             // pulse 2
-            0x4004 => self.apu.lock().unwrap().set_pulse2_DLCV(data),
-            0x4005 => self.apu.lock().unwrap().set_pulse2_EPNS(data),
-            0x4006 => self.apu.lock().unwrap().set_pulse2_timer_low(data),
-            0x4007 => self.apu.lock().unwrap().set_pulse2_LT(data),
+            0x4004 => self.apu.set_pulse2_DLCV(data),
+            0x4005 => self.apu.set_pulse2_EPNS(data),
+            0x4006 => self.apu.set_pulse2_timer_low(data),
+            0x4007 => self.apu.set_pulse2_LT(data),
 
             // triangle
-            0x4008 => self.apu.lock().unwrap().set_triangle_CR(data),
+            0x4008 => self.apu.set_triangle_CR(data),
             0x4009 => (), // unused
-            0x400A => self.apu.lock().unwrap().set_triangle_timer_low(data),
-            0x400B => self.apu.lock().unwrap().set_triangle_LT(data),
+            0x400A => self.apu.set_triangle_timer_low(data),
+            0x400B => self.apu.set_triangle_LT(data),
 
             // noise
-            0x400C => self.apu.lock().unwrap().set_noise_LCV(data),
+            0x400C => self.apu.set_noise_LCV(data),
             0x400D => (), // unused
-            0x400E => self.apu.lock().unwrap().set_noise_LP(data),
-            0x400F => self.apu.lock().unwrap().set_noise_length_counter_load(data),
+            0x400E => self.apu.set_noise_LP(data),
+            0x400F => self.apu.set_noise_length_counter_load(data),
 
             // DMC
-            0x4010 => self.apu.lock().unwrap().set_DMC_ILR(data),
-            0x4011 => self.apu.lock().unwrap().set_DMC_load_counter(data),
-            0x4012 => self.apu.lock().unwrap().set_DMC_sample_address(data),
-            0x4013 => self.apu.lock().unwrap().set_DMC_sample_length(data),
+            0x4010 => self.apu.set_DMC_ILR(data),
+            0x4011 => self.apu.set_DMC_load_counter(data),
+            0x4012 => self.apu.set_DMC_sample_address(data),
+            0x4013 => self.apu.set_DMC_sample_length(data),
 
             0x4014 => {
                 // https://wiki.nesdev.com/w/index.php/PPU_programmer_reference#OAM_DMA_.28.244014.29_.3E_write
@@ -279,12 +284,12 @@ impl Mem for Bus<'_> {
                     self.tick(2);
                 }
             }
-            0x4015 => self.apu.lock().unwrap().set_status(data),
+            0x4015 => self.apu.set_status(data),
             0x4016 => {
                 self.controller_1.write(data);
                 self.controller_2.write(data);
             }
-            0x4017 => self.apu.lock().unwrap().set_frame_counter(data),
+            0x4017 => self.apu.set_frame_counter(data),
             CARTRIDGE_START..=CARTRIDGE_END => self.rom.mapper_register_write(addr, data),
             _ => {
                 println!("Ignoring mem write at 0x{addr:X}");
