@@ -1,11 +1,10 @@
-use std::sync::{Arc, Mutex};
+use crate::apu::data_modulation_channel::DataModulationChannel;
 use crate::apu::noise_generator::NoiseGenerator;
 use crate::apu::pulse_generator::{PulseGenerator, PulseGeneratorID};
 use crate::apu::triangle_generator::TriangleGenerator;
-use crate::bus::PollIRQ;
-use crate::ring_buffer::RingBuffer;
-use crate::bus::AUDIO_BUFFER_SIZE;
+use crate::bus::{Bus, PollIRQ};
 
+mod data_modulation_channel;
 mod envelope;
 mod length_counter;
 mod noise_generator;
@@ -25,6 +24,7 @@ pub struct APU {
     pulse_generator2: PulseGenerator,
     noise_generator: NoiseGenerator,
     triangle_generator: TriangleGenerator,
+    data_modulation_channel: DataModulationChannel,
     cycle_in_frame: usize,
     enable_interrupt: bool,
     frame_counter_mode: FrameCounterMode,
@@ -49,6 +49,7 @@ impl APU {
             pulse_generator2: PulseGenerator::new(PulseGeneratorID::Two),
             noise_generator: NoiseGenerator::new(),
             triangle_generator: TriangleGenerator::new(),
+            data_modulation_channel: DataModulationChannel::new(),
             cycle_in_frame: 0,
             enable_interrupt: false,
             frame_counter_mode: FrameCounterMode::MODE4STEP,
@@ -56,7 +57,12 @@ impl APU {
         }
     }
 
-    pub fn tick(&mut self, cycles: u8, ring_buffer: Arc<Mutex<RingBuffer<f32, AUDIO_BUFFER_SIZE>>>) {
+    pub fn tick(
+        &mut self,
+        cycles: u8,
+        bus: &mut Bus,
+        //ring_buffer: Arc<Mutex<RingBuffer<f32, AUDIO_BUFFER_SIZE>>>,
+    ) {
         for _ in 0..cycles {
             self.cycle_in_frame += 1;
             self.triangle_generator.tick(); // tick every cpu cycle
@@ -72,7 +78,9 @@ impl APU {
             self.pulse_generator1.tick();
             self.pulse_generator2.tick();
             self.noise_generator.tick();
-            ring_buffer.lock().unwrap().push(self.get_output());
+            self.data_modulation_channel.tick(bus);
+            self.outstanding_interrupt = self.data_modulation_channel.poll_irq();
+            bus.audio_ring_buffer.lock().unwrap().push(self.get_output());
         }
     }
 
@@ -131,7 +139,7 @@ impl APU {
 
         let noise = self.noise_generator.get_output();
         let triangle = self.triangle_generator.get_output();
-        let dmc = 0f32;
+        let dmc = self.data_modulation_channel.get_output();
         let tnd_out = if noise <= 0f32 && triangle <= 0f32 && dmc <= 0f32 {
             0f32
         } else {
@@ -142,9 +150,9 @@ impl APU {
         pulse_out + tnd_out
     }
 
-    /// ---D NT21
-    /// Enable DMC (D), noise (N), triangle (T), and pulse channels (2/1)
-    pub fn get_status(&self) -> u8 {
+    /// IF-D NT21
+    /// DMC interrupt (I), frame interrupt (F), DMC active (D), length counter > 0 (N/T/2/1)
+    pub fn get_status(&mut self) -> u8 {
         let mut status = 0;
         if self.pulse_generator1.is_active() {
             status |= 0b0000_0001;
@@ -158,12 +166,22 @@ impl APU {
         if self.noise_generator.is_active() {
             status |= 0b0000_1000;
         }
-        //todo!()
+        if self.data_modulation_channel.get_bytes_remaining() != 0 {
+            status |= 0b0001_0000;
+        }
+        if self.enable_interrupt {
+            status |= 0b0100_0000;
+        }
+        if self.data_modulation_channel.is_interrupt_enabled() {
+            status |= 0b1000_0000;
+        }
+        //TODO: If an interrupt flag was set at the same moment of the read, it will read back as 1 but it will not be cleared. what?
+        self.enable_interrupt = false;
         status
     }
 
-    /// IF-D NT21
-    /// DMC interrupt (I), frame interrupt (F), DMC active (D), length counter > 0 (N/T/2/1)
+    /// ---D NT21
+    /// Enable DMC (D), noise (N), triangle (T), and pulse channels (2/1)
     pub fn set_status(&mut self, value: u8) {
         self.pulse_generator1
             .set_length_counter_enabled(value & 0b0000_0001 != 0);
@@ -173,7 +191,14 @@ impl APU {
             .set_length_counter_enabled(value & 0b0000_0100 != 0);
         self.noise_generator
             .set_length_counter_enabled(value & 0b0000_1000 != 0);
-        //todo!()
+        if value & 0b0001_0000 == 0 {
+            self.data_modulation_channel.set_bytes_remaining(0);
+        } else {
+            if self.data_modulation_channel.get_bytes_remaining() == 0 {
+                self.data_modulation_channel.restart();
+            }
+            self.data_modulation_channel.set_irq_enable(false);
+        }
     }
 
     /// MI-- ----
@@ -189,6 +214,7 @@ impl APU {
 
     /// DDLC VVVV
     /// Duty (D), envelope loop / length counter halt (L), constant volume (C), volume/envelope (V)
+    #[allow(non_snake_case)]
     pub fn set_pulse1_DLCV(&mut self, value: u8) {
         self.pulse_generator1.set_duty((value & 0b1100_0000) >> 6);
         let l = value & 0b0010_0000 != 0;
@@ -199,6 +225,7 @@ impl APU {
 
     /// DDLC VVVV
     /// Duty (D), envelope loop / length counter halt (L), constant volume (C), volume/envelope (V)
+    #[allow(non_snake_case)]
     pub fn set_pulse2_DLCV(&mut self, value: u8) {
         self.pulse_generator2.set_duty((value & 0b1100_0000) >> 6);
         let l = value & 0b0010_0000 != 0;
@@ -209,6 +236,7 @@ impl APU {
 
     /// EPPP NSSS
     /// Sweep unit: enabled (E), period (P), negate (N), shift (S)
+    #[allow(non_snake_case)]
     pub fn set_pulse1_EPNS(&mut self, value: u8) {
         self.pulse_generator1.set_sweep_parameters(
             value & 0b1000_0000 != 0,
@@ -220,6 +248,7 @@ impl APU {
 
     /// EPPP NSSS
     /// Sweep unit: enabled (E), period (P), negate (N), shift (S)
+    #[allow(non_snake_case)]
     pub fn set_pulse2_EPNS(&mut self, value: u8) {
         self.pulse_generator2.set_sweep_parameters(
             value & 0b1000_0000 != 0,
@@ -243,6 +272,7 @@ impl APU {
 
     /// LLLL LTTT
     /// Length counter load (L), timer high (T)
+    #[allow(non_snake_case)]
     pub fn set_pulse1_LT(&mut self, value: u8) {
         self.pulse_generator1.set_length_counter_value(value >> 3);
         self.pulse_generator1.set_timer_upper(value & 0x7)
@@ -250,6 +280,7 @@ impl APU {
 
     /// LLLL LTTT
     /// Length counter load (L), timer high (T)
+    #[allow(non_snake_case)]
     pub fn set_pulse2_LT(&mut self, value: u8) {
         self.pulse_generator2.set_length_counter_value(value >> 3);
         self.pulse_generator2.set_timer_upper(value & 0x7)
@@ -257,6 +288,7 @@ impl APU {
 
     /// CRRR RRRR
     /// Length counter halt / linear counter control (C), linear counter load (R)
+    #[allow(non_snake_case)]
     pub fn set_triangle_CR(&mut self, value: u8) {
         self.triangle_generator
             .set_length_counter_halt(value & 0b1000_0000 != 0);
@@ -274,6 +306,7 @@ impl APU {
 
     /// LLLL LTTT
     /// Length counter load (L), timer high (T), set linear counter reload flag
+    #[allow(non_snake_case)]
     pub fn set_triangle_LT(&mut self, value: u8) {
         self.triangle_generator.set_timer_upper(value & 0b0000_0111);
         self.triangle_generator.set_length_counter_value(value >> 3);
@@ -281,6 +314,7 @@ impl APU {
 
     /// --LC VVVV
     /// Envelope loop / length counter halt (L), constant volume (C), volume/envelope (V)
+    #[allow(non_snake_case)]
     pub fn set_noise_LCV(&mut self, value: u8) {
         let l = value & 0b0010_0000 != 0;
         self.noise_generator.set_length_counter_halt(l);
@@ -290,6 +324,7 @@ impl APU {
 
     /// L--- PPPP
     /// Loop noise (L), noise period (P)
+    #[allow(non_snake_case)]
     pub fn set_noise_LP(&mut self, value: u8) {
         self.noise_generator.set_loop_mode(value & 0b1000_0000 != 0);
         self.noise_generator.set_period(value & 0xF);
@@ -303,25 +338,35 @@ impl APU {
 
     /// IL-- RRRR
     /// IRQ enable (I), loop (L), frequency (R)
+    #[allow(non_snake_case)]
     pub fn set_DMC_ILR(&mut self, value: u8) {
-        //todo!()
+        self.data_modulation_channel
+            .set_irq_enable(value & 0b1000_0000 != 0);
+        self.data_modulation_channel
+            .set_loop_flag(value & 0b0100_0000 != 0);
+        self.data_modulation_channel
+            .set_output_rate(value & 0b0000_1111);
     }
 
     /// -DDD DDDD
     /// Load counter (D)
+    #[allow(non_snake_case)]
     pub fn set_DMC_load_counter(&mut self, value: u8) {
-        //todo!()
+        self.data_modulation_channel
+            .direct_load(value & 0b0111_1111)
     }
 
     /// AAAA AAAA
     /// Sample address (A)
+    #[allow(non_snake_case)]
     pub fn set_DMC_sample_address(&mut self, value: u8) {
-        //todo!()
+        self.data_modulation_channel.set_sample_address(value);
     }
 
     /// LLLL LLLL
     /// Sample length (L)
+    #[allow(non_snake_case)]
     pub fn set_DMC_sample_length(&mut self, value: u8) {
-        //todo!()
+        self.data_modulation_channel.set_sample_length(value);
     }
 }
