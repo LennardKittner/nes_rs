@@ -1,4 +1,5 @@
 use crate::mappers::{create_mapper, Mapper};
+use std::cmp::min;
 use std::fs::File;
 use std::io::Read;
 
@@ -13,6 +14,7 @@ pub enum Mirroring {
 pub struct Rom {
     mapper: Box<dyn Mapper>,
     pub screen_mirroring: Mirroring,
+    pub chr_is_writable: bool,
 }
 
 const NES_TAG: &str = "NES\x1A";
@@ -50,19 +52,29 @@ impl Rom {
 
         let prg_rom_size = raw[4] as usize * PRG_ROM_PAGE_SIZE;
         let chr_rom_size = raw[5] as usize * CHR_ROM_PAGE_SIZE;
+        let chr_is_writable = chr_rom_size == 0;
 
         let skip_trainer = raw[6] & 0b100 != 0;
 
         let prg_rom_start = HEADER_SIZE + if skip_trainer { 512 } else { 0 };
         let chr_rom_start = prg_rom_start + prg_rom_size;
+
+        let chr_space = if chr_is_writable {
+            &[0u8; 4 * CHR_ROM_PAGE_SIZE]
+        } else {
+            &raw[chr_rom_start..(chr_rom_start + chr_rom_size)]
+        };
+        
         let mapper = create_mapper(
             mapper_idx,
             &raw[prg_rom_start..(prg_rom_start + prg_rom_size)],
-            &raw[chr_rom_start..(chr_rom_start + chr_rom_size)],
+            chr_space,
+            chr_is_writable
         );
         Ok(Rom {
             mapper,
             screen_mirroring,
+            chr_is_writable,
         })
     }
 
@@ -89,6 +101,13 @@ impl Rom {
     }
     pub fn get_current_chr_rom(&self) -> &[u8] {
         self.mapper.get_current_chr_rom()
+    }
+    pub fn get_current_chr_ram(&mut self) -> Option<&mut [u8]> {
+        if self.chr_is_writable {
+            Some(self.mapper.get_current_chr_ram())
+        } else {
+            None
+        }
     }
     pub fn mapper_register_write(&mut self, address: u16, value: u8) {
         self.mapper.register_write(address, value);
