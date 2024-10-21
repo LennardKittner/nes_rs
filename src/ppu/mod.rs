@@ -342,7 +342,7 @@ pub mod test {
         let mut ppu = new_empty_rom();
         ppu.write_to_addr(0x23);
         ppu.write_to_addr(0x05);
-        ppu.write_to_data(0x66);
+        ppu.write_to_data(0x66, None);
 
         assert_eq!(ppu.vram[0x0305], 0x66);
     }
@@ -402,12 +402,12 @@ pub mod test {
         ppu.write_to_addr(0x24);
         ppu.write_to_addr(0x05);
 
-        ppu.write_to_data(0x66); //write to a
+        ppu.write_to_data(0x66, None); //write to, a
 
         ppu.write_to_addr(0x28);
         ppu.write_to_addr(0x05);
 
-        ppu.write_to_data(0x77); //write to B
+        ppu.write_to_data(0x77, None); //write to, B
 
         ppu.write_to_addr(0x20);
         ppu.write_to_addr(0x05);
@@ -432,12 +432,12 @@ pub mod test {
         ppu.write_to_addr(0x20);
         ppu.write_to_addr(0x05);
 
-        ppu.write_to_data(0x66); //write to A
+        ppu.write_to_data(0x66, None); //write to, A
 
         ppu.write_to_addr(0x2C);
         ppu.write_to_addr(0x05);
 
-        ppu.write_to_data(0x77); //write to b
+        ppu.write_to_data(0x77, None); //write to, b
 
         ppu.write_to_addr(0x28);
         ppu.write_to_addr(0x05);
