@@ -91,7 +91,7 @@ impl NoiseGenerator {
     }
 
     pub fn get_output(&self) -> f32 {
-        if self.shift_register & 1 == 1 || self.length_counter.get_value() == 0  {
+        if self.shift_register & 1 == 1 || self.length_counter.get_value() == 0 {
             return 0f32;
         }
 

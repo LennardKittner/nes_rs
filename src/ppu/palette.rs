@@ -29,7 +29,7 @@ impl SystemPalette {
             palettes: [[(0, 0, 0); PALETTE_SIZE_E]; 8],
         }
     }
-    
+
     pub fn new() -> Self {
         Self::from_raw(include_bytes!("../../system.palette")).unwrap()
     }

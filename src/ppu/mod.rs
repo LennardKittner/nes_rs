@@ -140,9 +140,9 @@ impl PPU {
     pub fn write_to_data(&mut self, data: u8, chr_rom: Option<&mut [u8]>) {
         match self.address_register.data {
             0x0000..=0x1FFF => match chr_rom {
-                    Some(chr_rom) => chr_rom[self.address_register.data as usize] = data,
-                    None => println!("Attempt to write to Cartridge ROM space")
-                },
+                Some(chr_rom) => chr_rom[self.address_register.data as usize] = data,
+                None => println!("Attempt to write to Cartridge ROM space"),
+            },
             0x2000..=0x2FFF => {
                 self.vram[self.mirror_vram_addr(self.address_register.data) as usize] = data
             }

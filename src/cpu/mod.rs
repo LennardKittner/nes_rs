@@ -111,7 +111,7 @@ impl CPU<'_> {
             }
         }
     }
-    
+
     pub fn step(&mut self) -> bool {
         if self.bus.poll_nmi_status() {
             self.handle_interrupt(NMI_INTERRUPT);
@@ -132,7 +132,6 @@ impl CPU<'_> {
         self.additional_cycles = 0;
         true
     }
-    
 
     fn handle_interrupt(&mut self, interrupt: Interrupt) {
         self.push_u16(self.program_counter);

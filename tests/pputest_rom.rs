@@ -15,22 +15,17 @@ fn test_rom(path: &str) {
         rom,
         SystemPalette::new(),
         |ppu, _, _| {
-            let (main_name_table, _) =
-                match (mirroring, ppu.address_register.get_name_table()) {
-                    (Mirroring::VERTICAL, 0b00)
-                    | (Mirroring::VERTICAL, 0b10)
-                    | (Mirroring::HORIZONTAL, 0b00)
-                    | (Mirroring::HORIZONTAL, 0b01) => {
-                        (&ppu.vram[0..0x400], &ppu.vram[0x400..0x800])
-                    }
-                    (Mirroring::VERTICAL, 0b01)
-                    | (Mirroring::VERTICAL, 0b11)
-                    | (Mirroring::HORIZONTAL, 0b10)
-                    | (Mirroring::HORIZONTAL, 0b11) => {
-                        (&ppu.vram[0x400..0x800], &ppu.vram[0..0x400])
-                    }
-                    (_, _) => panic!("Unsupported mirroring mode: {:?}", mirroring),
-                };
+            let (main_name_table, _) = match (mirroring, ppu.address_register.get_name_table()) {
+                (Mirroring::VERTICAL, 0b00)
+                | (Mirroring::VERTICAL, 0b10)
+                | (Mirroring::HORIZONTAL, 0b00)
+                | (Mirroring::HORIZONTAL, 0b01) => (&ppu.vram[0..0x400], &ppu.vram[0x400..0x800]),
+                (Mirroring::VERTICAL, 0b01)
+                | (Mirroring::VERTICAL, 0b11)
+                | (Mirroring::HORIZONTAL, 0b10)
+                | (Mirroring::HORIZONTAL, 0b11) => (&ppu.vram[0x400..0x800], &ppu.vram[0..0x400]),
+                (_, _) => panic!("Unsupported mirroring mode: {:?}", mirroring),
+            };
 
             *tile1.lock().unwrap() = main_name_table[32 * 5 + 3] as u16;
             *tile2.lock().unwrap() = main_name_table[32 * 5 + 4] as u16;

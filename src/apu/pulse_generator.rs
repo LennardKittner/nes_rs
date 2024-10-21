@@ -20,7 +20,6 @@ pub struct PulseGenerator {
 }
 
 impl PulseGenerator {
-
     const DUTY_PATTERNS: [[u8; 8]; 4] = [
         [0, 1, 0, 0, 0, 0, 0, 0], // 12.5% duty
         [0, 1, 1, 0, 0, 0, 0, 0], // 25% duty

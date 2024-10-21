@@ -64,12 +64,12 @@ impl Rom {
         } else {
             &raw[chr_rom_start..(chr_rom_start + chr_rom_size)]
         };
-        
+
         let mapper = create_mapper(
             mapper_idx,
             &raw[prg_rom_start..(prg_rom_start + prg_rom_size)],
             chr_space,
-            chr_is_writable
+            chr_is_writable,
         );
         Ok(Rom {
             mapper,

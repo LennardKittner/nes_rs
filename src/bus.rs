@@ -4,11 +4,11 @@ use crate::ppu::palette::SystemPalette;
 use crate::ppu::PPU;
 use crate::rendering::fps_frame::FPSFrame;
 use crate::rendering::{frame::Frame, render, scanline::Scanline};
+use crate::ring_buffer::RingBuffer;
 use crate::rolling_avg::RollingAvg;
 use crate::rom::Rom;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use crate::ring_buffer::RingBuffer;
 
 const FRAME_DURATION: Duration = Duration::from_nanos(16666667);
 
@@ -84,7 +84,7 @@ impl<'a> Bus<'a> {
         let mut apu = self.apu.take().unwrap();
         apu.tick(cycles, self);
         self.apu = Some(apu);
-        
+
         let vblank_before = self.ppu.is_in_vertical_blank();
         let next_scanline = self.ppu.tick(cycles * 3);
         let vblank_after = self.ppu.is_in_vertical_blank();
@@ -261,7 +261,11 @@ impl Mem for Bus<'_> {
             0x400C => self.apu.as_mut().unwrap().set_noise_LCV(data),
             0x400D => (), // unused
             0x400E => self.apu.as_mut().unwrap().set_noise_LP(data),
-            0x400F => self.apu.as_mut().unwrap().set_noise_length_counter_load(data),
+            0x400F => self
+                .apu
+                .as_mut()
+                .unwrap()
+                .set_noise_length_counter_load(data),
 
             // DMC
             0x4010 => self.apu.as_mut().unwrap().set_DMC_ILR(data),
