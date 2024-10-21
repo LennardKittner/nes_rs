@@ -80,7 +80,10 @@ impl APU {
             self.noise_generator.tick();
             self.data_modulation_channel.tick(bus);
             self.outstanding_interrupt = self.data_modulation_channel.poll_irq();
-            bus.audio_ring_buffer.lock().unwrap().push(self.get_output());
+            bus.audio_ring_buffer
+                .lock()
+                .unwrap()
+                .push(self.get_output());
         }
     }
 
