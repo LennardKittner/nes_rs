@@ -105,34 +105,34 @@ impl CPU<'_> {
     }
 
     pub fn run(&mut self) {
-        self.run_with_callback(|_| {});
-    }
-
-    pub fn run_with_callback<F>(&mut self, mut callback: F)
-    where
-        F: FnMut(&mut CPU),
-    {
         loop {
-            if self.bus.poll_nmi_status() {
-                self.handle_interrupt(NMI_INTERRUPT);
-            }
-            if self.bus.poll_irq() {
-                self.handle_interrupt(IRQ_INTERRUPT);
-            }
-
-            callback(self);
-            let op_code = self.mem_read(self.program_counter);
-
-            let instruction = CPU_INSTRUCTIONS[op_code as usize];
-            instruction.execute(self);
-            if op_code == 0x00 {
+            if !self.step() {
                 return;
             }
-
-            self.bus.tick(instruction.cycles + self.additional_cycles);
-            self.additional_cycles = 0;
         }
     }
+    
+    pub fn step(&mut self) -> bool {
+        if self.bus.poll_nmi_status() {
+            self.handle_interrupt(NMI_INTERRUPT);
+        }
+        if self.bus.poll_irq() {
+            self.handle_interrupt(IRQ_INTERRUPT);
+        }
+
+        let op_code = self.mem_read(self.program_counter);
+
+        let instruction = CPU_INSTRUCTIONS[op_code as usize];
+        instruction.execute(self);
+        if op_code == 0x00 {
+            return false;
+        }
+
+        self.bus.tick(instruction.cycles + self.additional_cycles);
+        self.additional_cycles = 0;
+        true
+    }
+    
 
     fn handle_interrupt(&mut self, interrupt: Interrupt) {
         self.push_u16(self.program_counter);
