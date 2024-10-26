@@ -22,7 +22,6 @@ fn test_against_nes_test_log_no_ppu_no_apu() {
     let mut cpu = CPU::new_with_bus(bus);
     cpu.reset();
     cpu.program_counter = 0xC000;
-    let mut line_num = 0;
     let file_content = fs::read_to_string("./tests/roms/nestest.log").unwrap();
     let test_file = file_content
         .lines()
