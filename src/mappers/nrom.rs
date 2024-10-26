@@ -7,11 +7,11 @@ pub struct NROMMapper {
 }
 
 impl NROMMapper {
-    pub fn new(prg_rom: Vec<u8>, chr_rom: Vec<u8>, has_chr_rom: bool) -> Self {
+    pub fn new(prg_rom: Vec<u8>, chr_rom: Vec<u8>, has_chr_ram: bool) -> Self {
         Self {
             prg_rom,
             chr_space: chr_rom,
-            has_chr_ram: has_chr_rom,
+            has_chr_ram,
         }
     }
 }
