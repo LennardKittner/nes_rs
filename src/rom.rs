@@ -1,5 +1,8 @@
+#[cfg(test)]
+use crate::cpu::interrupts::RESET_INTERRUPT;
+#[cfg(test)]
+use crate::mappers::nrom::NROMMapper;
 use crate::mappers::{create_mapper, Mapper};
-use std::cmp::min;
 use std::fs::File;
 use std::io::Read;
 
@@ -30,6 +33,23 @@ impl Rom {
         let mut rom_content = Vec::with_capacity(file_size);
         file.read_to_end(&mut rom_content).unwrap();
         Rom::new(&rom_content)
+    }
+
+    #[cfg(test)]
+    pub fn new_blank_test_rom(entry_point_address: u16) -> Rom {
+        let mut prg_rom = vec![0; PRG_ROM_PAGE_SIZE * 4];
+        prg_rom[(RESET_INTERRUPT.interrupt_vector - 0x8000) as usize] = entry_point_address as u8;
+        prg_rom[(RESET_INTERRUPT.interrupt_vector - 0x8000 + 1) as usize] =
+            (entry_point_address >> 8) as u8;
+        Rom {
+            mapper: Box::new(NROMMapper::new(
+                prg_rom,
+                vec![0; CHR_ROM_PAGE_SIZE * 4],
+                true,
+            )),
+            screen_mirroring: Mirroring::VERTICAL,
+            chr_is_writable: true,
+        }
     }
 
     pub fn new(raw: &[u8]) -> Result<Self, String> {

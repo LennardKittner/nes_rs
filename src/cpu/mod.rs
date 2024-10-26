@@ -8,7 +8,7 @@ use crate::rom::Rom;
 pub mod addressing_mode;
 #[cfg(test)]
 mod cpu_tests;
-mod interrupts;
+pub mod interrupts;
 pub mod opcodes;
 
 // 7  bit  0
@@ -91,7 +91,7 @@ impl CPU<'_> {
         for (i, byte) in program.iter().enumerate() {
             self.mem_write(at + i as u16, *byte);
         }
-        self.mem_write_u16(RESET_INTERRUPT.interrupt_vector, at);
+        // execution will start at the address RESET_INTERRUPT.interrupt_vector which points to cartridge program rom
     }
 
     pub fn reset(&mut self) {
