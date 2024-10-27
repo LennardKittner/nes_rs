@@ -197,9 +197,12 @@ impl CPU<'_> {
         self.update_flag(Flags::Negative, value & 0b1000_0000 != 0);
     }
 
-    fn branch(&mut self, condition: bool, target: u16) {
+    fn branch(&mut self, condition: bool, target: u16, instruction_size: u16) {
         if condition {
-            self.additional_cycles += 1 + if page_cross(self.program_counter, target) {
+            self.additional_cycles += 1 + if page_cross(
+                self.program_counter + instruction_size,
+                target + instruction_size,
+            ) {
                 1
             } else {
                 0
@@ -335,42 +338,71 @@ impl CPU<'_> {
 
     fn bcc(&mut self, mode: &AddressingMode) {
         let target = mode.get_operand_address(self).unwrap();
-        self.branch(!self.get_flag(Flags::Carry), target);
+        self.branch(
+            !self.get_flag(Flags::Carry),
+            target,
+            CPU_INSTRUCTIONS[0x90].size,
+        );
     }
 
     fn bcs(&mut self, mode: &AddressingMode) {
         let target = mode.get_operand_address(self).unwrap();
-        self.branch(self.get_flag(Flags::Carry), target);
+        self.branch(
+            self.get_flag(Flags::Carry),
+            target,
+            CPU_INSTRUCTIONS[0xB0].size,
+        );
     }
 
     fn beq(&mut self, mode: &AddressingMode) {
         let target = mode.get_operand_address(self).unwrap();
-        self.branch(self.get_flag(Flags::Zero), target);
+        self.branch(
+            self.get_flag(Flags::Zero),
+            target,
+            CPU_INSTRUCTIONS[0xF0].size,
+        );
     }
 
     fn bne(&mut self, mode: &AddressingMode) {
         let target = mode.get_operand_address(self).unwrap();
-        self.branch(!self.get_flag(Flags::Zero), target);
+        self.branch(
+            !self.get_flag(Flags::Zero),
+            target,
+            CPU_INSTRUCTIONS[0xD0].size,
+        );
     }
 
     fn bpl(&mut self, mode: &AddressingMode) {
         let target = mode.get_operand_address(self).unwrap();
-        self.branch(!self.get_flag(Flags::Negative), target);
+        self.branch(
+            !self.get_flag(Flags::Negative),
+            target,
+            CPU_INSTRUCTIONS[0x10].size,
+        );
     }
 
     fn bmi(&mut self, mode: &AddressingMode) {
         let target = mode.get_operand_address(self).unwrap();
-        self.branch(self.get_flag(Flags::Negative), target);
+        self.branch(
+            self.get_flag(Flags::Negative),
+            target,
+            CPU_INSTRUCTIONS[0x30].size,
+        );
     }
 
     fn bvc(&mut self, mode: &AddressingMode) {
         let target = mode.get_operand_address(self).unwrap();
-        self.branch(!self.get_flag(Flags::Overflow), target);
+        self.branch(
+            !self.get_flag(Flags::Overflow),
+            target,
+            CPU_INSTRUCTIONS[0x50].size,
+        );
     }
 
     fn bvs(&mut self, mode: &AddressingMode) {
         let target = mode.get_operand_address(self).unwrap();
-        self.branch(self.get_flag(Flags::Overflow), target);
+        self.branch(self.get_flag(Flags::Overflow), target,            CPU_INSTRUCTIONS[0x70].size,
+        );
     }
 
     fn bit(&mut self, mode: &AddressingMode) {

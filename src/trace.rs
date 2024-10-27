@@ -6,6 +6,9 @@ use itertools::Itertools;
 
 //TODO: cpu mut not good
 pub fn trace(cpu: &mut CPU) -> String {
+    let cpu_cycle = cpu.bus.get_cycle_count_cpu();
+    let ppu_cycle = cpu.bus.get_cycle_count_ppu();
+
     let opcode = CPU_INSTRUCTIONS[cpu.mem_read(cpu.program_counter) as usize];
     let mut instruction_bytes = Vec::new();
     for i in 0..opcode.size {
@@ -93,7 +96,7 @@ pub fn trace(cpu: &mut CPU) -> String {
     });
     if opcode.mnemonics.len() == 3 {
         format!(
-            "{:04X}  {:<8}  {:<31} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X}",
+            "{:04X}  {:<8}  {:<31} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} PPU:{:>3},{:>3} CYC:{}",
             cpu.program_counter,
             opcode_string,
             asm,
@@ -101,11 +104,14 @@ pub fn trace(cpu: &mut CPU) -> String {
             cpu.register_x,
             cpu.register_y,
             cpu.status,
-            cpu.register_s
+            cpu.register_s,
+            ppu_cycle.0,
+            ppu_cycle.1,
+            cpu_cycle
         )
     } else {
         format!(
-            "{:04X}  {:<8} {:<32} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X}",
+            "{:04X}  {:<8} {:<32} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} PPU:{:>3},{:>3} CYC:{}",
             cpu.program_counter,
             opcode_string,
             asm,
@@ -113,7 +119,10 @@ pub fn trace(cpu: &mut CPU) -> String {
             cpu.register_x,
             cpu.register_y,
             cpu.status,
-            cpu.register_s
+            cpu.register_s,
+            ppu_cycle.0,
+            ppu_cycle.1,
+            cpu_cycle
         )
     }
 }

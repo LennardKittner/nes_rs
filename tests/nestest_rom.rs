@@ -10,9 +10,9 @@ fn load_nestest_rom() -> Rom {
     Rom::load_from_disk("./tests/roms/nestest.nes").unwrap()
 }
 
-//TODO: test cycles, PPU and APU
+//TODO: test APU
 #[test]
-fn test_against_nes_test_log_no_ppu_no_apu() {
+fn test_against_nes_test() {
     let bus = Bus::new(
         load_nestest_rom(),
         SystemPalette::new(),
@@ -25,7 +25,6 @@ fn test_against_nes_test_log_no_ppu_no_apu() {
     let file_content = fs::read_to_string("./tests/roms/nestest.log").unwrap();
     let test_file = file_content
         .lines()
-        .map(|line| line.split(" PPU").collect_vec()[0])
         .collect_vec();
 
     for &trace_line in test_file.iter().take(8980) {
@@ -66,15 +65,15 @@ fn test_format_trace() {
     }
 
     assert_eq!(
-        "0064  A2 01     LDX #$01                        A:01 X:02 Y:03 P:24 SP:FD",
+        "0064  A2 01     LDX #$01                        A:01 X:02 Y:03 P:24 SP:FD PPU:  0,  0 CYC:0",
         result[0]
     );
     assert_eq!(
-        "0066  CA        DEX                             A:01 X:01 Y:03 P:24 SP:FD",
+        "0066  CA        DEX                             A:01 X:01 Y:03 P:24 SP:FD PPU:  0,  6 CYC:2",
         result[1]
     );
     assert_eq!(
-        "0067  88        DEY                             A:01 X:00 Y:03 P:26 SP:FD",
+        "0067  88        DEY                             A:01 X:00 Y:03 P:26 SP:FD PPU:  0, 12 CYC:4",
         result[2]
     );
 }
@@ -110,7 +109,7 @@ fn test_mem_access() {
     }
 
     assert_eq!(
-        "0064  11 33     ORA ($33),Y = 0400 @ 0400 = AA  A:00 X:00 Y:00 P:24 SP:FD",
+        "0064  11 33     ORA ($33),Y = 0400 @ 0400 = AA  A:00 X:00 Y:00 P:24 SP:FD PPU:  0,  0 CYC:0",
         result[0]
     );
 }

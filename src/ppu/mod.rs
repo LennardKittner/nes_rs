@@ -35,7 +35,7 @@ pub struct PPU {
     write_toggle: bool,
 
     pub scan_line: u16,
-    cycles: usize,
+    pub cycles: usize,
 
     outstanding_interrupt: bool,
 }

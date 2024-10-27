@@ -70,6 +70,14 @@ impl<'a> Bus<'a> {
             audio_ring_buffer: Arc::new(Mutex::new(RingBuffer::new())),
         }
     }
+    
+    pub fn get_cycle_count_cpu(&self) -> usize {
+        self.cycles
+    }
+    
+    pub fn get_cycle_count_ppu(&self) -> (usize, usize) {
+        (self.ppu.scan_line as usize, self.ppu.cycles)
+    }
 
     fn read_prg_rom(&self, addr: u16) -> u8 {
         let mut addr = addr - 0x8000;
