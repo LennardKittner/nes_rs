@@ -4,15 +4,14 @@ use crate::cpu::opcodes::CPU_INSTRUCTIONS;
 use crate::cpu::CPU;
 use itertools::Itertools;
 
-//TODO: cpu mut not good
-pub fn trace(cpu: &mut CPU) -> String {
+pub fn trace(cpu: &CPU) -> String {
     let cpu_cycle = cpu.bus.get_cycle_count_cpu();
     let ppu_cycle = cpu.bus.get_cycle_count_ppu();
 
-    let opcode = CPU_INSTRUCTIONS[cpu.mem_read(cpu.program_counter) as usize];
+    let opcode = CPU_INSTRUCTIONS[cpu.trace_mem_read(cpu.program_counter) as usize];
     let mut instruction_bytes = Vec::new();
     for i in 0..opcode.size {
-        instruction_bytes.push(cpu.mem_read(cpu.program_counter + i));
+        instruction_bytes.push(cpu.trace_mem_read(cpu.program_counter + i));
     }
     let opcode_string = instruction_bytes
         .iter()
@@ -20,28 +19,28 @@ pub fn trace(cpu: &mut CPU) -> String {
         .join(" ");
 
     let mut asm = opcode.mnemonics.to_string();
-    let operand_addr = opcode.mode.get_operand_address(cpu).unwrap_or(0);
+    let operand_addr = opcode.mode.trace_get_operand_address(cpu).unwrap_or(0);
     asm.push_str(&match opcode.mode {
         AddressingMode::Accumulator => " A".to_string(),
-        AddressingMode::Immediate => format!(" #${:02X}", cpu.mem_read(operand_addr)),
+        AddressingMode::Immediate => format!(" #${:02X}", cpu.trace_mem_read(operand_addr)),
         AddressingMode::Relative => {
             format!(" ${:02X}", operand_addr + opcode.size)
         }
         AddressingMode::ZeroPage => {
             let mut output = format!(" ${:02X}", operand_addr);
-            let value = cpu.mem_read(operand_addr);
+            let value = cpu.trace_mem_read(operand_addr);
             output.push_str(&format!(" = {value:02X}"));
             output
         }
         AddressingMode::ZeroPage_X => {
-            let value = cpu.mem_read(operand_addr);
+            let value = cpu.trace_mem_read(operand_addr);
             format!(
                 " ${:02X},X @ {:02X} = {:02X}",
                 instruction_bytes[1], operand_addr, value
             )
         }
         AddressingMode::ZeroPage_Y => {
-            let value = cpu.mem_read(operand_addr);
+            let value = cpu.trace_mem_read(operand_addr);
             format!(
                 " ${:02X},Y @ {:02X} = {:02X}",
                 instruction_bytes[1], operand_addr, value
@@ -50,20 +49,20 @@ pub fn trace(cpu: &mut CPU) -> String {
         AddressingMode::Absolute => {
             let mut output = format!(" ${:02X}{:02X}", instruction_bytes[2], instruction_bytes[1]);
             if opcode.mnemonics != "JMP" && opcode.mnemonics != "JSR" {
-                let value = cpu.mem_read(operand_addr);
+                let value = cpu.trace_mem_read(operand_addr);
                 output.push_str(&format!(" = {value:02X}"));
             }
             output
         }
         AddressingMode::Absolute_X => {
-            let value = cpu.mem_read(operand_addr);
+            let value = cpu.trace_mem_read(operand_addr);
             format!(
                 " ${:02X}{:02X},X @ {:04X} = {:02X} ",
                 instruction_bytes[2], instruction_bytes[1], operand_addr, value
             )
         }
         AddressingMode::Absolute_Y => {
-            let value = cpu.mem_read(operand_addr);
+            let value = cpu.trace_mem_read(operand_addr);
             format!(
                 " ${:02X}{:02X},Y @ {:04X} = {:02X} ",
                 instruction_bytes[2], instruction_bytes[1], operand_addr, value
@@ -76,17 +75,17 @@ pub fn trace(cpu: &mut CPU) -> String {
         }
         AddressingMode::Indirect_X => {
             let address_location = cpu.register_x.wrapping_add(instruction_bytes[1]);
-            let value = cpu.mem_read(operand_addr);
+            let value = cpu.trace_mem_read(operand_addr);
             format!(
                 " (${:02X},X) @ {:02X} = {:04X} = {:02X}",
                 instruction_bytes[1], address_location, operand_addr, value
             )
         }
         AddressingMode::Indirect_Y => {
-            let lo = cpu.mem_read(instruction_bytes[1] as u16);
-            let hi = cpu.mem_read(instruction_bytes[1].wrapping_add(1) as u16);
+            let lo = cpu.trace_mem_read(instruction_bytes[1] as u16);
+            let hi = cpu.trace_mem_read(instruction_bytes[1].wrapping_add(1) as u16);
             let deref_base = (hi as u16) << 8 | (lo as u16);
-            let value = cpu.mem_read(operand_addr);
+            let value = cpu.trace_mem_read(operand_addr);
             format!(
                 " (${:02X}),Y = {:04X} @ {:04X} = {:02X}",
                 instruction_bytes[1], deref_base, operand_addr, value

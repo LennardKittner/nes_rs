@@ -70,13 +70,33 @@ impl<'a> Bus<'a> {
             audio_ring_buffer: Arc::new(Mutex::new(RingBuffer::new())),
         }
     }
-    
+
     pub fn get_cycle_count_cpu(&self) -> usize {
         self.cycles
     }
-    
+
     pub fn get_cycle_count_ppu(&self) -> (usize, usize) {
         (self.ppu.scan_line as usize, self.ppu.cycles)
+    }
+
+    pub fn trace_mem_read(&self, addr: u16) -> u8 {
+        match addr {
+            RAM..=RAM_MIRRORS_END => {
+                let mirror_down_addr = addr & 0b00000111_11111111;
+                self.cpu_vram[mirror_down_addr as usize]
+            }
+            0x2000 | 0x2001 | 0x2003 | 0x2005 | 0x2006 | 0x4014 => 0,
+            CARTRIDGE_START..=CARTRIDGE_END => self.read_prg_rom(addr),
+            _ => {
+                panic!("Read will change data and thus trace_mem_read can not be used.");
+            }
+        }
+    }
+
+    pub fn trace_mem_read_u16(&self, pos: u16) -> u16 {
+        let lo = self.trace_mem_read(pos) as u16;
+        let hi = self.trace_mem_read(pos + 1) as u16;
+        (hi << 8) | lo
     }
 
     fn read_prg_rom(&self, addr: u16) -> u8 {
@@ -198,7 +218,6 @@ impl Mem for Bus<'_> {
                 self.cpu_vram[mirror_down_addr as usize]
             }
             0x2000 | 0x2001 | 0x2003 | 0x2005 | 0x2006 | 0x4014 => {
-                //TODO: maybe detect tracing
                 //panic!("Attempt to read from write-only PPU address {:x}", addr);
                 0
             }

@@ -133,6 +133,14 @@ impl CPU<'_> {
         true
     }
 
+    pub fn trace_mem_read(&self, addr: u16) -> u8 {
+        self.bus.trace_mem_read(addr)
+    }
+
+    pub fn trace_mem_read_u16(&self, addr: u16) -> u16 {
+        self.bus.trace_mem_read_u16(addr)
+    }
+
     fn handle_interrupt(&mut self, interrupt: Interrupt) {
         self.push_u16(self.program_counter);
         let mut status = self.status | Flags::B2 as u8;
@@ -401,7 +409,10 @@ impl CPU<'_> {
 
     fn bvs(&mut self, mode: &AddressingMode) {
         let target = mode.get_operand_address(self).unwrap();
-        self.branch(self.get_flag(Flags::Overflow), target,            CPU_INSTRUCTIONS[0x70].size,
+        self.branch(
+            self.get_flag(Flags::Overflow),
+            target,
+            CPU_INSTRUCTIONS[0x70].size,
         );
     }
 
