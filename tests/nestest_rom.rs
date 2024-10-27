@@ -23,9 +23,7 @@ fn test_against_nes_test() {
     cpu.reset();
     cpu.program_counter = 0xC000;
     let file_content = fs::read_to_string("./tests/roms/nestest.log").unwrap();
-    let test_file = file_content
-        .lines()
-        .collect_vec();
+    let test_file = file_content.lines().collect_vec();
 
     for &trace_line in test_file.iter().take(8980) {
         assert_eq!(trace_line, &trace(&mut cpu));
