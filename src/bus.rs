@@ -88,7 +88,8 @@ impl<'a> Bus<'a> {
             0x2000 | 0x2001 | 0x2003 | 0x2005 | 0x2006 | 0x4014 => 0,
             CARTRIDGE_START..=CARTRIDGE_END => self.read_prg_rom(addr),
             _ => {
-                panic!("Read will change data and thus trace_mem_read can not be used.");
+                //panic!("Read will change data and thus trace_mem_read can not be used.");
+                0
             }
         }
     }
@@ -255,8 +256,8 @@ impl Mem for Bus<'_> {
             0x2000 => self.ppu.write_to_ctrl(data),
             0x2001 => self.ppu.write_to_mask(data),
             0x2002 => panic!("write to PPU status register"),
-            0x2003 => self.ppu.write_to_addr(data),
-            0x2004 => self.ppu.write_to_data(data, self.rom.get_current_chr_ram()),
+            0x2003 => self.ppu.write_to_oam_addr(data),
+            0x2004 => self.ppu.write_to_oam_data(data),
             0x2005 => self.ppu.write_to_scroll(data),
             0x2006 => self.ppu.write_to_addr(data),
             0x2007 => self.ppu.write_to_data(data, self.rom.get_current_chr_ram()),

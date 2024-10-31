@@ -36,13 +36,36 @@ fn test_rom(path: &str) {
     cpu.reset();
 
     while *tile1.lock().unwrap() <= 0x20 || *tile2.lock().unwrap() <= 0x20 {
+        //println!("{}", trace(&cpu));
         cpu.step();
     }
-    assert_eq!(*tile1.lock().unwrap(), 0x30);
-    assert_eq!(*tile2.lock().unwrap(), 0x31);
+    assert_eq!(*tile2.lock().unwrap() - 0x30, 1);
+    assert_eq!(*tile1.lock().unwrap() - 0x30, 0);
 }
 
 #[test]
-fn palette_ram_test() {
-    test_rom("./tests/roms/palette_ram.nes");
+fn palette_ram() {
+    test_rom("./tests/roms/blargg_ppu_tests_2005.09.15b/palette_ram.nes");
+}
+
+#[ignore]
+#[test]
+/// Ignored because I'm unsure if every NES has the same startup palette
+fn power_up_palette() {
+    test_rom("./tests/roms/blargg_ppu_tests_2005.09.15b/power_up_palette.nes");
+}
+
+#[test]
+fn sprite_ram() {
+    test_rom("./tests/roms/blargg_ppu_tests_2005.09.15b/sprite_ram.nes");
+}
+
+#[test]
+fn vram_access() {
+    test_rom("./tests/roms/blargg_ppu_tests_2005.09.15b/vram_access.nes");
+}
+
+#[test]
+fn vbl_clear_time() {
+    test_rom("./tests/roms/blargg_ppu_tests_2005.09.15b/vbl_clear_time.nes");
 }

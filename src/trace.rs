@@ -1,4 +1,3 @@
-use crate::bus::Mem;
 use crate::cpu::addressing_mode::AddressingMode;
 use crate::cpu::opcodes::CPU_INSTRUCTIONS;
 use crate::cpu::CPU;
