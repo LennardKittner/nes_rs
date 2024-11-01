@@ -234,6 +234,11 @@ impl PPU {
             (self.address_register.data_alt & 0x00FF) | ((value as u16) << 8)
         };
 
+        // mirror down address above 0x3FFF
+        if self.address_register.data_alt > 0x3FFF {
+            self.address_register.data_alt &= 0b11_1111_1111_1111;
+        }
+
         self.write_toggle = !self.write_toggle;
     }
 
@@ -340,13 +345,13 @@ impl PPU {
 pub mod test {
     use super::*;
 
-    pub fn new_empty_rom() -> PPU {
+    pub fn new_ppu() -> PPU {
         PPU::new(Mirroring::HORIZONTAL, SystemPalette::new())
     }
 
     #[test]
     fn test_ppu_vram_writes() {
-        let mut ppu = new_empty_rom();
+        let mut ppu = new_ppu();
         ppu.write_to_addr(0x23);
         ppu.write_to_addr(0x05);
         ppu.write_to_data(0x66, None);
@@ -356,7 +361,7 @@ pub mod test {
 
     #[test]
     fn test_ppu_vram_reads() {
-        let mut ppu = new_empty_rom();
+        let mut ppu = new_ppu();
         ppu.write_to_ctrl(0);
         ppu.vram[0x0305] = 0x66;
 
@@ -364,13 +369,13 @@ pub mod test {
         ppu.write_to_addr(0x05);
 
         ppu.read_data(&vec![0; 2048]); //load_into_buffer
-        assert_eq!(ppu.address_register.data, 0x2306);
+        assert_eq!(ppu.address_register.data_alt, 0x2306);
         assert_eq!(ppu.read_data(&vec![0; 2048]), 0x66);
     }
 
     #[test]
     fn test_ppu_vram_reads_cross_page() {
-        let mut ppu = new_empty_rom();
+        let mut ppu = new_ppu();
         ppu.write_to_ctrl(0);
         ppu.vram[0x01ff] = 0x66;
         ppu.vram[0x0200] = 0x77;
@@ -385,7 +390,7 @@ pub mod test {
 
     #[test]
     fn test_ppu_vram_reads_step_32() {
-        let mut ppu = new_empty_rom();
+        let mut ppu = new_ppu();
         ppu.write_to_ctrl(0b100);
         ppu.vram[0x01ff] = 0x66;
         ppu.vram[0x01ff + 32] = 0x77;
@@ -405,7 +410,7 @@ pub mod test {
     //   [0x2800 B ] [0x2C00 b ]
     #[test]
     fn test_vram_horizontal_mirror() {
-        let mut ppu = new_empty_rom();
+        let mut ppu = new_ppu();
         ppu.write_to_addr(0x24);
         ppu.write_to_addr(0x05);
 
@@ -461,7 +466,7 @@ pub mod test {
 
     #[test]
     fn test_read_status_resets_latch() {
-        let mut ppu = new_empty_rom();
+        let mut ppu = new_ppu();
         ppu.vram[0x0305] = 0x66;
 
         ppu.write_to_addr(0x21);
@@ -482,7 +487,7 @@ pub mod test {
 
     #[test]
     fn test_ppu_vram_mirroring() {
-        let mut ppu = new_empty_rom();
+        let mut ppu = new_ppu();
         ppu.write_to_ctrl(0);
         ppu.vram[0x0305] = 0x66;
 
@@ -496,7 +501,7 @@ pub mod test {
 
     #[test]
     fn test_read_status_resets_vblank() {
-        let mut ppu = new_empty_rom();
+        let mut ppu = new_ppu();
         ppu.status_register.set_vertical_blank(true);
 
         let status = ppu.read_status();
@@ -507,7 +512,7 @@ pub mod test {
 
     #[test]
     fn test_oam_read_write() {
-        let mut ppu = new_empty_rom();
+        let mut ppu = new_ppu();
         ppu.write_to_oam_addr(0x10);
         ppu.write_to_oam_data(0x66);
         ppu.write_to_oam_data(0x77);
@@ -521,7 +526,7 @@ pub mod test {
 
     #[test]
     fn test_oam_dma() {
-        let mut ppu = new_empty_rom();
+        let mut ppu = new_ppu();
 
         let mut data = [0x66; 256];
         data[0] = 0x77;
