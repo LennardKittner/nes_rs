@@ -46,10 +46,10 @@ fn branch_basics() {
 
 #[test]
 fn backward_branch() {
-    test_rom("tests/roms/branch_timing_tests/2.Backward_branch.nes");
+    test_rom("tests/roms/branch_timing_tests/2.Backward_Branch.nes");
 }
 
 #[test]
 fn forward_branch() {
-    test_rom("tests/roms/branch_timing_tests/3.Forward_branch.nes");
+    test_rom("tests/roms/branch_timing_tests/3.Forward_Branch.nes");
 }
