@@ -76,6 +76,12 @@ impl PPU {
 
     pub fn tick(&mut self, cycles: u8) -> u16 {
         self.cycles += cycles as usize;
+
+        // The VBL flag ($2002.7) is cleared by the PPU around 2270 CPU clocks after NMI occurs.
+        if self.scan_line == 260 && self.cycles >= 308 {
+            self.status_register.set_vertical_blank(false);
+        }
+
         if self.cycles >= 341 {
             if self.show_background() {
                 self.address_register
@@ -89,14 +95,13 @@ impl PPU {
                 self.status_register.set_vertical_blank(true);
                 self.status_register.set_sprite_zero_hit(false);
                 if self.control_register.generate_nmi() {
+                    self.status_register.set_sprite_zero_hit(false);
+                    self.status_register.set_sprite_overflow(false);
                     self.outstanding_interrupt = true;
                 }
             } else if self.scan_line >= 262 {
                 self.scan_line = 0;
                 self.outstanding_interrupt = false;
-                self.status_register.set_vertical_blank(false);
-                self.status_register.set_sprite_zero_hit(false);
-                self.status_register.set_sprite_overflow(false);
                 if self.show_background() {
                     self.address_register
                         .load_y_from(&self.temporary_address_register);
