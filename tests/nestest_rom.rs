@@ -16,6 +16,7 @@ fn test_against_nes_test() {
     let bus = Bus::new(
         load_nestest_rom(),
         SystemPalette::new(),
+        0f64,
         |_, _, _| {},
         |_, _| {},
     );
@@ -39,6 +40,7 @@ fn test_format_trace() {
     let mut bus = Bus::new(
         load_nestest_rom(),
         SystemPalette::new(),
+        0f64,
         |_, _, _| {},
         |_, _| {},
     );
@@ -81,6 +83,7 @@ fn test_mem_access() {
     let mut bus = Bus::new(
         load_nestest_rom(),
         SystemPalette::new(),
+        0f64,
         |_, _, _| {},
         |_, _| {},
     );

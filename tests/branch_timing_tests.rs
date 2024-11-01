@@ -13,6 +13,7 @@ fn test_rom(path: &str) {
     let bus = Bus::new(
         rom,
         SystemPalette::new(),
+        0f64,
         |ppu, _, _| {
             let (main_name_table, _) = match (mirroring, ppu.address_register.get_name_table()) {
                 (Mirroring::VERTICAL, 0b00)

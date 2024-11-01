@@ -7,6 +7,7 @@ use crate::rendering::{frame::Frame, render, scanline::Scanline};
 use crate::ring_buffer::RingBuffer;
 use crate::rolling_avg::RollingAvg;
 use crate::rom::Rom;
+use num::traits::Inv;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -34,6 +35,7 @@ pub struct Bus<'a> {
     rendering_overhead: RollingAvg<u64>,
     fps: RollingAvg<f64>,
     frame_counter: u64,
+    desired_frame_duration: Duration,
     pub audio_ring_buffer: Arc<Mutex<RingBuffer<f32, AUDIO_BUFFER_SIZE>>>, // 1s of audio
 }
 
@@ -41,6 +43,7 @@ impl<'a> Bus<'a> {
     pub fn new<GF, C1F>(
         rom: Rom,
         system_palette: SystemPalette,
+        speed_multiplier: f64,
         graphics_callback: GF,
         controller_callback: C1F,
     ) -> Bus<'a>
@@ -49,6 +52,10 @@ impl<'a> Bus<'a> {
         C1F: FnMut(&mut Controller, &mut Controller) + 'a,
     {
         let ppu = PPU::new(rom.screen_mirroring, system_palette);
+        let mut speed_multiplier = speed_multiplier;
+        if speed_multiplier <= 0f64 {
+            speed_multiplier = f64::INFINITY;
+        }
         Bus {
             cpu_vram: [0; 2048],
             rom,
@@ -67,6 +74,7 @@ impl<'a> Bus<'a> {
             rendering_overhead: RollingAvg::new(60),
             fps: RollingAvg::new(60),
             frame_counter: 0,
+            desired_frame_duration: FRAME_DURATION.mul_f64(speed_multiplier.inv()),
             audio_ring_buffer: Arc::new(Mutex::new(RingBuffer::new())),
         }
     }
@@ -133,7 +141,9 @@ impl<'a> Bus<'a> {
 
         if !vblank_before && vblank_after {
             let avg_overhead = Duration::from_nanos(self.rendering_overhead.avg().unwrap_or(0));
-            let sleep_duration = FRAME_DURATION
+
+            let sleep_duration = self
+                .desired_frame_duration
                 .checked_sub(self.last_frame.elapsed())
                 .and_then(|d| d.checked_sub(avg_overhead))
                 .unwrap_or(Duration::ZERO);
