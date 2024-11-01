@@ -94,7 +94,10 @@ impl<'a> Bus<'a> {
                 self.cpu_vram[mirror_down_addr as usize]
             }
             0x2000 | 0x2001 | 0x2003 | 0x2005 | 0x2006 | 0x4014 => 0,
-            CARTRIDGE_START..=CARTRIDGE_END => self.read_prg_rom(addr),
+            CARTRIDGE_RAM_START..=CARTRIDGE_RAM_END => self.rom.read_cartridge_ram(addr - 0x6000),
+            CARTRIDGE_ROM_AND_MAPPER_START..=CARTRIDGE_ROM_AND_MAPPER_END => {
+                self.read_prg_rom(addr - 0x8000)
+            }
             _ => {
                 //panic!("Read will change data and thus trace_mem_read can not be used.");
                 0
@@ -109,7 +112,7 @@ impl<'a> Bus<'a> {
     }
 
     fn read_prg_rom(&self, addr: u16) -> u8 {
-        let mut addr = addr - 0x8000;
+        let mut addr = addr;
         if self.rom.prg_rom_len() == 0x4000 && addr >= 0x4000 {
             addr %= 0x4000;
         }
@@ -204,8 +207,10 @@ pub trait Mem {
 const RAM: u16 = 0x0000;
 const RAM_MIRRORS_END: u16 = 0x1FFF;
 const PPU_REGISTERS_MIRRORS_END: u16 = 0x3FFF;
-const CARTRIDGE_START: u16 = 0x8000;
-const CARTRIDGE_END: u16 = 0xFFFF;
+const CARTRIDGE_ROM_AND_MAPPER_START: u16 = 0x8000;
+const CARTRIDGE_ROM_AND_MAPPER_END: u16 = 0xFFFF;
+const CARTRIDGE_RAM_START: u16 = 0x6000;
+const CARTRIDGE_RAM_END: u16 = 0x7FFF;
 const APU_REGISTERS_START: u16 = 0x4000;
 const APU_REGISTERS_END: u16 = 0x4013;
 
@@ -249,7 +254,10 @@ impl Mem for Bus<'_> {
                 (self.controller_callback)(&mut self.controller_1, &mut self.controller_2);
                 self.controller_2.read()
             }
-            CARTRIDGE_START..=CARTRIDGE_END => self.read_prg_rom(addr),
+            CARTRIDGE_RAM_START..=CARTRIDGE_RAM_END => self.rom.read_cartridge_ram(addr - 0x6000),
+            CARTRIDGE_ROM_AND_MAPPER_START..=CARTRIDGE_ROM_AND_MAPPER_END => {
+                self.read_prg_rom(addr - 0x8000)
+            }
             _ => {
                 println!("Ignoring mem read at {addr:x}");
                 0
@@ -334,7 +342,12 @@ impl Mem for Bus<'_> {
                 self.controller_2.write(data);
             }
             0x4017 => self.apu.as_mut().unwrap().set_frame_counter(data),
-            CARTRIDGE_START..=CARTRIDGE_END => self.rom.mapper_register_write(addr, data),
+            CARTRIDGE_RAM_START..=CARTRIDGE_RAM_END => {
+                self.rom.write_cartridge_ram(addr - 0x6000, data)
+            }
+            CARTRIDGE_ROM_AND_MAPPER_START..=CARTRIDGE_ROM_AND_MAPPER_END => {
+                self.rom.mapper_register_write(addr - 0x8000, data)
+            }
             _ => {
                 println!("Ignoring mem write at 0x{addr:X}");
             }

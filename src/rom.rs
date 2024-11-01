@@ -132,6 +132,13 @@ impl Rom {
     pub fn mapper_register_write(&mut self, address: u16, value: u8) {
         self.mapper.register_write(address, value);
     }
+
+    pub fn read_cartridge_ram(&self, address: u16) -> u8 {
+        self.mapper.read_cartridge_ram(address)
+    }
+    pub fn write_cartridge_ram(&mut self, address: u16, value: u8) {
+        self.mapper.write_cartridge_ram(address, value);
+    }
 }
 
 //TODO: tests

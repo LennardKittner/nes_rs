@@ -4,6 +4,7 @@ pub struct NROMMapper {
     prg_rom: Vec<u8>,
     chr_space: Vec<u8>,
     has_chr_ram: bool,
+    cartridge_ram: [u8; 0x2000],
 }
 
 impl NROMMapper {
@@ -12,6 +13,7 @@ impl NROMMapper {
             prg_rom,
             chr_space: chr_rom,
             has_chr_ram,
+            cartridge_ram: [0; 0x2000],
         }
     }
 }
@@ -50,5 +52,10 @@ impl Mapper for NROMMapper {
             panic!("Tried to access nonexistent chr RAM");
         }
     }
-    fn register_write(&mut self, _address: u16, _value: u8) {}
+    fn read_cartridge_ram(&self, address: u16) -> u8 {
+        self.cartridge_ram[address as usize]
+    }
+    fn write_cartridge_ram(&mut self, address: u16, value: u8) {
+        self.cartridge_ram[address as usize] = value;
+    }
 }
