@@ -13,6 +13,7 @@
 - iNES2
 - frame skip on fast-forward
 - frame skip on slow hardware
+- documentation
 
 ## Useful Resources
 
