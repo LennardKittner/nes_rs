@@ -138,7 +138,7 @@ fn main() {
     let bus = Bus::new(
         rom,
         palette,
-        2f64,
+        1f64,
         move |_: &PPU, frame: &Frame, fps_frame: &FPSFrame| {
             texture.update(None, &frame.data, frame.width * 3).unwrap();
 
