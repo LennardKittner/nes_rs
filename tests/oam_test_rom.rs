@@ -1,7 +1,7 @@
 use nes_rs::bus::{Bus, Mem};
 use nes_rs::cpu::CPU;
 use nes_rs::ppu::palette::SystemPalette;
-use nes_rs::rom::{Rom};
+use nes_rs::rom::Rom;
 
 fn test_rom(path: &str) {
     let rom = Rom::load_from_disk(path).unwrap();
@@ -26,4 +26,10 @@ fn test_rom(path: &str) {
 #[test]
 fn oam_read() {
     test_rom("./tests/roms/oam_read/oam_read.nes");
+}
+
+#[ignore]
+#[test]
+fn oam_stress() {
+    test_rom("./tests/roms/oam_stress/oam_stress.nes");
 }
