@@ -15,6 +15,15 @@
 - frame skip on slow hardware
 - documentation
 
+### Tests
+
+- ppu_read_buffer
+- ppu_sprite_hit
+- sprite_overflow_tests
+- ppu_vbl_nmi
+- scanline
+- oam_stress
+
 ## Useful Resources
 
 https://bugzmanov.github.io/nes_ebook/chapter_1.html
