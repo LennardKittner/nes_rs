@@ -17,7 +17,6 @@ use crate::ppu::sprite::Sprite;
 use crate::ppu::status::StatusRegister;
 use crate::ppu::t_register::TRegister;
 use crate::rendering::frame::SCREEN_WIDTH;
-use crate::rendering::get_sprite_palette;
 use crate::rendering::scanline::{Scanline, SpriteColor};
 use crate::rom::{Mirroring, Rom};
 use itertools::Itertools;
@@ -161,7 +160,7 @@ impl PPU {
 
         for sprite_idx in (0..current_sprite_slot).rev() {
             let sprite = &self.sprite_buffer[sprite_idx];
-            let palette = get_sprite_palette(self, sprite.get_palette_index());
+            let palette = self.get_sprite_palette(sprite.get_palette_index());
             let bank = self.control_register.get_sprite_pattern_table_address() as usize;
             let tile = rom.read_tile_chr_rom((bank + sprite.get_pattern_index() * 16) as u16);
             let sprite_line = if sprite.is_vertical_flip() {
@@ -214,6 +213,16 @@ impl PPU {
         } else {
             (sprite_zero_start as usize)..(sprite_zero_start as usize + sprite_zero_len as usize)
         };
+    }
+
+    fn get_sprite_palette(&self, palette_idx: usize) -> [u8; 4] {
+        let start = 0x11 + palette_idx * 4; // + 0x11 is the offset for the sprite palette tables
+        [
+            0,
+            self.read_palette_table(start),
+            self.read_palette_table(start + 1),
+            self.read_palette_table(start + 2),
+        ]
     }
 
     fn increment_vram_addr(&mut self) {

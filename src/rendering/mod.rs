@@ -31,16 +31,6 @@ pub fn get_bg_palette(ppu: &PPU, attribute_table: &[u8], x_pos: usize, y_pos: us
     ]
 }
 
-pub fn get_sprite_palette(ppu: &PPU, palette_idx: usize) -> [u8; 4] {
-    let start = 0x11 + palette_idx * 4; // + 0x11 is the offset for the sprite palette tables
-    [
-        0,
-        ppu.read_palette_table(start),
-        ppu.read_palette_table(start + 1),
-        ppu.read_palette_table(start + 2),
-    ]
-}
-
 pub fn write_tile(frame: &mut Frame, x_pos: usize, y_pos: usize, tile: &[u8], palette: &[u8; 4]) {
     for y in 0..8 {
         let mut upper = tile[y];
