@@ -3,12 +3,10 @@ pub mod frame;
 pub mod scanline;
 
 use crate::ppu::palette::SystemPalette;
-use crate::ppu::sprite::Sprite;
 use crate::ppu::PPU;
-use crate::rendering::frame::{Frame, SCREEN_WIDTH};
-use crate::rendering::scanline::{BackgroundColor, Scanline, SpriteColor};
+use crate::rendering::frame::Frame;
+use crate::rendering::scanline::{BackgroundColor, Scanline};
 use crate::rom::{Mirroring, Rom};
-use itertools::Itertools;
 
 pub fn get_bg_palette(ppu: &PPU, attribute_table: &[u8], x_pos: usize, y_pos: usize) -> [u8; 4] {
     let attribute_table_idx = y_pos / 4 * 8 + x_pos / 4;

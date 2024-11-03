@@ -17,9 +17,9 @@ use crate::ppu::sprite::Sprite;
 use crate::ppu::status::StatusRegister;
 use crate::ppu::t_register::TRegister;
 use crate::rendering::frame::SCREEN_WIDTH;
+use crate::rendering::render_bg;
 use crate::rendering::scanline::{Scanline, SpriteColor};
 use crate::rom::{Mirroring, Rom};
-use itertools::Itertools;
 use std::cmp::{max, min};
 use std::ops::Range;
 
@@ -87,12 +87,7 @@ impl PPU {
     }
 
     pub fn tick(&mut self, cycles: u8, rom: &Rom, sprite_pixel_buffer: &mut Scanline) -> i32 {
-        if !self.sprite_zero_was_hit_this_frame {
-            self.check_sprite_zero_hit(
-                self.cycles..(self.cycles + cycles as usize),
-                sprite_pixel_buffer,
-            );
-        }
+        let pixel_range = self.cycles..(self.cycles + cycles as usize);
         self.cycles += cycles as usize;
 
         // The VBL flag ($2002.7) is cleared by the PPU around 2270 CPU clocks after NMI occurs.
@@ -108,13 +103,17 @@ impl PPU {
 
             self.cycles -= 341;
             self.scan_line += 1;
-
-            if self.scan_line == 241 {
+            if self.scan_line < 241 {
+                sprite_pixel_buffer.clear();
+                self.compute_sprites_next_scanline(rom, sprite_pixel_buffer);
+                if self.show_background() {
+                    render_bg(self, rom, sprite_pixel_buffer);
+                }
+            } else if self.scan_line == 241 {
                 self.status_register.set_vertical_blank(true);
                 self.status_register.set_sprite_zero_hit(false);
+                self.status_register.set_sprite_overflow(false);
                 if self.control_register.generate_nmi() {
-                    self.status_register.set_sprite_zero_hit(false);
-                    self.status_register.set_sprite_overflow(false);
                     self.outstanding_interrupt = true;
                 }
             } else if self.scan_line >= 262 {
@@ -126,8 +125,12 @@ impl PPU {
                         .load_y_from(&self.temporary_address_register);
                 }
             }
-            self.compute_sprites_next_scanline(rom, sprite_pixel_buffer);
         }
+
+        if !self.sprite_zero_was_hit_this_frame {
+            self.check_sprite_zero_hit(pixel_range, sprite_pixel_buffer);
+        }
+
         if self.control_register.get_sprite_size() == 16 {
             println!("Sprite size: 16");
         }
@@ -143,21 +146,17 @@ impl PPU {
             && self.show_sprites()
             && (range_to_check.end > 8 || self.show_sprites_left() && self.show_background_left())
         {
-            // for pos in max(range_to_check.start, self.sprite_zero_pos.start)
-            //     ..min(range_to_check.end, self.sprite_zero_pos.end)
-            // {
-            //     if !scanline.data[pos].sprite_color.transparent
-            //         && !scanline.data[pos].background_color.transparent
-            //     {
-            self.set_sprite_zero_hit();
-            self.sprite_zero_was_hit_this_frame = true;
-            //         break;
-            //     }
-            // }
-            // println!(
-            //     "Sprite zero hit {}..{} scanline {}",
-            //     range_to_check.start, range_to_check.end, self.scan_line
-            // );
+            for pos in max(range_to_check.start, self.sprite_zero_pos.start)
+                ..min(range_to_check.end, self.sprite_zero_pos.end)
+            {
+                if !scanline.data[pos].sprite_color.transparent
+                    && !scanline.data[pos].background_color.transparent
+                {
+                    self.set_sprite_zero_hit();
+                    self.sprite_zero_was_hit_this_frame = true;
+                    break;
+                }
+            }
         }
     }
 

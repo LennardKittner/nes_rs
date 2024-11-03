@@ -3,7 +3,7 @@ use crate::controller::Controller;
 use crate::ppu::palette::SystemPalette;
 use crate::ppu::PPU;
 use crate::rendering::fps_frame::FPSFrame;
-use crate::rendering::{frame::Frame, render_bg, scanline::Scanline};
+use crate::rendering::{frame::Frame, scanline::Scanline};
 use crate::ring_buffer::RingBuffer;
 use crate::rolling_avg::RollingAvg;
 use crate::rom::Rom;
@@ -135,15 +135,9 @@ impl<'a> Bus<'a> {
             return;
         }
 
-        if next_scanline != self.last_scanline && next_scanline <= 240 && self.ppu.show_background()
-        {
-            render_bg(&mut self.ppu, &self.rom, &mut self.current_scanline);
-        }
-
         if next_scanline != self.last_scanline && next_scanline <= 240 {
             self.current_scanline
                 .write_scanline(&mut self.frame, next_scanline as usize);
-            self.current_scanline.clear();
             self.last_scanline = next_scanline;
         }
 
@@ -278,7 +272,7 @@ impl Mem for Bus<'_> {
             }
             0x2000 => self.ppu.write_to_ctrl(data),
             0x2001 => self.ppu.write_to_mask(data),
-            0x2002 => panic!("write to PPU status register"),
+            0x2002 => (), //panic!("write to PPU status register"),
             0x2003 => self.ppu.write_to_oam_addr(data),
             0x2004 => self.ppu.write_to_oam_data(data),
             0x2005 => self.ppu.write_to_scroll(data),

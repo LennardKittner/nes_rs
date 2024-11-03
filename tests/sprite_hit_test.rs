@@ -48,7 +48,6 @@ fn test_rom(path: &str) {
     assert_eq!(*tile1.lock().unwrap(), 0x50);
 }
 
-#[ignore]
 #[test]
 fn basics() {
     test_rom("tests/roms/sprite_hit_tests_2005.10.05/01.basics.nes");
