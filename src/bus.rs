@@ -25,7 +25,7 @@ pub struct Bus<'a> {
     frame: Frame,
     fps_frame: FPSFrame,
     current_scanline: Scanline,
-    last_scanline: u16,
+    last_scanline: i32,
     cycles: usize,
     graphics_callback: GraphicsCallback<'a>,
     controller_callback: ControllerCallback<'a>,
@@ -125,20 +125,22 @@ impl<'a> Bus<'a> {
         apu.tick(cycles, self);
         self.apu = Some(apu);
 
-        let ppu_cycle = self.ppu.cycles;
         let vblank_before = self.ppu.is_in_vertical_blank();
         let next_scanline = self
             .ppu
             .tick(cycles * 3, &self.rom, &mut self.current_scanline);
         let vblank_after = self.ppu.is_in_vertical_blank();
 
+        if next_scanline == -1 {
+            return;
+        }
+
         if next_scanline != self.last_scanline && next_scanline <= 240 && self.ppu.show_background()
         {
             render_bg(&mut self.ppu, &self.rom, &mut self.current_scanline);
         }
 
-        if next_scanline != self.last_scanline && next_scanline <= 240 && self.ppu.show_background()
-        {
+        if next_scanline != self.last_scanline && next_scanline <= 240 {
             self.current_scanline
                 .write_scanline(&mut self.frame, next_scanline as usize);
             self.current_scanline.clear();

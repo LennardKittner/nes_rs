@@ -20,6 +20,7 @@ use crate::rendering::frame::SCREEN_WIDTH;
 use crate::rendering::scanline::{Scanline, SpriteColor};
 use crate::rom::{Mirroring, Rom};
 use itertools::Itertools;
+use std::cmp::{max, min};
 use std::ops::Range;
 
 //TODO: 8x16 sprites
@@ -40,8 +41,9 @@ pub struct PPU {
     write_toggle: bool,
     sprite_buffer: [Sprite; 8],
     pub sprite_zero_pos: Range<usize>,
+    sprite_zero_was_hit_this_frame: bool,
 
-    pub scan_line: u16,
+    pub scan_line: i32,
     pub cycles: usize,
 
     outstanding_interrupt: bool,
@@ -77,14 +79,20 @@ impl PPU {
             write_toggle: false,
             sprite_buffer: [Sprite::default(); 8],
             sprite_zero_pos: 0..0,
+            sprite_zero_was_hit_this_frame: false,
             scan_line: 0,
             cycles: 0,
             outstanding_interrupt: false,
         }
     }
 
-    pub fn tick(&mut self, cycles: u8, rom: &Rom, sprite_pixel_buffer: &mut Scanline) -> u16 {
-        self.check_sprite_zero_hit(self.cycles..(self.cycles + cycles as usize));
+    pub fn tick(&mut self, cycles: u8, rom: &Rom, sprite_pixel_buffer: &mut Scanline) -> i32 {
+        if !self.sprite_zero_was_hit_this_frame {
+            self.check_sprite_zero_hit(
+                self.cycles..(self.cycles + cycles as usize),
+                sprite_pixel_buffer,
+            );
+        }
         self.cycles += cycles as usize;
 
         // The VBL flag ($2002.7) is cleared by the PPU around 2270 CPU clocks after NMI occurs.
@@ -110,8 +118,9 @@ impl PPU {
                     self.outstanding_interrupt = true;
                 }
             } else if self.scan_line >= 262 {
-                self.scan_line = 0;
+                self.scan_line = -1;
                 self.outstanding_interrupt = false;
+                self.sprite_zero_was_hit_this_frame = false;
                 if self.show_background() {
                     self.address_register
                         .load_y_from(&self.temporary_address_register);
@@ -125,19 +134,35 @@ impl PPU {
         self.scan_line
     }
 
-    fn check_sprite_zero_hit(&mut self, range_to_check: Range<usize>) {
+    fn check_sprite_zero_hit(&mut self, range_to_check: Range<usize>, scanline: &Scanline) {
         if self.show_sprites()
             && self.scan_line <= 240
             && range_to_check.start < self.sprite_zero_pos.end
             && self.sprite_zero_pos.start < range_to_check.end
+            && self.show_background()
+            && self.show_sprites()
+            && (range_to_check.end > 8 || self.show_sprites_left() && self.show_background_left())
         {
-            // TODO: also compare with bg
-            self.set_sprite_zero_hit()
+            // for pos in max(range_to_check.start, self.sprite_zero_pos.start)
+            //     ..min(range_to_check.end, self.sprite_zero_pos.end)
+            // {
+            //     if !scanline.data[pos].sprite_color.transparent
+            //         && !scanline.data[pos].background_color.transparent
+            //     {
+            self.set_sprite_zero_hit();
+            self.sprite_zero_was_hit_this_frame = true;
+            //         break;
+            //     }
+            // }
+            // println!(
+            //     "Sprite zero hit {}..{} scanline {}",
+            //     range_to_check.start, range_to_check.end, self.scan_line
+            // );
         }
     }
 
     fn compute_sprites_next_scanline(&mut self, rom: &Rom, sprite_pixel_buffer: &mut Scanline) {
-        let next_scanline = self.scan_line + 1;
+        let next_scanline = (self.scan_line + 1) as u16;
         let mut current_sprite_slot = 0;
         for sprite_idx in (0..self.oam_data.len()).step_by(4) {
             let raw = &self.oam_data[sprite_idx..sprite_idx + 4];

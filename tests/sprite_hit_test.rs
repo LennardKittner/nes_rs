@@ -9,7 +9,8 @@ fn test_rom(path: &str) {
     let mirroring = rom.screen_mirroring;
 
     let tile1 = Arc::new(Mutex::new(0));
-    let error_code = Arc::new(Mutex::new(0));
+    let error_code_higher = Arc::new(Mutex::new(0));
+    let error_code_lower = Arc::new(Mutex::new(0));
 
     let bus = Bus::new(
         rom,
@@ -29,7 +30,8 @@ fn test_rom(path: &str) {
             };
 
             *tile1.lock().unwrap() = main_name_table[32 * 6 + 2] as u16;
-            *error_code.lock().unwrap() = main_name_table[32 * 6 + 10] as u16;
+            *error_code_higher.lock().unwrap() = main_name_table[32 * 6 + 10] as u16;
+            *error_code_lower.lock().unwrap() = main_name_table[32 * 6 + 11] as u16;
         },
         |_, _| {},
     );
@@ -41,7 +43,7 @@ fn test_rom(path: &str) {
         cpu.step();
     }
     if *tile1.lock().unwrap() != 0x50 {
-        println!("error code {}", *error_code.lock().unwrap() - 0x30);
+        println!("error code {}{}", *error_code_higher.lock().unwrap() - 0x30, *error_code_lower.lock().unwrap() - 0x30);
     }
     assert_eq!(*tile1.lock().unwrap(), 0x50);
 }
