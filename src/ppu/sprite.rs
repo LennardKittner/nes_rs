@@ -1,10 +1,22 @@
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub struct Sprite {
     y_pos: u8,
     pattern_index: u8,
     attributes: u8,
     x_pos: u8,
     sprite_zero: bool,
+}
+
+impl Default for Sprite {
+    fn default() -> Self {
+        Sprite {
+            y_pos: 0,
+            pattern_index: 0,
+            attributes: 0,
+            x_pos: 0,
+            sprite_zero: false,
+        }
+    }
 }
 
 impl Sprite {

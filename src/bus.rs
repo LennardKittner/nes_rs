@@ -3,7 +3,7 @@ use crate::controller::Controller;
 use crate::ppu::palette::SystemPalette;
 use crate::ppu::PPU;
 use crate::rendering::fps_frame::FPSFrame;
-use crate::rendering::{frame::Frame, render, scanline::Scanline};
+use crate::rendering::{frame::Frame, render_bg, scanline::Scanline};
 use crate::ring_buffer::RingBuffer;
 use crate::rolling_avg::RollingAvg;
 use crate::rom::Rom;
@@ -125,17 +125,20 @@ impl<'a> Bus<'a> {
         apu.tick(cycles, self);
         self.apu = Some(apu);
 
+        let ppu_cycle = self.ppu.cycles;
         let vblank_before = self.ppu.is_in_vertical_blank();
-        let next_scanline = self.ppu.tick(cycles * 3);
+        let next_scanline = self
+            .ppu
+            .tick(cycles * 3, &self.rom, &mut self.current_scanline);
         let vblank_after = self.ppu.is_in_vertical_blank();
 
-        if next_scanline != self.last_scanline && next_scanline <= 240 {
-            render(
-                &mut self.ppu,
-                &self.rom,
-                &mut self.current_scanline,
-                next_scanline as usize,
-            );
+        if next_scanline != self.last_scanline && next_scanline <= 240 && self.ppu.show_background()
+        {
+            render_bg(&mut self.ppu, &self.rom, &mut self.current_scanline);
+        }
+
+        if next_scanline != self.last_scanline && next_scanline <= 240 && self.ppu.show_background()
+        {
             self.current_scanline
                 .write_scanline(&mut self.frame, next_scanline as usize);
             self.current_scanline.clear();

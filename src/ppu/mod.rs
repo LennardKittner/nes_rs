@@ -13,9 +13,15 @@ use crate::ppu::control::ControlRegister;
 use crate::ppu::mask::MaskRegister;
 use crate::ppu::palette::SystemPalette;
 use crate::ppu::scroll::ScrollRegister;
+use crate::ppu::sprite::Sprite;
 use crate::ppu::status::StatusRegister;
 use crate::ppu::t_register::TRegister;
-use crate::rom::Mirroring;
+use crate::rendering::frame::SCREEN_WIDTH;
+use crate::rendering::get_sprite_palette;
+use crate::rendering::scanline::{Scanline, SpriteColor};
+use crate::rom::{Mirroring, Rom};
+use itertools::Itertools;
+use std::ops::Range;
 
 //TODO: 8x16 sprites
 pub struct PPU {
@@ -33,6 +39,8 @@ pub struct PPU {
     mirroring: Mirroring,
     internal_data_buffer: u8,
     write_toggle: bool,
+    sprite_buffer: [Sprite; 8],
+    pub sprite_zero_pos: Range<usize>,
 
     pub scan_line: u16,
     pub cycles: usize,
@@ -68,13 +76,16 @@ impl PPU {
             temporary_address_register: TRegister::new(),
             internal_data_buffer: 0,
             write_toggle: false,
+            sprite_buffer: [Sprite::default(); 8],
+            sprite_zero_pos: 0..0,
             scan_line: 0,
             cycles: 0,
             outstanding_interrupt: false,
         }
     }
 
-    pub fn tick(&mut self, cycles: u8) -> u16 {
+    pub fn tick(&mut self, cycles: u8, rom: &Rom, sprite_pixel_buffer: &mut Scanline) -> u16 {
+        self.check_sprite_zero_hit(self.cycles..(self.cycles + cycles as usize));
         self.cycles += cycles as usize;
 
         // The VBL flag ($2002.7) is cleared by the PPU around 2270 CPU clocks after NMI occurs.
@@ -107,11 +118,102 @@ impl PPU {
                         .load_y_from(&self.temporary_address_register);
                 }
             }
+            self.compute_sprites_next_scanline(rom, sprite_pixel_buffer);
         }
         if self.control_register.get_sprite_size() == 16 {
             println!("Sprite size: 16");
         }
         self.scan_line
+    }
+
+    fn check_sprite_zero_hit(&mut self, range_to_check: Range<usize>) {
+        if self.show_sprites()
+            && self.scan_line <= 240
+            && range_to_check.start < self.sprite_zero_pos.end
+            && self.sprite_zero_pos.start < range_to_check.end
+        {
+            // TODO: also compare with bg
+            self.set_sprite_zero_hit()
+        }
+    }
+
+    fn compute_sprites_next_scanline(&mut self, rom: &Rom, sprite_pixel_buffer: &mut Scanline) {
+        let next_scanline = self.scan_line + 1;
+        let mut current_sprite_slot = 0;
+        for sprite_idx in (0..self.oam_data.len()).step_by(4) {
+            let raw = &self.oam_data[sprite_idx..sprite_idx + 4];
+            if raw[0] < 239
+                && next_scanline > raw[0] as u16
+                && next_scanline < (raw[0] + 1 + 8) as u16
+            {
+                self.sprite_buffer[current_sprite_slot] =
+                    Sprite::new(raw, sprite_idx == 0).unwrap();
+                current_sprite_slot += 1;
+                if current_sprite_slot >= 8 {
+                    self.set_sprite_overflow();
+                    break;
+                }
+            }
+        }
+
+        let mut sprite_zero_start: i32 = -1;
+        let mut sprite_zero_len: i32 = 0;
+
+        for sprite_idx in (0..current_sprite_slot).rev() {
+            let sprite = &self.sprite_buffer[sprite_idx];
+            let palette = get_sprite_palette(self, sprite.get_palette_index());
+            let bank = self.control_register.get_sprite_pattern_table_address() as usize;
+            let tile = rom.read_tile_chr_rom((bank + sprite.get_pattern_index() * 16) as u16);
+            let sprite_line = if sprite.is_vertical_flip() {
+                7 - (next_scanline as usize - sprite.get_y())
+            } else {
+                next_scanline as usize - sprite.get_y()
+            };
+
+            let mut upper = tile[sprite_line];
+            let mut lowwer = tile[sprite_line + 8];
+
+            for x in (0..8).rev() {
+                let color_idx = (1 & lowwer) << 1 | (1 & upper);
+                upper >>= 1;
+                lowwer >>= 1;
+
+                if color_idx == 0 {
+                    continue;
+                }
+
+                let x_pos = if sprite.is_horizontal_flip() {
+                    sprite.get_x() + 7 - x
+                } else {
+                    x + sprite.get_x()
+                };
+
+                if sprite.is_sprite_zero() {
+                    if sprite_zero_start <= 0 {
+                        sprite_zero_start = x_pos as i32;
+                        sprite_zero_len = 1;
+                    } else {
+                        sprite_zero_len += 1;
+                    }
+                }
+
+                let rgb = self
+                    .get_color_from_current_system_palette(palette[color_idx as usize] as usize);
+
+                if x_pos < SCREEN_WIDTH {
+                    sprite_pixel_buffer.data[x_pos].sprite_color = SpriteColor {
+                        color: rgb,
+                        behind_background: !sprite.draw_over_background(),
+                        transparent: false,
+                    };
+                }
+            }
+        }
+        self.sprite_zero_pos = if sprite_zero_start <= 0 {
+            0..0
+        } else {
+            (sprite_zero_start as usize)..(sprite_zero_start as usize + sprite_zero_len as usize)
+        };
     }
 
     fn increment_vram_addr(&mut self) {

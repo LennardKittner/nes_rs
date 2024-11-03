@@ -57,79 +57,8 @@ pub fn write_tile(frame: &mut Frame, x_pos: usize, y_pos: usize, tile: &[u8], pa
     }
 }
 
-pub fn render(ppu: &mut PPU, rom: &Rom, scanline: &mut Scanline, scanline_pos: usize) {
-    if ppu.show_background() {
-        render_bg(ppu, rom, scanline);
-    }
-    if ppu.show_sprites() {
-        render_sprites(ppu, rom, scanline, scanline_pos);
-    }
-}
-
-pub fn render_sprites(ppu: &mut PPU, rom: &Rom, scanline: &mut Scanline, scanline_pos: usize) {
-    let scanline_pos = scanline_pos as u8;
-    let sprites = (0..ppu.oam_data.len())
-        .step_by(4)
-        .filter_map(|idx| {
-            let raw = &ppu.oam_data[idx..idx + 4];
-            if raw[0] >= 239 || scanline_pos < raw[0] + 1 || scanline_pos >= (raw[0] + 1 + 8) {
-                None
-            } else {
-                Sprite::new(raw, idx == 0)
-            }
-        })
-        .collect_vec();
-
-    if sprites.len() > 8 {
-        ppu.set_sprite_overflow();
-    }
-
-    for sprite in sprites.iter().take(8).rev() {
-        let palette = get_sprite_palette(ppu, sprite.get_palette_index());
-        let bank = ppu.control_register.get_sprite_pattern_table_address() as usize;
-        let tile = rom.read_tile_chr_rom((bank + sprite.get_pattern_index() * 16) as u16);
-        let sprite_line = if sprite.is_vertical_flip() {
-            7 - (scanline_pos as usize - sprite.get_y())
-        } else {
-            scanline_pos as usize - sprite.get_y()
-        };
-
-        let mut upper = tile[sprite_line];
-        let mut lowwer = tile[sprite_line + 8];
-
-        for x in (0..8).rev() {
-            let color_idx = (1 & lowwer) << 1 | (1 & upper);
-            upper >>= 1;
-            lowwer >>= 1;
-
-            if color_idx == 0 {
-                continue;
-            }
-
-            if sprite.is_sprite_zero() {
-                ppu.set_sprite_zero_hit();
-            }
-
-            let rgb =
-                ppu.get_color_from_current_system_palette(palette[color_idx as usize] as usize);
-            let x_pos = if sprite.is_horizontal_flip() {
-                sprite.get_x() + 7 - x
-            } else {
-                x + sprite.get_x()
-            };
-            if x_pos < SCREEN_WIDTH {
-                scanline.data[x_pos].sprite_color = SpriteColor {
-                    color: rgb,
-                    behind_background: !sprite.draw_over_background(),
-                    transparent: false,
-                };
-            }
-        }
-    }
-}
-
 //TODO: maybe extract rendering loop
-fn render_bg(ppu: &mut PPU, rom: &Rom, scanline: &mut Scanline) {
+pub fn render_bg(ppu: &mut PPU, rom: &Rom, scanline: &mut Scanline) {
     let (main_name_table, second_name_table) =
         match (rom.screen_mirroring, ppu.address_register.get_name_table()) {
             (Mirroring::VERTICAL, 0b00)

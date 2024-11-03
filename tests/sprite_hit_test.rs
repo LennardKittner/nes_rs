@@ -33,7 +33,7 @@ fn test_rom(path: &str) {
         },
         |_, _| {},
     );
-    //8
+
     let mut cpu = CPU::new_with_bus(bus);
     cpu.reset();
 
