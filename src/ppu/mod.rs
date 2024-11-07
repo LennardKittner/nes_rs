@@ -161,15 +161,12 @@ impl PPU {
     }
 
     fn compute_sprites_next_scanline(&mut self, rom: &Rom, sprite_pixel_buffer: &mut Scanline) {
-        let next_scanline = (self.scan_line + 1) as u16;
+        let scan_line = (self.scan_line) as u16;
         let mut current_sprite_slot = 0;
         self.sprite_zero_pos = 0..0;
         for sprite_idx in (0..self.oam_data.len()).step_by(4) {
             let raw = &self.oam_data[sprite_idx..sprite_idx + 4];
-            if raw[0] < 239
-                && next_scanline > raw[0] as u16
-                && next_scanline < (raw[0] + 1 + 8) as u16
-            {
+            if raw[0] < 239 && scan_line > raw[0] as u16 && scan_line < (raw[0] + 1 + 8) as u16 {
                 self.sprite_buffer[current_sprite_slot] =
                     Sprite::new(raw, sprite_idx == 0).unwrap();
                 current_sprite_slot += 1;
@@ -190,9 +187,9 @@ impl PPU {
             let bank = self.control_register.get_sprite_pattern_table_address() as usize;
             let tile = rom.read_tile_chr_rom((bank + sprite.get_pattern_index() * 16) as u16);
             let sprite_line = if sprite.is_vertical_flip() {
-                7 - (next_scanline as usize - sprite.get_y())
+                7 - (scan_line as usize - sprite.get_y())
             } else {
-                next_scanline as usize - sprite.get_y()
+                scan_line as usize - sprite.get_y()
             };
 
             let mut upper = tile[sprite_line];

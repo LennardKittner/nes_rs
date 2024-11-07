@@ -43,7 +43,19 @@ fn test_rom(path: &str) {
         cpu.step();
     }
     if *tile1.lock().unwrap() != 0x50 {
-        println!("error code {}{}", *error_code_higher.lock().unwrap() - 0x30, *error_code_lower.lock().unwrap() - 0x30);
+        if *error_code_lower.lock().unwrap() > 0x30 {
+            println!(
+                "error code {}{}",
+                *error_code_higher.lock().unwrap() - 0x30,
+                *error_code_lower.lock().unwrap() - 0x30
+            );
+        } else {
+            println!(
+                "error code {}",
+                *error_code_higher.lock().unwrap() - 0x30
+            );
+        }
+
     }
     assert_eq!(*tile1.lock().unwrap(), 0x50);
 }
@@ -51,4 +63,9 @@ fn test_rom(path: &str) {
 #[test]
 fn basics() {
     test_rom("tests/roms/sprite_hit_tests_2005.10.05/01.basics.nes");
+}
+
+#[test]
+fn alignment() {
+    test_rom("tests/roms/sprite_hit_tests_2005.10.05/02.alignment.nes");
 }
