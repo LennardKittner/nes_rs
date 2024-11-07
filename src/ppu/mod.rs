@@ -163,6 +163,7 @@ impl PPU {
     fn compute_sprites_next_scanline(&mut self, rom: &Rom, sprite_pixel_buffer: &mut Scanline) {
         let next_scanline = (self.scan_line + 1) as u16;
         let mut current_sprite_slot = 0;
+        self.sprite_zero_pos = 0..0;
         for sprite_idx in (0..self.oam_data.len()).step_by(4) {
             let raw = &self.oam_data[sprite_idx..sprite_idx + 4];
             if raw[0] < 239
@@ -172,15 +173,16 @@ impl PPU {
                 self.sprite_buffer[current_sprite_slot] =
                     Sprite::new(raw, sprite_idx == 0).unwrap();
                 current_sprite_slot += 1;
+                if sprite_idx == 0 {
+                    let x_start = self.sprite_buffer[current_sprite_slot - 1].get_x();
+                    self.sprite_zero_pos = x_start..(x_start + 8);
+                }
                 if current_sprite_slot >= 8 {
                     self.set_sprite_overflow();
                     break;
                 }
             }
         }
-
-        let mut sprite_zero_start: i32 = -1;
-        let mut sprite_zero_len: i32 = 0;
 
         for sprite_idx in (0..current_sprite_slot).rev() {
             let sprite = &self.sprite_buffer[sprite_idx];
@@ -211,15 +213,6 @@ impl PPU {
                     x + sprite.get_x()
                 };
 
-                if sprite.is_sprite_zero() {
-                    if sprite_zero_start <= 0 {
-                        sprite_zero_start = x_pos as i32;
-                        sprite_zero_len = 1;
-                    } else {
-                        sprite_zero_len += 1;
-                    }
-                }
-
                 let rgb = self
                     .get_color_from_current_system_palette(palette[color_idx as usize] as usize);
 
@@ -232,11 +225,6 @@ impl PPU {
                 }
             }
         }
-        self.sprite_zero_pos = if sprite_zero_start <= 0 {
-            0..0
-        } else {
-            (sprite_zero_start as usize)..(sprite_zero_start as usize + sprite_zero_len as usize)
-        };
     }
 
     fn get_sprite_palette(&self, palette_idx: usize) -> [u8; 4] {
