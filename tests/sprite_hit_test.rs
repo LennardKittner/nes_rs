@@ -50,12 +50,8 @@ fn test_rom(path: &str) {
                 *error_code_lower.lock().unwrap() - 0x30
             );
         } else {
-            println!(
-                "error code {}",
-                *error_code_higher.lock().unwrap() - 0x30
-            );
+            println!("error code {}", *error_code_higher.lock().unwrap() - 0x30);
         }
-
     }
     assert_eq!(*tile1.lock().unwrap(), 0x50);
 }
@@ -68,4 +64,56 @@ fn basics() {
 #[test]
 fn alignment() {
     test_rom("tests/roms/sprite_hit_tests_2005.10.05/02.alignment.nes");
+}
+
+#[test]
+fn corners() {
+    test_rom("tests/roms/sprite_hit_tests_2005.10.05/03.corners.nes");
+}
+
+#[test]
+fn flip() {
+    test_rom("tests/roms/sprite_hit_tests_2005.10.05/04.flip.nes");
+}
+
+#[ignore]
+#[test]
+fn left_clip() {
+    test_rom("tests/roms/sprite_hit_tests_2005.10.05/05.left_clip.nes");
+}
+
+#[ignore]
+#[test]
+fn right_edge() {
+    test_rom("tests/roms/sprite_hit_tests_2005.10.05/06.right_edge.nes");
+}
+
+#[ignore]
+#[test]
+fn screen_bottom() {
+    test_rom("tests/roms/sprite_hit_tests_2005.10.05/07.screen_bottom.nes");
+}
+
+#[ignore] // 8x16 sprites not implemented
+#[test]
+fn double_height() {
+    test_rom("tests/roms/sprite_hit_tests_2005.10.05/08.double_height.nes");
+}
+
+#[ignore]
+#[test]
+fn timing_basics() {
+    test_rom("tests/roms/sprite_hit_tests_2005.10.05/09.timing_basics.nes");
+}
+
+#[ignore]
+#[test]
+fn timing_order() {
+    test_rom("tests/roms/sprite_hit_tests_2005.10.05/10.timing_order.nes");
+}
+
+#[ignore]
+#[test]
+fn edge_timing() {
+    test_rom("tests/roms/sprite_hit_tests_2005.10.05/11.edge_timing.nes");
 }
