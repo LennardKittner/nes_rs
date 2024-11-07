@@ -116,7 +116,8 @@ impl PPU {
                 if self.control_register.generate_nmi() {
                     self.outstanding_interrupt = true;
                 }
-            } else if self.scan_line >= 262 {
+            } else if self.scan_line > 260 {
+                // 260 is the last scanline
                 self.scan_line = -1;
                 self.outstanding_interrupt = false;
                 self.sprite_zero_was_hit_this_frame = false;
