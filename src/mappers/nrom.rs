@@ -1,19 +1,22 @@
 use crate::mappers::Mapper;
+use crate::rom::Mirroring;
 
 pub struct NROMMapper {
     prg_rom: Vec<u8>,
     chr_space: Vec<u8>,
     has_chr_ram: bool,
     cartridge_ram: [u8; 0x2000],
+    mirroring: Mirroring,
 }
 
 impl NROMMapper {
-    pub fn new(prg_rom: Vec<u8>, chr_rom: Vec<u8>, has_chr_ram: bool) -> Self {
+    pub fn new(prg_rom: Vec<u8>, chr_rom: Vec<u8>, has_chr_ram: bool, mirroring: Mirroring) -> Self {
         Self {
             prg_rom,
             chr_space: chr_rom,
             has_chr_ram,
             cartridge_ram: [0; 0x2000],
+            mirroring,
         }
     }
 }
@@ -42,20 +45,16 @@ impl Mapper for NROMMapper {
         let address = bank as usize * 0x1000 + address as usize;
         &self.chr_space[address..(address + 16)]
     }
-    fn get_current_chr_rom(&self) -> &[u8] {
-        &self.chr_space
-    }
-    fn get_current_chr_ram(&mut self) -> &mut [u8] {
-        if self.has_chr_ram {
-            self.chr_space.as_mut_slice()
-        } else {
-            panic!("Tried to access nonexistent chr RAM");
-        }
-    }
     fn read_cartridge_ram(&self, address: u16) -> u8 {
         self.cartridge_ram[address as usize]
     }
     fn write_cartridge_ram(&mut self, address: u16, value: u8) {
         self.cartridge_ram[address as usize] = value;
+    }
+    fn get_mirroring(&self) -> Mirroring {
+        self.mirroring
+    }
+    fn write_chr_ram(&mut self, address: u16, value: u8) {
+        self.chr_space[address as usize] = value;
     }
 }

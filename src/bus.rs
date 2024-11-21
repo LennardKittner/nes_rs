@@ -51,7 +51,7 @@ impl<'a> Bus<'a> {
         GF: FnMut(&PPU, &Frame, &FPSFrame) + 'a,
         C1F: FnMut(&mut Controller, &mut Controller) + 'a,
     {
-        let ppu = PPU::new(rom.screen_mirroring, system_palette);
+        let ppu = PPU::new(rom.get_mirroring_mode(), system_palette);
         let mut speed_multiplier = speed_multiplier;
         if speed_multiplier <= 0f64 {
             speed_multiplier = f64::INFINITY;
@@ -131,7 +131,8 @@ impl<'a> Bus<'a> {
             .tick(cycles * 3, &self.rom, &mut self.current_scanline);
         let vblank_after = self.ppu.is_in_vertical_blank();
 
-        if next_scanline == -1 {
+        // pre render scanline has index -1
+        if next_scanline < 0 {
             return;
         }
 
@@ -238,7 +239,7 @@ impl Mem for Bus<'_> {
             }
             0x2002 => self.ppu.read_status(),
             0x2004 => self.ppu.read_oam_data(),
-            0x2007 => self.ppu.read_data(self.rom.get_current_chr_rom()),
+            0x2007 => self.ppu.read_data(&self.rom),
             0x2008..=PPU_REGISTERS_MIRRORS_END => {
                 let mirror_down_addr = addr & 0b00100000_00000111;
                 self.mem_read(mirror_down_addr)
@@ -277,7 +278,7 @@ impl Mem for Bus<'_> {
             0x2004 => self.ppu.write_to_oam_data(data),
             0x2005 => self.ppu.write_to_scroll(data),
             0x2006 => self.ppu.write_to_addr(data),
-            0x2007 => self.ppu.write_to_data(data, self.rom.get_current_chr_ram()),
+            0x2007 => self.ppu.write_to_data(data, &mut self.rom),
             0x2008..=PPU_REGISTERS_MIRRORS_END => {
                 let mirror_down_addr = addr & 0b00100000_00000111;
                 self.mem_write(mirror_down_addr, data);

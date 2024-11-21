@@ -7,16 +7,16 @@ use std::fs::File;
 use std::io::Read;
 
 #[derive(Debug, PartialEq, Copy, Clone)]
-#[allow(non_camel_case_types)]
 pub enum Mirroring {
-    VERTICAL,
-    HORIZONTAL,
-    FOUR_SCREEN,
+    Vertical,
+    Horizontal,
+    FourScree,
+    OneScreenLowerBank,
+    OneScreenUpperBank,
 }
 
 pub struct Rom {
     mapper: Box<dyn Mapper>,
-    pub screen_mirroring: Mirroring,
     pub chr_is_writable: bool,
 }
 
@@ -46,8 +46,8 @@ impl Rom {
                 prg_rom,
                 vec![0; CHR_ROM_PAGE_SIZE * 4],
                 true,
+                Mirroring::Vertical
             )),
-            screen_mirroring: Mirroring::VERTICAL,
             chr_is_writable: true,
         }
     }
@@ -62,12 +62,13 @@ impl Rom {
             return Err("iNES2.0 format is not supported".to_string());
         }
 
+        let battery_backed_ram = raw[6] & 0b10 != 0;
         let four_screen = raw[6] & 0b1000 != 0;
         let vertical_mirroring = raw[6] & 1 != 0;
         let screen_mirroring = match (four_screen, vertical_mirroring) {
-            (true, _) => Mirroring::FOUR_SCREEN,
-            (false, true) => Mirroring::VERTICAL,
-            (false, false) => Mirroring::HORIZONTAL,
+            (true, _) => Mirroring::FourScree,
+            (false, true) => Mirroring::Vertical,
+            (false, false) => Mirroring::Horizontal,
         };
 
         let prg_rom_size = raw[4] as usize * PRG_ROM_PAGE_SIZE;
@@ -87,13 +88,14 @@ impl Rom {
 
         let mapper = create_mapper(
             mapper_idx,
+            battery_backed_ram,
             &raw[prg_rom_start..(prg_rom_start + prg_rom_size)],
             chr_space,
             chr_is_writable,
+            screen_mirroring
         );
         Ok(Rom {
             mapper,
-            screen_mirroring,
             chr_is_writable,
         })
     }
@@ -119,25 +121,20 @@ impl Rom {
     pub fn read_tile_chr_rom_bank(&self, bank: u16, address: u16) -> &[u8] {
         self.mapper.read_tile_chr_rom_bank(bank, address)
     }
-    pub fn get_current_chr_rom(&self) -> &[u8] {
-        self.mapper.get_current_chr_rom()
-    }
-    pub fn get_current_chr_ram(&mut self) -> Option<&mut [u8]> {
-        if self.chr_is_writable {
-            Some(self.mapper.get_current_chr_ram())
-        } else {
-            None
-        }
-    }
     pub fn mapper_register_write(&mut self, address: u16, value: u8) {
         self.mapper.register_write(address, value);
     }
-
     pub fn read_cartridge_ram(&self, address: u16) -> u8 {
         self.mapper.read_cartridge_ram(address)
     }
     pub fn write_cartridge_ram(&mut self, address: u16, value: u8) {
         self.mapper.write_cartridge_ram(address, value);
+    }
+    pub fn get_mirroring_mode(&self) -> Mirroring {
+        self.mapper.get_mirroring()
+    }
+    pub fn write_chr_ram(&mut self, address: u16, value: u8) {
+        self.mapper.write_chr_ram(address, value);
     }
 }
 

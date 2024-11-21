@@ -47,18 +47,23 @@ pub fn write_tile(frame: &mut Frame, x_pos: usize, y_pos: usize, tile: &[u8], pa
 
 //TODO: maybe extract rendering loop
 pub fn render_bg(ppu: &mut PPU, rom: &Rom, scanline: &mut Scanline) {
-    let (main_name_table, second_name_table) =
-        match (rom.screen_mirroring, ppu.address_register.get_name_table()) {
-            (Mirroring::VERTICAL, 0b00)
-            | (Mirroring::VERTICAL, 0b10)
-            | (Mirroring::HORIZONTAL, 0b00)
-            | (Mirroring::HORIZONTAL, 0b01) => (&ppu.vram[0..0x400], &ppu.vram[0x400..0x800]),
-            (Mirroring::VERTICAL, 0b01)
-            | (Mirroring::VERTICAL, 0b11)
-            | (Mirroring::HORIZONTAL, 0b10)
-            | (Mirroring::HORIZONTAL, 0b11) => (&ppu.vram[0x400..0x800], &ppu.vram[0..0x400]),
-            (_, _) => panic!("Unsupported mirroring mode: {:?}", rom.screen_mirroring),
-        };
+    let (main_name_table, second_name_table) = match (
+        rom.get_mirroring_mode(),
+        ppu.address_register.get_name_table(),
+    ) {
+        //TODO: one scree and four screen
+        (Mirroring::Vertical, 0b00)
+        | (Mirroring::Vertical, 0b10)
+        | (Mirroring::Horizontal, 0b00)
+        | (Mirroring::Horizontal, 0b01) => (&ppu.vram[0..0x400], &ppu.vram[0x400..0x800]),
+        (Mirroring::OneScreenLowerBank, _) => (&ppu.vram[0..0x400], &ppu.vram[0..0x400]),
+        (Mirroring::Vertical, 0b01)
+        | (Mirroring::Vertical, 0b11)
+        | (Mirroring::Horizontal, 0b10)
+        | (Mirroring::Horizontal, 0b11) => (&ppu.vram[0x400..0x800], &ppu.vram[0..0x400]),
+        (Mirroring::OneScreenUpperBank, _) => (&ppu.vram[0x400..0x800], &ppu.vram[0x400..0x800]),
+        (_, _) => panic!("Unsupported mirroring mode: {:?}", rom.get_mirroring_mode()),
+    };
 
     let bank = ppu.control_register.get_background_pattern_table_address();
     let attribute_table = &main_name_table[0x3C0..0x400];

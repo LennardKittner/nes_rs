@@ -252,9 +252,11 @@ impl PPU {
         let vram_index = mirrored_vram.wrapping_sub(0x2000); // to vram vector
         let name_table = vram_index / 0x400; // to name table index
         match (&self.mirroring, name_table) {
-            (Mirroring::VERTICAL, 2) | (Mirroring::VERTICAL, 3) => vram_index - 0x800,
-            (Mirroring::HORIZONTAL, 1) | (Mirroring::HORIZONTAL, 2) => vram_index - 0x400,
-            (Mirroring::HORIZONTAL, 3) => vram_index - 0x800,
+            (Mirroring::Vertical, 2) | (Mirroring::Vertical, 3) => vram_index - 0x800,
+            (Mirroring::Horizontal, 1) | (Mirroring::Horizontal, 2) => vram_index - 0x400,
+            (Mirroring::Horizontal, 3) => vram_index - 0x800,
+            (Mirroring::OneScreenLowerBank, _) => vram_index % 0x400,
+            (Mirroring::OneScreenUpperBank, _) => (vram_index % 0x400) + 0x400,
             _ => vram_index,
         }
     }
@@ -263,13 +265,10 @@ impl PPU {
         (addr - 0x3F00) % 32
     }
 
-    pub fn write_to_data(&mut self, data: u8, chr_rom: Option<&mut [u8]>) {
+    pub fn write_to_data(&mut self, data: u8, rom: &mut Rom) {
         let addr = self.address_register.data_alt;
         match addr {
-            0x0000..=0x1FFF => match chr_rom {
-                Some(chr_rom) => chr_rom[addr as usize] = data,
-                None => println!("Attempt to write to Cartridge ROM space"),
-            },
+            0x0000..=0x1FFF => rom.write_chr_ram(addr, data),
             0x2000..=0x2FFF => self.vram[self.mirror_vram_addr(addr) as usize] = data,
             0x3000..=0x3EFF => self.vram[self.mirror_vram_addr(addr - 0x1000) as usize] = data,
             0x3F10 | 0x3F14 | 0x3F18 | 0x3F1C => {
@@ -310,7 +309,7 @@ impl PPU {
         palette
     }
 
-    pub fn read_data(&mut self, chr_rom: &[u8]) -> u8 {
+    pub fn read_data(&mut self, rom: &Rom) -> u8 {
         let addr = self.address_register.data_alt;
         self.address_register
             .increment_alt(self.control_register.get_vram_increment());
@@ -318,7 +317,7 @@ impl PPU {
         match addr {
             0x0000..=0x1FFF => {
                 let result = self.internal_data_buffer;
-                self.internal_data_buffer = chr_rom[addr as usize];
+                self.internal_data_buffer = rom.read_chr_rom(addr);
                 result
             }
             0x2000..=0x2FFF => {
@@ -472,7 +471,7 @@ pub mod test {
     use super::*;
 
     pub fn new_ppu() -> PPU {
-        PPU::new(Mirroring::HORIZONTAL, SystemPalette::new())
+        PPU::new(Mirroring::Horizontal, SystemPalette::new())
     }
 
     #[test]
