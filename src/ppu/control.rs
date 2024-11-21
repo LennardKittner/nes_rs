@@ -5,7 +5,7 @@ bitflags! {
     // ---- ----
     // VPHB SIUU
     // |||| ||||
-    // |||| ||++- Unused Base nametable address is inside the address register https://www.nesdev.org/wiki/PPU_scrolling#$2000_write
+    // |||| ||++- Base nametable address is also inside the address register https://www.nesdev.org/wiki/PPU_scrolling#$2000_write
     // |||| |+--- VRAM address increment per CPU read/write of PPUDATA
     // |||| |     (0: add 1, going across; 1: add 32, going down)
     // |||| +---- Sprite pattern table address for 8x8 sprites
