@@ -80,19 +80,23 @@ impl PPU {
             sprite_buffer: [Sprite::default(); 8],
             sprite_zero_pos: 0..0,
             sprite_zero_was_hit_this_frame: false,
-            scan_line: 0,
+            scan_line: -1,
             cycles: 0,
             outstanding_interrupt: false,
+            global_cycle: 0,
         }
     }
 
     pub fn tick(&mut self, cycles: u8, rom: &Rom, sprite_pixel_buffer: &mut Scanline) -> i32 {
         let pixel_range = self.cycles..(self.cycles + cycles as usize);
         self.cycles += cycles as usize;
+        self.global_cycle += cycles as usize;
 
         // The VBL flag ($2002.7) is cleared by the PPU around 2270 CPU clocks after NMI occurs.
         if self.scan_line == 260 && self.cycles >= 308 {
             self.status_register.set_vertical_blank(false);
+            self.status_register.set_sprite_zero_hit(false);
+            self.outstanding_interrupt = false;
         }
 
         if self.cycles >= 341 {
@@ -103,21 +107,25 @@ impl PPU {
 
             self.cycles -= 341;
             self.scan_line += 1;
-            if self.scan_line < 241 {
+
+            // Handle visible scanlines
+            if self.scan_line < 240 {
                 sprite_pixel_buffer.clear();
                 self.compute_sprites_next_scanline(rom, sprite_pixel_buffer);
                 if self.show_background() {
                     render_bg(self, rom, sprite_pixel_buffer);
                 }
-            } else if self.scan_line == 241 {
+            }
+            // VBlank start at scanline 241
+            else if self.scan_line == 241 {
                 self.status_register.set_vertical_blank(true);
-                self.status_register.set_sprite_zero_hit(false);
                 self.status_register.set_sprite_overflow(false);
                 if self.control_register.generate_nmi() {
                     self.outstanding_interrupt = true;
                 }
-            } else if self.scan_line > 260 {
-                // 260 is the last scanline
+            }
+            // Reset scanline to -1 after 260 to start pre-render
+            else if self.scan_line > 260 {
                 self.scan_line = -1;
                 self.outstanding_interrupt = false;
                 self.sprite_zero_was_hit_this_frame = false;
@@ -128,13 +136,15 @@ impl PPU {
             }
         }
 
-        if !self.sprite_zero_was_hit_this_frame {
+        // Check for Sprite Zero hit during visible scanlines (0–239)
+        if !self.sprite_zero_was_hit_this_frame && self.scan_line >= 0 && self.scan_line < 240 {
             self.check_sprite_zero_hit(pixel_range, sprite_pixel_buffer);
         }
 
         if self.control_register.get_sprite_size() == 16 {
             println!("Sprite size: 16");
         }
+
         self.scan_line
     }
 
