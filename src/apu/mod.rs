@@ -19,6 +19,7 @@ enum FrameCounterMode {
     MODE4STEP,
 }
 
+#[allow(clippy::upper_case_acronyms)]
 pub struct APU {
     pulse_generator1: PulseGenerator,
     pulse_generator2: PulseGenerator,

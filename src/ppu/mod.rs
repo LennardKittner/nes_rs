@@ -251,11 +251,6 @@ impl PPU {
         ]
     }
 
-    fn increment_vram_addr(&mut self) {
-        self.address_register
-            .increment(self.control_register.get_vram_increment());
-    }
-
     // Horizontal:
     //   [ A ] [ a ]
     //   [ B ] [ b ]

@@ -3,11 +3,9 @@ use nes_rs::bus::Bus;
 use nes_rs::cpu::CPU;
 use nes_rs::ppu::palette::SystemPalette;
 use nes_rs::rom::Rom;
-use std::fs::File;
-use std::io::Read;
+use std::env;
 use std::str::FromStr;
 use std::time::Instant;
-use std::{env, io};
 
 fn main() {
     let args = env::args().collect_vec();
@@ -41,11 +39,4 @@ fn main() {
         "Emulated {name} for {cycles}, which took {}s",
         duration.as_secs_f64()
     );
-}
-
-fn read_palette_table(path: &str) -> io::Result<SystemPalette> {
-    let mut palette_file = File::open(path)?;
-    let mut buffer = Vec::new();
-    palette_file.read_to_end(&mut buffer)?;
-    Ok(SystemPalette::from_raw(&buffer).unwrap())
 }

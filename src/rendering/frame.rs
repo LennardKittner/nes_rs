@@ -47,7 +47,7 @@ impl Frame {
     ) {
         assert!(bank <= 1);
         let tile = rom.read_tile_chr_rom_bank(bank as u16, tile_n as u16 * 16);
-        write_tile(self, x_pos, y_pos, &tile, pallet);
+        write_tile(self, x_pos, y_pos, tile, pallet);
     }
 }
 

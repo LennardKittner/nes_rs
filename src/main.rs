@@ -18,6 +18,7 @@ use std::sync::Arc;
 use std::{env, io};
 
 struct AudioWrapper {
+    #[allow(clippy::type_complexity)]
     func: Box<dyn FnMut(&mut [f32]) + Send>,
 }
 

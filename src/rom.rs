@@ -46,7 +46,7 @@ impl Rom {
                 prg_rom,
                 vec![0; CHR_ROM_PAGE_SIZE * 4],
                 true,
-                Mirroring::Vertical
+                Mirroring::Vertical,
             )),
             chr_is_writable: true,
         }
@@ -92,7 +92,7 @@ impl Rom {
             &raw[prg_rom_start..(prg_rom_start + prg_rom_size)],
             chr_space,
             chr_is_writable,
-            screen_mirroring
+            screen_mirroring,
         );
         Ok(Rom {
             mapper,

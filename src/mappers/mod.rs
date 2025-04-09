@@ -21,7 +21,9 @@ pub trait Mapper {
     }
     fn write_cartridge_ram(&mut self, _address: u16, _value: u8) {}
     fn write_chr_ram(&mut self, _address: u16, _value: u8) {}
-    fn get_battery_backed_ram(&self) -> Option<&[u8]> { None }
+    fn get_battery_backed_ram(&self) -> Option<&[u8]> {
+        None
+    }
     fn get_mirroring(&self) -> Mirroring;
 }
 
@@ -31,7 +33,7 @@ pub fn create_mapper(
     prg_rom: &[u8],
     chr_rom: &[u8],
     has_chr_ram: bool,
-    mirroring: Mirroring
+    mirroring: Mirroring,
 ) -> Box<dyn Mapper> {
     match idx {
         0 => Box::new(NROMMapper::new(

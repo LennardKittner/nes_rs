@@ -28,3 +28,9 @@ impl<T: Default + Copy, const BUFFER_SIZE: usize> RingBuffer<T, BUFFER_SIZE> {
         }
     }
 }
+
+impl<T: Default + Copy, const BUFFER_SIZE: usize> Default for RingBuffer<T, BUFFER_SIZE> {
+    fn default() -> Self {
+        Self::new()
+    }
+}

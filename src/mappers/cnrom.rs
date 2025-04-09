@@ -10,7 +10,12 @@ pub struct CNROMMapper {
 }
 
 impl CNROMMapper {
-    pub fn new(prg_rom: Vec<u8>, chr_rom: Vec<u8>, has_chr_ram: bool, mirroring: Mirroring) -> Self {
+    pub fn new(
+        prg_rom: Vec<u8>,
+        chr_rom: Vec<u8>,
+        has_chr_ram: bool,
+        mirroring: Mirroring,
+    ) -> Self {
         Self {
             prg_rom,
             chr_space: chr_rom,
