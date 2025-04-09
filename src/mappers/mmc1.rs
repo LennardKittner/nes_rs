@@ -23,11 +23,11 @@ struct ControlRegister {
 impl ControlRegister {
     pub fn new() -> Self {
         // "Although some tests have found that all versions of the MMC1 seems to reliably power on in the last bank (by setting the "PRG-ROM bank mode" to 3); other tests have found that this is fragile. Several commercial games have reset vectors every 32 KiB, but not every 16, so evidently PRG-ROM bank mode 2 doesn't seem to occur randomly on power-up." nes-dev
-        ControlRegister { value: 0b0110 }
+        ControlRegister { value: 0b01100 }
     }
 
     pub fn reset(&mut self) {
-        self.value |= 0b0110;
+        self.value |= 0b01100;
     }
 
     pub fn set(&mut self, value: u8) {
@@ -173,12 +173,20 @@ impl MMC1Mapper {
     }
 
     fn get_prg_bank_0_offset(&self) -> usize {
+        let mut bank_id = self.prg_bank_register & 0b1111;
+
+        if self.control_register.chr_8k_mode() {
+            bank_id += self.chr_bank0_register & 0x10;
+        } else {
+            bank_id += self.chr_bank1_register & 0x10;
+        }
+
         let mut offset = if self.control_register.prg_first_bank_fixed() {
             0usize
         } else if self.control_register.prg_last_bank_fixed() {
-            (self.prg_bank_register & 0b1111) as usize * 16384
+            bank_id as usize * 16384
         } else {
-            ((self.prg_bank_register & 0b1111) >> 1) as usize * 32768
+            (bank_id >> 1) as usize * 32768
         };
 
         if !self.has_battery_backed_ram
@@ -187,6 +195,7 @@ impl MMC1Mapper {
         {
             offset += 16384;
         }
+
         offset
     }
 
@@ -268,6 +277,9 @@ impl Mapper for MMC1Mapper {
         } else {
             (address - 4096) as usize + self.chr_rom_bank1_offset
         };
+        if addr > self.chr_rom.len() {
+            return &[0; 16];
+        }
         &self.chr_rom[addr..(addr + 16)]
     }
 
@@ -279,46 +291,46 @@ impl Mapper for MMC1Mapper {
     /// Ignoring consecutive-cycle writes not implemented
     fn register_write(&mut self, address: u16, value: u8) {
         // if value != 192 && value != 129 {
-        println!("{:x}", value);
+        // println!("{:x}", value);
         // }        // if value != 192 && value != 129 {
 
         // if address + 0x8000 != 0xffff && address + 0x8000 != 0xbfdf {
-        println!("{:x}", address + 0x8000);
+        // println!("{:x}", address + 0x8000);
         // }
         if value & 0b1000_0000 != 0 {
-            println!(
-                "RESET  {:b} {:x} {:b}",
-                value,
-                address + 0x8000,
-                self.shift_register
-            );
+            // println!(
+            //     "RESET  {:b} {:x} {:b}",
+            //     value,
+            //     address + 0x8000,
+            //     self.shift_register
+            // );
             self.shift_register_pos = 0;
             self.shift_register = 0;
             self.control_register.reset();
             return;
         }
-        println!(
-            "WRITE  {value:b} {value:x} {:x} {:b}",
-            address + 0x8000,
-            self.shift_register
-        );
+        // println!(
+        //     "WRITE  {value:b} {value:x} {:x} {:b}",
+        //     address + 0x8000,
+        //     self.shift_register
+        // );
         self.shift_register |= (value & 1) << self.shift_register_pos;
         self.shift_register_pos += 1;
         if self.shift_register_pos >= 5 {
-            println!("WRITE");
+            // println!("WRITE");
             match address + 0x8000 {
                 Self::CONTROL_REGISTER_START..=Self::CONTROL_REGISTER_END => {
                     self.control_register.set(self.shift_register);
                 }
                 Self::CHR_BANK_0_START..=Self::CHR_BANK_0_END => {
                     // if self.shift_register != 0 {
-                    //     println!("wrote chr bank 0 {}", self.shift_register);
+                    //     //println!("wrote chr bank 0 {}", self.shift_register);
                     // }
                     self.chr_bank0_register = self.shift_register;
                 }
                 Self::CHR_BANK_1_START..=Self::CHR_BANK_1_END => {
                     // if self.shift_register != 0 {
-                    //     println!("wrote chr bank 1 {}", self.shift_register);
+                    //     //println!("wrote chr bank 1 {}", self.shift_register);
                     // }
                     self.chr_bank1_register = self.shift_register;
                 }
@@ -334,19 +346,19 @@ impl Mapper for MMC1Mapper {
     }
 
     fn read_cartridge_ram(&self, address: u16) -> u8 {
-        //if self.has_battery_backed_ram && self.prg_bank_register & 0b10000 != 0 {
-        self.prg_ram[address as usize]
-        // } else {
-        //     0
-        // }
+        if self.has_battery_backed_ram && self.prg_bank_register & 0b10000 != 0 {
+            self.prg_ram[address as usize]
+        } else {
+            0
+        }
     }
 
     fn write_cartridge_ram(&mut self, address: u16, value: u8) {
-        //if self.has_battery_backed_ram && self.prg_bank_register & 0b10000 != 0 {
-        self.prg_ram[address as usize] = value
-        // } else {
-        //     println!("Writing to cartridge ram failed.");
-        // }
+        if self.has_battery_backed_ram && self.prg_bank_register & 0b10000 != 0 {
+            self.prg_ram[address as usize] = value
+        } else {
+            //println!("Writing to cartridge ram failed.");
+        }
     }
 
     fn get_mirroring(&self) -> Mirroring {
