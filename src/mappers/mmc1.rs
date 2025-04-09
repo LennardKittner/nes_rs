@@ -100,11 +100,10 @@ impl ops::IndexMut<usize> for PrgRamWrapper<MmapMut> {
 }
 
 pub struct MMC1Mapper {
-    has_battery_backed_ram: bool,
     prg_rom: Vec<u8>,
     prg_rom_bank0_offset: usize,
     prg_rom_bank1_offset: usize,
-    prg_ram: PrgRamWrapper<MmapMut>,
+    prg_ram: Option<PrgRamWrapper<MmapMut>>,
     chr_rom: Vec<u8>,
     chr_rom_bank0_offset: usize,
     chr_rom_bank1_offset: usize,
@@ -127,19 +126,7 @@ impl MMC1Mapper {
     const PRG_BANK_START: u16 = 0xE000;
     const PRG_BANK_END: u16 = 0xFFFF;
 
-    pub fn new(prg_rom: Vec<u8>, chr_rom: Vec<u8>, prg_ram: Option<Vec<u8>>) -> Self {
-        let has_battery_backed_ram;
-        let prg_ram = match prg_ram {
-            None => {
-                has_battery_backed_ram = false;
-                vec![]
-            }
-            Some(v) => {
-                has_battery_backed_ram = true;
-                v
-            }
-        };
-
+    pub fn new(prg_rom: Vec<u8>, chr_rom: Vec<u8>, has_battery_backed_ram: bool) -> Self {
         let file = OpenOptions::new()
             .read(true)
             .write(true)
@@ -149,14 +136,19 @@ impl MMC1Mapper {
 
         file.set_len(32768).expect("Unable to resize file");
 
-        let mapping = unsafe { MmapMut::map_mut(&file).expect("Unable to map file") };
+        let prg_ram = if has_battery_backed_ram {
+            Some(PrgRamWrapper::new(unsafe {
+                MmapMut::map_mut(&file).expect("Unable to map file")
+            }))
+        } else {
+            None
+        };
 
         let mut mapper = MMC1Mapper {
-            has_battery_backed_ram,
             prg_rom,
             prg_rom_bank0_offset: 0,
             prg_rom_bank1_offset: 0,
-            prg_ram: PrgRamWrapper::new(mapping),
+            prg_ram,
             chr_rom,
             chr_rom_bank0_offset: 0,
             chr_rom_bank1_offset: 0,
@@ -189,7 +181,7 @@ impl MMC1Mapper {
             (bank_id >> 1) as usize * 32768
         };
 
-        if !self.has_battery_backed_ram
+        if self.prg_ram.is_none()
             && self.control_register.prg_first_bank_fixed()
             && self.prg_bank_register & 0b10000 != 0
         {
@@ -208,7 +200,7 @@ impl MMC1Mapper {
             ((self.prg_bank_register & 0b1111) >> 1) as usize * 32768 + 16384
         };
 
-        if !self.has_battery_backed_ram
+        if self.prg_ram.is_none()
             && self.control_register.prg_last_bank_fixed()
             && self.prg_bank_register & 0b1000 != 0
         {
@@ -346,16 +338,22 @@ impl Mapper for MMC1Mapper {
     }
 
     fn read_cartridge_ram(&self, address: u16) -> u8 {
-        if self.has_battery_backed_ram && self.prg_bank_register & 0b10000 != 0 {
-            self.prg_ram[address as usize]
+        if self.prg_bank_register & 0b10000 == 0 {
+            return 0;
+        }
+        if let Some(ram) = &self.prg_ram {
+            ram[address as usize]
         } else {
             0
         }
     }
 
     fn write_cartridge_ram(&mut self, address: u16, value: u8) {
-        if self.has_battery_backed_ram && self.prg_bank_register & 0b10000 != 0 {
-            self.prg_ram[address as usize] = value
+        if self.prg_bank_register & 0b10000 == 0 {
+            return;
+        }
+        if let Some(ram) = self.prg_ram.as_mut() {
+            ram[address as usize] = value
         } else {
             //println!("Writing to cartridge ram failed.");
         }

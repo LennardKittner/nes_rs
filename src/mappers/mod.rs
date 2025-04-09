@@ -45,7 +45,7 @@ pub fn create_mapper(
         1 => Box::new(MMC1Mapper::new(
             prg_rom.to_vec(),
             chr_rom.to_vec(),
-            Some(vec![0u8; 0x2000])
+            battery_backed_ram,
         )),
         3 => Box::new(CNROMMapper::new(
             prg_rom.to_vec(),
