@@ -1,6 +1,8 @@
 use crate::bus::{Bus, Mem, PollIRQ, PollNMI};
 use crate::cpu::addressing_mode::{page_cross, AddressingMode};
-use crate::cpu::interrupts::{Interrupt, IRQ_INTERRUPT, NMI_INTERRUPT, RESET_INTERRUPT};
+use crate::cpu::interrupts::{
+    Interrupt, BRK_INTERRUPT, IRQ_INTERRUPT, NMI_INTERRUPT, RESET_INTERRUPT,
+};
 use crate::cpu::opcodes::CPU_INSTRUCTIONS;
 use crate::ppu::palette::SystemPalette;
 use crate::rom::Rom;
@@ -283,9 +285,9 @@ impl CPU<'_> {
     fn nop() {}
 
     fn brk(&mut self) {
-        //TODO: maybe pc +2 before handling interrupt
-        //TODO: just exit for now
-        //self.handle_interrupt(BRK_INTERRUPT);
+        // Because BRK skips the following byte, it is often considered a 2-byte instruction.
+        self.program_counter += 2;
+        self.handle_interrupt(BRK_INTERRUPT);
     }
 
     fn add_to_a(&mut self, value: u8) {
