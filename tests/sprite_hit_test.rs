@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 
 fn test_rom(path: &str) {
     let rom = Rom::load_from_disk(path).unwrap();
-    let mirroring = rom.screen_mirroring;
+    let mirroring = rom.get_mirroring_mode();
 
     let tile1 = Arc::new(Mutex::new(0));
     let error_code_higher = Arc::new(Mutex::new(0));
