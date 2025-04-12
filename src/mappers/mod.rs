@@ -1,7 +1,7 @@
 use crate::mappers::cnrom::CNROMMapper;
 use crate::mappers::mmc1::MMC1Mapper;
 use crate::mappers::nrom::NROMMapper;
-use crate::rom::Mirroring;
+use crate::rom::{Mirroring, RomHeader, CHR_ROM_PAGE_SIZE};
 
 pub mod cnrom;
 mod mmc1;
@@ -27,32 +27,67 @@ pub trait Mapper {
     fn get_mirroring(&self) -> Mirroring;
 }
 
-pub fn create_mapper(
-    idx: u8,
-    battery_backed_ram: bool,
-    prg_rom: &[u8],
-    chr_rom: &[u8],
-    has_chr_ram: bool,
-    mirroring: Mirroring,
-) -> Box<dyn Mapper> {
-    match idx {
-        0 => Box::new(NROMMapper::new(
-            prg_rom.to_vec(),
-            chr_rom.to_vec(),
-            has_chr_ram,
-            mirroring,
-        )),
-        1 => Box::new(MMC1Mapper::new(
-            prg_rom.to_vec(),
-            chr_rom.to_vec(),
-            battery_backed_ram,
-        )),
-        3 => Box::new(CNROMMapper::new(
-            prg_rom.to_vec(),
-            chr_rom.to_vec(),
-            has_chr_ram,
-            mirroring,
-        )),
+fn get_chr_space(header: &RomHeader, raw: &[u8]) -> Vec<u8> {
+    match header {
+        RomHeader::INES(header) => if header.has_chr_ram {
+            &[0u8; 4 * CHR_ROM_PAGE_SIZE]
+        } else {
+            &raw[header.chr_rom_start..(header.chr_rom_start + header.chr_rom_size)]
+        }
+        .to_vec(),
+        //TODO: nvram and other stuff
+        RomHeader::NES2(header) => {
+            if header.chr_ram_size > 0 {
+                vec![0u8; header.chr_ram_size * CHR_ROM_PAGE_SIZE]
+            } else {
+                raw[header.chr_rom_start..(header.chr_rom_start + header.chr_rom_size)].to_vec()
+            }
+        }
+    }
+}
+
+pub fn create_mapper(rom_header: &RomHeader, raw: &[u8]) -> Box<dyn Mapper> {
+    match rom_header.get_mapper_number() {
+        0 => match rom_header {
+            RomHeader::INES(header) => Box::new(NROMMapper::new(
+                raw[header.prg_rom_start..(header.prg_rom_start + header.prg_rom_size)].to_vec(),
+                get_chr_space(rom_header, raw),
+                header.has_chr_ram,
+                header.mirroring,
+            )),
+            RomHeader::NES2(header) => Box::new(NROMMapper::new(
+                raw[header.prg_rom_start..(header.prg_rom_start + header.prg_rom_size)].to_vec(),
+                get_chr_space(rom_header, raw),
+                header.chr_ram_size > 0,
+                header.mirroring,
+            )),
+        },
+        1 => match rom_header {
+            RomHeader::INES(header) => Box::new(MMC1Mapper::new(
+                raw[header.prg_rom_start..(header.prg_rom_start + header.prg_rom_size)].to_vec(),
+                get_chr_space(rom_header, raw),
+                header.has_battery_backed_ram,
+            )),
+            RomHeader::NES2(header) => Box::new(MMC1Mapper::new(
+                raw[header.prg_rom_start..(header.prg_rom_start + header.prg_rom_size)].to_vec(),
+                get_chr_space(rom_header, raw),
+                header.has_battery_backed_ram,
+            )),
+        },
+        3 => match rom_header {
+            RomHeader::INES(header) => Box::new(CNROMMapper::new(
+                raw[header.prg_rom_start..(header.prg_rom_start + header.prg_rom_size)].to_vec(),
+                get_chr_space(rom_header, raw),
+                header.has_chr_ram,
+                header.mirroring,
+            )),
+            RomHeader::NES2(header) => Box::new(CNROMMapper::new(
+                raw[header.prg_rom_start..(header.prg_rom_start + header.prg_rom_size)].to_vec(),
+                get_chr_space(rom_header, raw),
+                header.chr_ram_size > 0,
+                header.mirroring,
+            )),
+        },
         _ => panic!("Mapper not implemented"),
     }
 }

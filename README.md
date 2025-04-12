@@ -10,7 +10,6 @@
 - 8x16 sprites
 - more mappers
 - detect tiles for FPS automatically
-- iNES2
 - frame skip on fast-forward
 - frame skip on slow hardware
 - documentation
