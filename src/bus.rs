@@ -112,9 +112,9 @@ impl<'a> Bus<'a> {
     }
 
     fn read_prg_rom(&self, addr: u16) -> u8 {
-        let mut addr = addr;
-        addr %= self.rom.prg_rom_len() as u16;
-        self.rom.read_prg_rom(addr)
+        let mut addr = addr as usize;
+        addr %= self.rom.prg_rom_len();
+        self.rom.read_prg_rom(addr as u16)
     }
 
     pub fn tick(&mut self, cycles: u8) {

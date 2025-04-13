@@ -334,6 +334,11 @@ lazy_static! {
 #[test]
 fn test_size() {
     for opcode in CPU_INSTRUCTIONS.iter() {
+        // brk is special
+        if opcode.code == 0x00 {
+            assert_eq!(opcode.size, 0);
+            continue;
+        }
         match opcode.mode {
             AddressingMode::Accumulator => assert_eq!(opcode.size, 1),
             AddressingMode::Immediate => assert_eq!(opcode.size, 2),
