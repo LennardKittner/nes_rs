@@ -84,7 +84,7 @@ impl<'a> Bus<'a> {
     }
 
     pub fn get_cycle_count_ppu(&self) -> (usize, usize) {
-        (self.ppu.scan_line as usize, self.ppu.cycles)
+        ((self.ppu.scan_line + 1) as usize, self.ppu.cycles)
     }
 
     pub fn trace_mem_read(&self, addr: u16) -> u8 {

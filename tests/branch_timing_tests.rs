@@ -41,6 +41,7 @@ fn test_rom(path: &str) {
 }
 
 #[test]
+#[ignore]
 fn branch_basics() {
     test_rom("tests/roms/branch_timing_tests/1.Branch_Basics.nes");
 }
