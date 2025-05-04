@@ -33,7 +33,7 @@ pub struct Bus<'a> {
     controller_2: Controller,
     last_frame: Instant,
     rendering_overhead: RollingAvg<u64>,
-    fps: RollingAvg<f64>,
+    last_60_frames: Instant,
     frame_counter: u64,
     desired_frame_duration: Duration,
     pub audio_ring_buffer: Arc<Mutex<RingBuffer<f32, AUDIO_BUFFER_SIZE>>>, // 1s of audio
@@ -72,7 +72,7 @@ impl<'a> Bus<'a> {
             controller_2: Controller::new(),
             last_frame: Instant::now(),
             rendering_overhead: RollingAvg::new(60),
-            fps: RollingAvg::new(60),
+            last_60_frames: Instant::now(),
             frame_counter: 0,
             desired_frame_duration: FRAME_DURATION.mul_f64(speed_multiplier.inv()),
             audio_ring_buffer: Arc::new(Mutex::new(RingBuffer::new())),
@@ -147,28 +147,25 @@ impl<'a> Bus<'a> {
                 .desired_frame_duration
                 .checked_sub(self.last_frame.elapsed())
                 .and_then(|d| d.checked_sub(avg_overhead))
+                .map(|d| d.min(FRAME_DURATION))
                 .unwrap_or(Duration::ZERO);
 
             if sleep_duration > Duration::ZERO {
                 spin_sleep::sleep(sleep_duration);
             }
 
-            let fps = 1.0 / self.last_frame.elapsed().as_secs_f64();
-            self.fps.push(fps);
             if self.frame_counter % 60 == 0 {
-                let avg = self.fps.avg().unwrap_or_default() as usize;
+                let fps = (60f64 / self.last_60_frames.elapsed().as_secs_f64()) as usize;
+                self.last_60_frames = Instant::now();
                 self.fps_frame
-                    .update(&self.rom, 1, avg, self.ppu.get_universal_background_color());
+                    .update(&self.rom, 1, fps, self.ppu.get_universal_background_color());
             }
 
             let rendering_start = Instant::now();
             (self.graphics_callback)(&self.ppu, &self.frame, &self.fps_frame);
             (self.controller_callback)(&mut self.controller_1, &mut self.controller_2);
             let overhead = rendering_start.elapsed().as_nanos() as u64;
-            if self.frame_counter > 300 {
-                // skip initial high overhead
-                self.rendering_overhead.push(overhead);
-            }
+            self.rendering_overhead.push(overhead);
             self.last_frame = Instant::now();
             self.frame_counter += 1;
         }
