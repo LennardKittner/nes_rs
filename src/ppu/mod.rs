@@ -162,7 +162,7 @@ impl PPU {
             for pos in max(range_to_check.start, self.sprite_zero_pos.start)
                 ..min(range_to_check.end, self.sprite_zero_pos.end)
             {
-                if !scanline.data[pos].sprite_color.transparent
+                if scanline.data[pos].sprite_zero_opaque
                     && !scanline.data[pos].background_color.transparent
                 {
                     self.set_sprite_zero_hit();
@@ -236,6 +236,7 @@ impl PPU {
                         behind_background: !sprite.draw_over_background(),
                         transparent: false,
                     };
+                    sprite_pixel_buffer.data[x_pos].sprite_zero_opaque |= sprite.is_sprite_zero();
                 }
             }
         }

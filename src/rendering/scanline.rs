@@ -17,6 +17,7 @@ pub struct BackgroundColor {
 pub struct ScanlinePixel {
     pub background_color: BackgroundColor,
     pub sprite_color: SpriteColor,
+    pub sprite_zero_opaque: bool,
 }
 
 impl ScanlinePixel {
@@ -31,6 +32,7 @@ impl ScanlinePixel {
                 behind_background: false,
                 transparent: true,
             },
+            sprite_zero_opaque: false,
         }
     }
 
