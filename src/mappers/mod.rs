@@ -15,12 +15,18 @@ pub trait Mapper {
     fn read_chr_rom_bank(&self, bank: u16, address: u16) -> u8;
     fn read_tile_chr_rom(&self, address: u16) -> &[u8];
     fn read_tile_chr_rom_bank(&self, bank: u16, address: u16) -> &[u8];
-    fn register_write(&mut self, _address: u16, _value: u8) {}
+    fn register_write(&mut self, _address: u16, _value: u8) {
+        println!("register_write not implemented")
+    }
     fn read_cartridge_ram(&self, _address: u16) -> u8 {
         0
     }
-    fn write_cartridge_ram(&mut self, _address: u16, _value: u8) {}
-    fn write_chr_ram(&mut self, _address: u16, _value: u8) {}
+    fn write_cartridge_ram(&mut self, _address: u16, _value: u8) {
+        println!("write_cartridge_ram not implemented")
+    }
+    fn write_chr_ram(&mut self, _address: u16, _value: u8) {
+        println!("write_chr_ram not implemented")
+    }
     fn get_battery_backed_ram(&self) -> Option<&[u8]> {
         None
     }
