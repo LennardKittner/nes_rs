@@ -2,16 +2,152 @@ use crate::cpu::addressing_mode::AddressingMode;
 use crate::cpu::opcodes::CPU_INSTRUCTIONS;
 use crate::cpu::{Flags, CPU};
 use itertools::Itertools;
-use std::fmt::format;
 
-enum TraceStyle {
-    Default,
-    Fceux,
+//c[CycleCount][Align,13]A:[A,2h] X:[X,2h] Y:[Y,2h] S:[SP,2h] P:[P,8]   $[PC]: [ByteCode][Align,62][Disassembly][EffectiveAddress] [MemoryValue,h]
+pub fn trace_mesen(cpu: &CPU) -> String {
+    let cpu_cycle = cpu.bus.get_cycle_count_cpu();
+
+    let opcode = CPU_INSTRUCTIONS[cpu.trace_mem_read(cpu.program_counter) as usize];
+    let mut instruction_bytes = Vec::new();
+    for i in 0..opcode.size {
+        instruction_bytes.push(cpu.trace_mem_read(cpu.program_counter + i));
+    }
+    let mut opcode_string = instruction_bytes
+        .iter()
+        .map(|b| format!("{:02X}", *b))
+        .join(" ");
+
+    if opcode.mnemonics == "BRK" {
+        opcode_string = "00".to_string();
+    }
+
+    let mut asm = opcode.mnemonics.to_string();
+    let operand_addr = opcode.mode.trace_get_operand_address(cpu).unwrap_or(0);
+    asm.push_str(&match opcode.mode {
+        AddressingMode::Accumulator => " A".to_string(),
+        AddressingMode::Immediate => format!(" #${:02X}", cpu.trace_mem_read(operand_addr)),
+        AddressingMode::Relative => {
+            format!(" ${:02X}", operand_addr + opcode.size)
+        }
+        AddressingMode::ZeroPage => {
+            let mut output = format!(" ${:02X}", operand_addr);
+            let value = cpu.trace_mem_read(operand_addr);
+            output.push_str(&format!(" = ${value:02X}"));
+            output
+        }
+        AddressingMode::ZeroPage_X => {
+            let value = cpu.trace_mem_read(operand_addr);
+            format!(
+                " ${:02X},X [${:04X}] = ${:02X}",
+                instruction_bytes[1], operand_addr, value
+            )
+        }
+        AddressingMode::ZeroPage_Y => {
+            let value = cpu.trace_mem_read(operand_addr);
+            format!(
+                " ${:02X},Y [${:04X}] = ${:02X}",
+                instruction_bytes[1], operand_addr, value
+            )
+        }
+        AddressingMode::Absolute => {
+            let mut output = format!(" ${:02X}{:02X}", instruction_bytes[2], instruction_bytes[1]);
+            if opcode.mnemonics != "JMP" && opcode.mnemonics != "JSR" {
+                let value = cpu.trace_mem_read(operand_addr);
+                output.push_str(&format!(" = ${value:02X}"));
+            }
+            output
+        }
+        AddressingMode::Absolute_X => {
+            let value = cpu.trace_mem_read(operand_addr);
+            format!(
+                " ${:02X}{:02X},X [${:04X}] = ${:02X} ",
+                instruction_bytes[2], instruction_bytes[1], operand_addr, value
+            )
+        }
+        AddressingMode::Absolute_Y => {
+            let value = cpu.trace_mem_read(operand_addr);
+            format!(
+                " ${:02X}{:02X},Y [${:04X}] = ${:02X} ",
+                instruction_bytes[2], instruction_bytes[1], operand_addr, value
+            )
+        }
+        AddressingMode::Indirect => {
+            let address = (instruction_bytes[2] as u16) << 8 | (instruction_bytes[1] as u16);
+            let value = cpu.trace_mem_read(operand_addr);
+            format!(
+                " (${:04X}) [${:04X}] = ${:02X}",
+                address, operand_addr, value
+            )
+        }
+        AddressingMode::Indirect_X => {
+            let address_location = cpu.register_x.wrapping_add(instruction_bytes[1]);
+            let value = cpu.trace_mem_read(operand_addr);
+            format!(
+                " (${:02X},X) @ {:02X} = ${:04X} = ${:02X}",
+                instruction_bytes[1], address_location, operand_addr, value
+            )
+        }
+        AddressingMode::Indirect_Y => {
+            let lo = cpu.trace_mem_read(instruction_bytes[1] as u16);
+            let hi = cpu.trace_mem_read(instruction_bytes[1].wrapping_add(1) as u16);
+            let deref_base = (hi as u16) << 8 | (lo as u16);
+            let value = cpu.trace_mem_read(operand_addr);
+            format!(
+                " (${:02X}),Y [${:04X}] = ${:02X}",
+                instruction_bytes[1], operand_addr, value
+            )
+        }
+        AddressingMode::NonAddressing => String::new(),
+    });
+
+    let flags = if cpu.get_flag(Flags::Negative) {
+        "N".to_string()
+    } else {
+        "n".to_string()
+    } + if cpu.get_flag(Flags::Overflow) {
+        "V"
+    } else {
+        "v"
+    } + if cpu.get_flag(Flags::B2) { "-" } else { "-" }
+        + if cpu.get_flag(Flags::B1) { "-" } else { "-" }
+        + if cpu.get_flag(Flags::DecimalMode) {
+            "D"
+        } else {
+            "d"
+        }
+        + if cpu.get_flag(Flags::InterruptDisabled) {
+            "I"
+        } else {
+            "i"
+        }
+        + if cpu.get_flag(Flags::Zero) { "Z" } else { "z" }
+        + if cpu.get_flag(Flags::Carry) { "C" } else { "c" };
+
+    let stack_spacer = " ".repeat(CPU::STACK_END.saturating_sub(cpu.register_s) as usize / 2);
+
+    let part1 = format!(
+        "{:04X}  c{:<6}A:{:02X} X:{:02X} Y:{:02X} S:{:02X} P:{}   ${:2X}: {:<8}",
+        cpu.program_counter,
+        cpu_cycle,
+        cpu.register_a,
+        cpu.register_x,
+        cpu.register_y,
+        cpu.register_s,
+        flags,
+        cpu.program_counter,
+        opcode_string
+    );
+    let part2 = format!(
+        "{}{}{}",
+        if cpu.register_s == 0xFF { "" } else { " " },
+        stack_spacer,
+        asm
+    );
+    format!("{part1:<62}{part2}")
 }
 
-pub fn trace_with_style(cpu: &CPU, style: TraceStyle) -> String {
+pub fn trace_fceux(cpu: &CPU) -> String {
     let cpu_cycle = cpu.bus.get_cycle_count_cpu();
-    let ppu_cycle = cpu.bus.get_cycle_count_ppu();
 
     let opcode = CPU_INSTRUCTIONS[cpu.trace_mem_read(cpu.program_counter) as usize];
     let mut instruction_bytes = Vec::new();
@@ -26,7 +162,7 @@ pub fn trace_with_style(cpu: &CPU, style: TraceStyle) -> String {
     let mut asm = opcode.mnemonics.to_string();
     let operand_addr = opcode.mode.trace_get_operand_address(cpu).unwrap_or(0);
     asm.push_str(&match opcode.mode {
-        AddressingMode::Accumulator => " A".to_string(),
+        AddressingMode::Accumulator => "".to_string(),
         AddressingMode::Immediate => format!(" #${:02X}", cpu.trace_mem_read(operand_addr)),
         AddressingMode::Relative => {
             format!(" ${:02X}", operand_addr + opcode.size)
@@ -96,7 +232,20 @@ pub fn trace_with_style(cpu: &CPU, style: TraceStyle) -> String {
                 instruction_bytes[1], deref_base, operand_addr, value
             )
         }
-        AddressingMode::NonAddressing => String::new(),
+        AddressingMode::NonAddressing => {
+            if opcode.mnemonics == "RTS" {
+                let lo = cpu
+                    .trace_mem_read(CPU::STACK_BASE_ADDRESS + cpu.register_s.wrapping_add(1) as u16)
+                    as u16;
+                let hi = cpu
+                    .trace_mem_read(CPU::STACK_BASE_ADDRESS + cpu.register_s.wrapping_add(2) as u16)
+                    as u16;
+                let addr = (hi << 8) | lo;
+                format!(" (from ${addr:04X}) ----------------------------")
+            } else {
+                String::new()
+            }
+        }
     });
 
     let flags = if cpu.get_flag(Flags::Negative) {
@@ -122,14 +271,17 @@ pub fn trace_with_style(cpu: &CPU, style: TraceStyle) -> String {
         + if cpu.get_flag(Flags::Zero) { "Z" } else { "z" }
         + if cpu.get_flag(Flags::Carry) { "C" } else { "c" };
 
+    let stack_spacer = " ".repeat(0xFFu8.saturating_sub(cpu.register_s) as usize);
+
     format!(
-        "c{:<12} A:{:02X} X:{:02X} Y:{:02X} S:{:02X} P:{}   ${:04X}:  {:<8}  {:<31}",
+        "c{:<11} A:{:02X} X:{:02X} Y:{:02X} S:{:02X} P:{} {}${:04X}: {:<8}  {:<31}",
         cpu_cycle,
         cpu.register_a,
         cpu.register_x,
         cpu.register_y,
         cpu.register_s,
         flags,
+        stack_spacer,
         cpu.program_counter,
         opcode_string,
         asm

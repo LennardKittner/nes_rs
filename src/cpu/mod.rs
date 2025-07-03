@@ -12,6 +12,7 @@ pub mod addressing_mode;
 mod cpu_tests;
 pub mod interrupts;
 pub mod opcodes;
+pub mod trace;
 
 // 7  bit  0
 // ---- ----
