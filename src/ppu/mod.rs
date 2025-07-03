@@ -32,7 +32,7 @@ pub struct PPU {
     pub oam_data: [u8; 256],
     pub control_register: ControlRegister,
     mask_register: MaskRegister,
-    status_register: StatusRegister,
+    pub(crate) status_register: StatusRegister,
     scroll_register: ScrollRegister,
     pub address_register: AddressRegister,
     pub temporary_address_register: TRegister,

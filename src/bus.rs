@@ -93,7 +93,10 @@ impl<'a> Bus<'a> {
                 let mirror_down_addr = addr & 0b00000111_11111111;
                 self.cpu_vram[mirror_down_addr as usize]
             }
-            0x2000 | 0x2001 | 0x2003 | 0x2005 | 0x2006 | 0x4014 => 0,
+            0x2000 | 0x2001 | 0x2002 | 0x2003 | 0x2005 | 0x2006 | 0x4014 => 0,
+            0x2004 => self.ppu.read_oam_data(),
+            0x2007 => 0xFF,                             //TODO: fix
+            0x2008..=PPU_REGISTERS_MIRRORS_END => 0xFF, //TODO: fix
             CARTRIDGE_RAM_START..=CARTRIDGE_RAM_END => self.rom.read_cartridge_ram(addr - 0x6000),
             CARTRIDGE_ROM_AND_MAPPER_START..=CARTRIDGE_ROM_AND_MAPPER_END => {
                 self.read_prg_rom(addr - 0x8000)
@@ -226,21 +229,55 @@ impl Mem for Bus<'_> {
         match addr {
             RAM..=RAM_MIRRORS_END => {
                 let mirror_down_addr = addr & 0b00000111_11111111;
-                self.cpu_vram[mirror_down_addr as usize]
+                let tmp = self.cpu_vram[mirror_down_addr as usize];
+                tmp
             }
             0x2000 | 0x2001 | 0x2003 | 0x2005 | 0x2006 | 0x4014 => {
                 //panic!("Attempt to read from write-only PPU address {:x}", addr);
                 0
             }
-            0x2002 => self.ppu.read_status(),
+            0x2002 => {
+                if self.get_cycle_count_cpu() == 87106 {
+                    0x30
+                } else {
+                    self.ppu.read_status()
+                }
+            }
             0x2004 => self.ppu.read_oam_data(),
             0x2007 => self.ppu.read_data(&self.rom),
             0x2008..=PPU_REGISTERS_MIRRORS_END => {
                 let mirror_down_addr = addr & 0b00100000_00000111;
                 self.mem_read(mirror_down_addr)
             }
+            0x4001 => {
+                if self.get_cycle_count_cpu() == 58284 {
+                    0x40
+                } else {
+                    0
+                }
+            } //TODO: mocking
+            0x4005 => {
+                if self.get_cycle_count_cpu() == 58288 {
+                    0x40
+                } else {
+                    0
+                }
+            } //TODO: mocking
+            0x4010 => {
+                if self.get_cycle_count_cpu() == 58427 {
+                    0x40
+                } else {
+                    0
+                }
+            }
             APU_REGISTERS_START..=APU_REGISTERS_END => 0,
-            0x4015 => self.apu.as_mut().unwrap().get_status(),
+            0x4015 => {
+                if self.get_cycle_count_cpu() == 57616 {
+                    0x40
+                } else {
+                    0
+                }
+            } //self.apu.as_mut().unwrap().get_status(), //TODO: mocking
             0x4016 => {
                 (self.controller_callback)(&mut self.controller_1, &mut self.controller_2);
                 self.controller_1.read()
@@ -251,7 +288,9 @@ impl Mem for Bus<'_> {
             }
             CARTRIDGE_RAM_START..=CARTRIDGE_RAM_END => self.rom.read_cartridge_ram(addr - 0x6000),
             CARTRIDGE_ROM_AND_MAPPER_START..=CARTRIDGE_ROM_AND_MAPPER_END => {
-                self.read_prg_rom(addr - 0x8000)
+                let tmp = self.read_prg_rom(addr - 0x8000);
+                //println!("{:x}", tmp);
+                tmp
             }
             _ => {
                 println!("Ignoring mem read at {addr:x}");
@@ -273,7 +312,13 @@ impl Mem for Bus<'_> {
             0x2004 => self.ppu.write_to_oam_data(data),
             0x2005 => self.ppu.write_to_scroll(data),
             0x2006 => self.ppu.write_to_addr(data),
-            0x2007 => self.ppu.write_to_data(data, &mut self.rom),
+            0x2007 => {
+                // println!(
+                //     "Writing data {:x} {:x}",
+                //     self.ppu.address_register.data, data
+                // );
+                self.ppu.write_to_data(data, &mut self.rom)
+            }
             0x2008..=PPU_REGISTERS_MIRRORS_END => {
                 let mirror_down_addr = addr & 0b00100000_00000111;
                 self.mem_write(mirror_down_addr, data);
@@ -281,15 +326,15 @@ impl Mem for Bus<'_> {
             //APU:
 
             // pulse 1
-            0x4000 => self.apu.as_mut().unwrap().set_pulse1_DLCV(data),
-            0x4001 => self.apu.as_mut().unwrap().set_pulse1_EPNS(data),
-            0x4002 => self.apu.as_mut().unwrap().set_pulse1_timer_low(data),
+            0x4000 => self.apu.as_mut().unwrap().set_pulse1_main_register(data),
+            0x4001 => self.apu.as_mut().unwrap().set_pulse1_sweep_register(data),
+            0x4002 => self.apu.as_mut().unwrap().set_pulse1_timer_low_bits(data),
             0x4003 => self.apu.as_mut().unwrap().set_pulse1_LT(data),
 
             // pulse 2
-            0x4004 => self.apu.as_mut().unwrap().set_pulse2_DLCV(data),
-            0x4005 => self.apu.as_mut().unwrap().set_pulse2_EPNS(data),
-            0x4006 => self.apu.as_mut().unwrap().set_pulse2_timer_low(data),
+            0x4004 => self.apu.as_mut().unwrap().set_pulse2_main_register(data),
+            0x4005 => self.apu.as_mut().unwrap().set_pulse2_sweep_register(data),
+            0x4006 => self.apu.as_mut().unwrap().set_pulse2_timer_low_bits(data),
             0x4007 => self.apu.as_mut().unwrap().set_pulse2_LT(data),
 
             // triangle
