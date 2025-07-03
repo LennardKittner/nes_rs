@@ -11,7 +11,7 @@ use crate::bus::PollNMI;
 use crate::ppu::addr::AddressRegister;
 use crate::ppu::control::ControlRegister;
 use crate::ppu::mask::MaskRegister;
-use crate::ppu::palette::SystemPalette;
+use crate::ppu::palette::{SystemPalette, PALETTE_SIZE_E};
 use crate::ppu::scroll::ScrollRegister;
 use crate::ppu::sprite::Sprite;
 use crate::ppu::status::StatusRegister;
@@ -36,7 +36,6 @@ pub struct PPU {
     scroll_register: ScrollRegister,
     pub address_register: AddressRegister,
     pub temporary_address_register: TRegister,
-    mirroring: Mirroring,
     internal_data_buffer: u8,
     write_toggle: bool,
     sprite_buffer: [Sprite; 8],
@@ -62,7 +61,7 @@ impl PollNMI for PPU {
 }
 
 impl PPU {
-    pub fn new(mirroring: Mirroring, system_palette: SystemPalette) -> Self {
+    pub fn new(system_palette: SystemPalette) -> Self {
         PPU {
             palette_table: [0; 32],
             system_palette,
@@ -73,7 +72,6 @@ impl PPU {
             mask_register: MaskRegister::new(),
             status_register: StatusRegister::new(),
             scroll_register: ScrollRegister::new(),
-            mirroring,
             address_register: AddressRegister::new(),
             temporary_address_register: TRegister::new(),
             internal_data_buffer: 0,
@@ -113,6 +111,7 @@ impl PPU {
             // Handle visible scanlines
             if self.scan_line < 240 {
                 sprite_pixel_buffer.clear();
+                //TODO: check if sprite rendering is on?
                 self.compute_sprites_next_scanline(rom, sprite_pixel_buffer);
                 if self.show_background() {
                     render_bg(self, rom, sprite_pixel_buffer);
@@ -259,11 +258,11 @@ impl PPU {
     // Vertical:
     //   [ A ] [ B ]
     //   [ a ] [ b ]
-    pub fn mirror_vram_addr(&self, addr: u16) -> u16 {
+    pub fn mirror_vram_addr(&self, addr: u16, mirroring: Mirroring) -> u16 {
         let mirrored_vram = addr & 0b10_1111_1111_1111; // mirror down 0x3000-0x3eff to 0x2000 - 0x2eff
         let vram_index = mirrored_vram.wrapping_sub(0x2000); // to vram vector
         let name_table = vram_index / 0x400; // to name table index
-        match (&self.mirroring, name_table) {
+        match (mirroring, name_table) {
             (Mirroring::Vertical, 2) | (Mirroring::Vertical, 3) => vram_index - 0x800,
             (Mirroring::Horizontal, 1) | (Mirroring::Horizontal, 2) => vram_index - 0x400,
             (Mirroring::Horizontal, 3) => vram_index - 0x800,
@@ -279,10 +278,13 @@ impl PPU {
 
     pub fn write_to_data(&mut self, data: u8, rom: &mut Rom) {
         let addr = self.address_register.data_alt;
+        let mirroring = rom.get_mirroring_mode();
         match addr {
             0x0000..=0x1FFF => rom.write_chr_ram(addr, data),
-            0x2000..=0x2FFF => self.vram[self.mirror_vram_addr(addr) as usize] = data,
-            0x3000..=0x3EFF => self.vram[self.mirror_vram_addr(addr - 0x1000) as usize] = data,
+            0x2000..=0x2FFF => self.vram[self.mirror_vram_addr(addr, mirroring) as usize] = data,
+            0x3000..=0x3EFF => {
+                self.vram[self.mirror_vram_addr(addr - 0x1000, mirroring) as usize] = data
+            }
             0x3F10 | 0x3F14 | 0x3F18 | 0x3F1C => {
                 self.palette_table[(addr - 0x10 - 0x3F00) as usize] = data
             }
@@ -326,6 +328,7 @@ impl PPU {
         self.address_register
             .increment_alt(self.control_register.get_vram_increment());
 
+        let mirroring = rom.get_mirroring_mode();
         match addr {
             0x0000..=0x1FFF => {
                 let result = self.internal_data_buffer;
@@ -334,23 +337,24 @@ impl PPU {
             }
             0x2000..=0x2FFF => {
                 let result = self.internal_data_buffer;
-                self.internal_data_buffer = self.vram[self.mirror_vram_addr(addr) as usize];
+                self.internal_data_buffer =
+                    self.vram[self.mirror_vram_addr(addr, mirroring) as usize];
                 result
             }
             0x3000..=0x3EFF => {
                 let result = self.internal_data_buffer;
                 self.internal_data_buffer =
-                    self.vram[self.mirror_vram_addr(addr - 0x1000) as usize];
+                    self.vram[self.mirror_vram_addr(addr - 0x1000, mirroring) as usize];
                 result
             }
             0x3F10 | 0x3F14 | 0x3F18 | 0x3F1C => {
                 self.internal_data_buffer =
-                    self.vram[self.mirror_vram_addr(addr - 0x1000) as usize];
+                    self.vram[self.mirror_vram_addr(addr - 0x1000, mirroring) as usize];
                 self.read_palette_table((addr - 0x10 - 0x3F00) as usize)
             }
             0x3F00..=0x3FFF => {
                 self.internal_data_buffer =
-                    self.vram[self.mirror_vram_addr(addr - 0x1000) as usize];
+                    self.vram[self.mirror_vram_addr(addr - 0x1000, mirroring) as usize];
                 self.read_palette_table((addr - 0x3F00) as usize)
             }
             _ => panic!("unexpected access to mirrored space, requested = {}", addr),
@@ -428,7 +432,7 @@ impl PPU {
         }
     }
 
-    pub fn read_oam_data(&mut self) -> u8 {
+    pub fn read_oam_data(&self) -> u8 {
         self.oam_data[self.oam_addr as usize]
     }
 
@@ -466,7 +470,7 @@ impl PPU {
 
     pub fn get_color_from_current_system_palette(&self, idx: usize) -> (u8, u8, u8) {
         self.system_palette
-            .get_palette(self.mask_register.get_emphasis_index() as usize)[idx]
+            .get_palette(self.mask_register.get_emphasis_index() as usize)[idx % PALETTE_SIZE_E]
     }
 
     pub fn set_sprite_zero_hit(&mut self) {
@@ -478,6 +482,7 @@ impl PPU {
     }
 }
 
+//TODO: fix tests
 #[cfg(test)]
 pub mod test {
     use super::*;

@@ -1,6 +1,6 @@
 // generate palettes https://bisqwit.iki.fi/utils/nespalette.php
 
-const PALETTE_SIZE_E: usize = 64;
+pub const PALETTE_SIZE_E: usize = 64;
 const PALETTE_SIZE_B: usize = PALETTE_SIZE_E * 3;
 const NUMBER_PALETTES: usize = 8;
 #[allow(dead_code)]

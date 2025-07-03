@@ -51,7 +51,7 @@ impl<'a> Bus<'a> {
         GF: FnMut(&PPU, &Frame, &FPSFrame) + 'a,
         C1F: FnMut(&mut Controller, &mut Controller) + 'a,
     {
-        let ppu = PPU::new(rom.get_mirroring_mode(), system_palette);
+        let ppu = PPU::new(system_palette);
         let mut speed_multiplier = speed_multiplier;
         if speed_multiplier <= 0f64 {
             speed_multiplier = f64::INFINITY;
