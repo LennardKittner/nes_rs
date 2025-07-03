@@ -9,6 +9,8 @@ pub enum PulseGeneratorID {
     Two,
 }
 
+//TODO: sweep
+
 pub struct PulseGenerator {
     timer: Timer,
     sweep_unit: SweepUnit,
@@ -89,7 +91,10 @@ impl PulseGenerator {
     pub fn get_output(&self) -> f32 {
         let patter = Self::DUTY_PATTERNS[self.duty as usize];
 
-        if self.sweep_unit.should_mute(self.timer.data) || self.length_counter.get_value() == 0 {
+        // if self.sweep_unit.should_mute(self.timer.data) || self.length_counter.get_value() == 0 {
+        //     return 0f32;
+        // }
+        if self.length_counter.should_mute() {
             return 0f32;
         }
 

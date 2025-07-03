@@ -4,13 +4,13 @@ pub struct EnvelopeGenerator {
     /// start flag to reset envelope
     start: bool,
     /// constant volume mode flag
-    constant_volume_flag: bool,
+    pub constant_volume_flag: bool,
     /// whether the envelope should be looped
     loop_envelope: bool,
     /// timer for envelope decay
     divider: u8,
     /// volume for constant volume mode
-    constant_volume: u8,
+    pub constant_volume: u8,
     /// initial divider value
     initial_divider: u8,
     /// represents current volume when not using constant volume mode
@@ -33,10 +33,6 @@ impl EnvelopeGenerator {
 
     /// Tick the envelope generator
     pub fn tick(&mut self) {
-        if self.constant_volume_flag {
-            return;
-        }
-
         if self.start {
             self.divider = self.initial_divider;
             self.decay_level_counter = 15;

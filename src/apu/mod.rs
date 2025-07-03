@@ -19,6 +19,8 @@ enum FrameCounterMode {
     MODE4STEP,
 }
 
+const SUB_SAMPLES_PER_SAMPLE: usize = 18;
+
 #[allow(clippy::upper_case_acronyms)]
 pub struct APU {
     pulse_generator1: PulseGenerator,
@@ -30,6 +32,8 @@ pub struct APU {
     enable_interrupt: bool,
     frame_counter_mode: FrameCounterMode,
     outstanding_interrupt: bool,
+    next_sample: f32,
+    num_sub_samples: usize,
 }
 
 impl PollIRQ for APU {
@@ -55,15 +59,12 @@ impl APU {
             enable_interrupt: false,
             frame_counter_mode: FrameCounterMode::MODE4STEP,
             outstanding_interrupt: false,
+            next_sample: 0f32,
+            num_sub_samples: 0,
         }
     }
 
-    pub fn tick(
-        &mut self,
-        cycles: u8,
-        bus: &mut Bus,
-        //ring_buffer: Arc<Mutex<RingBuffer<f32, AUDIO_BUFFER_SIZE>>>,
-    ) {
+    pub fn tick(&mut self, cycles: u8, bus: &mut Bus) {
         for _ in 0..cycles {
             self.cycle_in_frame += 1;
             self.triangle_generator.tick(); // tick every cpu cycle
@@ -81,10 +82,13 @@ impl APU {
             self.noise_generator.tick();
             self.data_modulation_channel.tick(bus);
             self.outstanding_interrupt = self.data_modulation_channel.poll_irq();
-            bus.audio_ring_buffer
-                .lock()
-                .unwrap()
-                .push(self.get_output());
+            self.next_sample += self.get_output();
+            self.num_sub_samples += 1;
+            if self.num_sub_samples == SUB_SAMPLES_PER_SAMPLE {
+                self.next_sample /= SUB_SAMPLES_PER_SAMPLE as f32;
+                self.num_sub_samples = 0;
+                bus.audio_ring_buffer.lock().unwrap().push(self.next_sample);
+            }
         }
     }
 
@@ -95,7 +99,7 @@ impl APU {
         self.triangle_generator.tick_half_frame();
     }
 
-    fn tick_all_channels_quater_frame(&mut self) {
+    fn tick_all_channels_quarter_frame(&mut self) {
         self.pulse_generator1.tick_quarter_frame();
         self.pulse_generator2.tick_quarter_frame();
         self.noise_generator.tick_quarter_frame();
@@ -111,9 +115,9 @@ impl APU {
                 }
                 self.cycle_in_frame = 0;
             }
-            c if c >= 11185 => self.tick_all_channels_quater_frame(),
+            c if c >= 11185 => self.tick_all_channels_quarter_frame(),
             c if c >= 7456 => self.tick_all_channels_half_frame(),
-            c if c >= 3728 => self.tick_all_channels_quater_frame(),
+            c if c >= 3728 => self.tick_all_channels_quarter_frame(),
             _ => {}
         }
     }
@@ -125,9 +129,9 @@ impl APU {
                 self.cycle_in_frame = 0;
             }
             c if c >= 14914 => { /* Do Nothing */ }
-            c if c >= 11185 => self.tick_all_channels_quater_frame(),
+            c if c >= 11185 => self.tick_all_channels_quarter_frame(),
             c if c >= 7456 => self.tick_all_channels_half_frame(),
-            c if c >= 3728 => self.tick_all_channels_quater_frame(),
+            c if c >= 3728 => self.tick_all_channels_quarter_frame(),
             _ => {}
         }
     }
@@ -151,7 +155,9 @@ impl APU {
                 / (1f32 / ((triangle / 8227f32) + (noise / 12241f32) + (dmc / 22638f32)) + 100f32)
         };
 
-        pulse_out + tnd_out
+        //pulse_out + tnd_out
+
+        pulse1
     }
 
     /// IF-D NT21
@@ -209,17 +215,16 @@ impl APU {
     /// Mode (M, 0 = 4-step, 1 = 5-step), IRQ inhibit flag (I)
     pub fn set_frame_counter(&mut self, value: u8) {
         if value & 0b1000_0000 != 0 {
-            self.frame_counter_mode = FrameCounterMode::MODE4STEP;
-        } else {
             self.frame_counter_mode = FrameCounterMode::MODE5STEP;
+        } else {
+            self.frame_counter_mode = FrameCounterMode::MODE4STEP;
         }
         self.enable_interrupt = value & 0b0100_0000 == 0;
     }
 
     /// DDLC VVVV
     /// Duty (D), envelope loop / length counter halt (L), constant volume (C), volume/envelope (V)
-    #[allow(non_snake_case)]
-    pub fn set_pulse1_DLCV(&mut self, value: u8) {
+    pub fn set_pulse1_main_register(&mut self, value: u8) {
         self.pulse_generator1.set_duty((value & 0b1100_0000) >> 6);
         let l = value & 0b0010_0000 != 0;
         self.pulse_generator1.set_length_counter_halt(l);
@@ -230,7 +235,7 @@ impl APU {
     /// DDLC VVVV
     /// Duty (D), envelope loop / length counter halt (L), constant volume (C), volume/envelope (V)
     #[allow(non_snake_case)]
-    pub fn set_pulse2_DLCV(&mut self, value: u8) {
+    pub fn set_pulse2_main_register(&mut self, value: u8) {
         self.pulse_generator2.set_duty((value & 0b1100_0000) >> 6);
         let l = value & 0b0010_0000 != 0;
         self.pulse_generator2.set_length_counter_halt(l);
@@ -240,8 +245,7 @@ impl APU {
 
     /// EPPP NSSS
     /// Sweep unit: enabled (E), period (P), negate (N), shift (S)
-    #[allow(non_snake_case)]
-    pub fn set_pulse1_EPNS(&mut self, value: u8) {
+    pub fn set_pulse1_sweep_register(&mut self, value: u8) {
         self.pulse_generator1.set_sweep_parameters(
             value & 0b1000_0000 != 0,
             value & 0b0000_1000 != 0,
@@ -252,8 +256,7 @@ impl APU {
 
     /// EPPP NSSS
     /// Sweep unit: enabled (E), period (P), negate (N), shift (S)
-    #[allow(non_snake_case)]
-    pub fn set_pulse2_EPNS(&mut self, value: u8) {
+    pub fn set_pulse2_sweep_register(&mut self, value: u8) {
         self.pulse_generator2.set_sweep_parameters(
             value & 0b1000_0000 != 0,
             value & 0b0000_1000 != 0,
@@ -264,13 +267,13 @@ impl APU {
 
     /// TTTT TTTT
     /// Timer low (T)
-    pub fn set_pulse1_timer_low(&mut self, value: u8) {
+    pub fn set_pulse1_timer_low_bits(&mut self, value: u8) {
         self.pulse_generator1.set_timer_lower(value)
     }
 
     /// TTTT TTTT
     /// Timer low (T)
-    pub fn set_pulse2_timer_low(&mut self, value: u8) {
+    pub fn set_pulse2_timer_low_bits(&mut self, value: u8) {
         self.pulse_generator2.set_timer_lower(value)
     }
 

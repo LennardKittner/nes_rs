@@ -14,7 +14,6 @@ use sdl2::pixels::PixelFormatEnum;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
-use std::sync::Arc;
 use std::{env, io};
 
 struct AudioWrapper {
@@ -133,7 +132,7 @@ fn main() {
     let desired_spec = AudioSpecDesired {
         freq: Some(44100),
         channels: Some(1),
-        samples: None,
+        samples: Some(1024),
     };
 
     let bus = Bus::new(
@@ -157,7 +156,7 @@ fn main() {
         poll_controller_input,
     );
 
-    let audio_buffer = Arc::clone(&bus.audio_ring_buffer);
+    let audio_buffer = bus.audio_ring_buffer.clone();
 
     let audio_device = audio_subsystem
         .open_playback(None, &desired_spec, |_spec| AudioWrapper {
