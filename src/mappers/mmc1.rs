@@ -20,6 +20,12 @@ struct ControlRegister {
     pub value: u8,
 }
 
+enum PRGBankMode {
+    Mode32k,
+    FirstBankFix,
+    LastBankFix,
+}
+
 impl ControlRegister {
     pub fn new() -> Self {
         // "Although some tests have found that all versions of the MMC1 seems to reliably power on in the last bank (by setting the "PRG-ROM bank mode" to 3); other tests have found that this is fragile. Several commercial games have reset vectors every 32 KiB, but not every 16, so evidently PRG-ROM bank mode 2 doesn't seem to occur randomly on power-up." nes-dev
@@ -44,16 +50,13 @@ impl ControlRegister {
         }
     }
 
-    pub fn prg_32k_mode(&self) -> bool {
-        self.value & 0b1100 == 0b0100 || self.value & 0b1100 == 0b0000
-    }
-
-    pub fn prg_first_bank_fixed(&self) -> bool {
-        self.value & 0b1100 == 0b1000
-    }
-
-    pub fn prg_last_bank_fixed(&self) -> bool {
-        self.value & 0b1100 == 0b1100
+    pub fn get_prg_mode(&self) -> PRGBankMode {
+        match (self.value & 0b1100) >> 2 {
+            0 | 1 => PRGBankMode::Mode32k,
+            2 => PRGBankMode::FirstBankFix,
+            3 => PRGBankMode::LastBankFix,
+            _ => unreachable!(),
+        }
     }
 
     pub fn chr_8k_mode(&self) -> bool {
@@ -107,7 +110,6 @@ pub struct MMC1Mapper {
     chr_rom: Vec<u8>,
     chr_rom_bank0_offset: usize,
     chr_rom_bank1_offset: usize,
-    shift_register_pos: u8,
     shift_register: u8,
     control_register: ControlRegister,
     chr_bank0_register: u8,
@@ -125,6 +127,14 @@ impl MMC1Mapper {
     const CHR_BANK_1_END: u16 = 0xDFFF;
     const PRG_BANK_START: u16 = 0xE000;
     const PRG_BANK_END: u16 = 0xFFFF;
+    const PRG_ADDRESS_MASK: u8 = 0b1111;
+
+    const SHIFT_REGISTER_RESET: u8 = 0b1000_0000;
+    const SHIFT_REGISTER_INIT: u8 = 0b1_0000;
+    const BANK_SIZE_4K: usize = 0x1000;
+    const BANK_SIZE_8K: usize = 0x2000;
+    const BANK_SIZE_16K: usize = 0x4000;
+    const BANK_SIZE_32K: usize = 0x8000;
 
     pub fn new(prg_rom: Vec<u8>, chr_rom: Vec<u8>, has_battery_backed_ram: bool) -> Self {
         let file = OpenOptions::new()
@@ -152,7 +162,6 @@ impl MMC1Mapper {
             chr_rom,
             chr_rom_bank0_offset: 0,
             chr_rom_bank1_offset: 0,
-            shift_register_pos: 0,
             shift_register: 0,
             control_register: ControlRegister::new(),
             chr_bank0_register: 0,
@@ -164,70 +173,68 @@ impl MMC1Mapper {
         mapper
     }
 
-    fn get_prg_bank_0_offset(&self) -> usize {
-        let mut bank_id = self.prg_bank_register & 0b1111;
+    fn get_prg_bank_offsets(&self) -> (usize, usize) {
+        let bank_id = (self.prg_bank_register & Self::PRG_ADDRESS_MASK) as usize;
 
-        if self.control_register.chr_8k_mode() {
-            bank_id += self.chr_bank0_register & 0x10;
+        let upper_256kb = if self.prg_rom.len() == 524288 {
+            ((self.chr_bank0_register | self.chr_bank1_register) & 0b10000) as usize
         } else {
-            bank_id += self.chr_bank1_register & 0x10;
-        }
-
-        let mut offset = if self.control_register.prg_first_bank_fixed() {
             0usize
-        } else if self.control_register.prg_last_bank_fixed() {
-            bank_id as usize * 16384
+        };
+        let max_16k_banks = self.prg_rom.len() / Self::BANK_SIZE_16K - 1;
+        let max_32k_banks = self.prg_rom.len() / Self::BANK_SIZE_32K - 1;
+
+        let first_bank = upper_256kb;
+        let last_bank = if self.prg_rom.len() == 524288 && upper_256kb == 0 {
+            (max_16k_banks - 0b10000) * Self::BANK_SIZE_16K
         } else {
-            (bank_id >> 1) as usize * 32768
+            max_16k_banks * Self::BANK_SIZE_16K
         };
 
-        if self.prg_ram.is_none()
-            && self.control_register.prg_first_bank_fixed()
-            && self.prg_bank_register & 0b10000 != 0
-        {
-            offset += 16384;
+        match self.control_register.get_prg_mode() {
+            PRGBankMode::Mode32k => (
+                Self::BANK_SIZE_32K * (upper_256kb + (bank_id & 0b1110)).min(max_32k_banks),
+                Self::BANK_SIZE_32K * (upper_256kb + (bank_id & 0b1110)).min(max_32k_banks)
+                    + Self::BANK_SIZE_16K,
+            ),
+            PRGBankMode::FirstBankFix => (
+                first_bank,
+                Self::BANK_SIZE_16K * (upper_256kb + bank_id).min(max_16k_banks),
+            ),
+            PRGBankMode::LastBankFix => (
+                Self::BANK_SIZE_16K * (upper_256kb + bank_id).min(max_16k_banks),
+                last_bank,
+            ),
         }
-
-        offset
-    }
-
-    fn get_prg_bank_1_offset(&self) -> usize {
-        let mut offset = if self.control_register.prg_first_bank_fixed() {
-            (self.prg_bank_register & 0b1111) as usize * 16384
-        } else if self.control_register.prg_last_bank_fixed() {
-            self.prg_rom.len() - 16384
-        } else {
-            ((self.prg_bank_register & 0b1111) >> 1) as usize * 32768 + 16384
-        };
-
-        if self.prg_ram.is_none()
-            && self.control_register.prg_last_bank_fixed()
-            && self.prg_bank_register & 0b1000 != 0
-        {
-            offset -= 16384;
-        }
-        offset
     }
 
     fn get_chr_bank_0_offset(&self) -> usize {
-        if self.control_register.chr_8k_mode() {
-            (self.chr_bank0_register as usize >> 1) * 8192
+        if self.prg_rom.len() == 524288 {
+            if self.control_register.chr_8k_mode() {
+                0
+            } else {
+                (self.chr_bank0_register as usize & 1) * Self::BANK_SIZE_4K
+            }
         } else {
-            self.chr_bank0_register as usize * 4096
+            //TODO: there are more modes
+            if self.control_register.chr_8k_mode() {
+                (self.chr_bank0_register as usize & 0b11110) * Self::BANK_SIZE_8K
+            } else {
+                self.chr_bank0_register as usize * Self::BANK_SIZE_4K
+            }
         }
     }
 
     fn get_chr_bank_1_offset(&self) -> usize {
         if self.control_register.chr_8k_mode() {
-            (self.chr_bank0_register as usize >> 1) * 8192 + 4096
+            self.get_chr_bank_0_offset() + Self::BANK_SIZE_4K
         } else {
-            self.chr_bank1_register as usize * 4096
+            self.chr_bank1_register as usize * Self::BANK_SIZE_4K
         }
     }
 
     fn update_from_registers(&mut self) {
-        self.prg_rom_bank0_offset = self.get_prg_bank_0_offset();
-        self.prg_rom_bank1_offset = self.get_prg_bank_1_offset();
+        (self.prg_rom_bank0_offset, self.prg_rom_bank1_offset) = self.get_prg_bank_offsets();
         self.chr_rom_bank0_offset = self.get_chr_bank_0_offset();
         self.chr_rom_bank1_offset = self.get_chr_bank_1_offset();
         self.mirroring = self.control_register.get_mirroring();
@@ -236,38 +243,38 @@ impl MMC1Mapper {
 
 impl Mapper for MMC1Mapper {
     fn prg_rom_len(&self) -> usize {
-        32768
+        Self::BANK_SIZE_32K
     }
 
     fn chr_rom_len(&self) -> usize {
-        8192
+        Self::BANK_SIZE_8K
     }
 
     fn read_prg_rom(&self, address: u16) -> u8 {
-        if address < 16384 {
+        if address < Self::BANK_SIZE_16K as u16 {
             self.prg_rom[address as usize + self.prg_rom_bank0_offset]
         } else {
-            self.prg_rom[(address - 16384) as usize + self.prg_rom_bank1_offset]
+            self.prg_rom[address as usize - Self::BANK_SIZE_16K + self.prg_rom_bank1_offset]
         }
     }
 
     fn read_chr_rom(&self, address: u16) -> u8 {
-        if address < 4096 {
+        if address < Self::BANK_SIZE_4K as u16 {
             self.chr_rom[address as usize + self.chr_rom_bank0_offset]
         } else {
-            self.chr_rom[(address - 4096) as usize + self.chr_rom_bank1_offset]
+            self.chr_rom[address as usize - Self::BANK_SIZE_4K + self.chr_rom_bank1_offset]
         }
     }
 
     fn read_chr_rom_bank(&self, bank: u16, address: u16) -> u8 {
-        self.chr_rom[(bank * 8192 + address) as usize]
+        self.chr_rom[(bank * Self::BANK_SIZE_8K as u16 + address) as usize]
     }
 
     fn read_tile_chr_rom(&self, address: u16) -> &[u8] {
-        let addr = if address < 4096 {
+        let addr = if address < Self::BANK_SIZE_4K as u16 {
             address as usize + self.chr_rom_bank0_offset
         } else {
-            (address - 4096) as usize + self.chr_rom_bank1_offset
+            address as usize - Self::BANK_SIZE_4K + self.chr_rom_bank1_offset
         };
         if addr > self.chr_rom.len() {
             return &[0; 16];
@@ -276,71 +283,42 @@ impl Mapper for MMC1Mapper {
     }
 
     fn read_tile_chr_rom_bank(&self, bank: u16, address: u16) -> &[u8] {
-        let addr = (bank * 8192 + address) as usize;
+        let addr = bank as usize * Self::BANK_SIZE_8K + address as usize;
         &self.chr_rom[addr..(addr + 16)]
     }
 
-    /// Ignoring consecutive-cycle writes not implemented
+    ///TODO:: Ignoring consecutive-cycle writes not implemented
     fn register_write(&mut self, address: u16, value: u8) {
-        // if value != 192 && value != 129 {
-        // println!("{:x}", value);
-        // }        // if value != 192 && value != 129 {
-
-        // if address + 0x8000 != 0xffff && address + 0x8000 != 0xbfdf {
-        // println!("{:x}", address + 0x8000);
-        // }
-        if value & 0b1000_0000 != 0 {
-            // println!(
-            //     "RESET  {:b} {:x} {:b}",
-            //     value,
-            //     address + 0x8000,
-            //     self.shift_register
-            // );
-            self.shift_register_pos = 0;
-            self.shift_register = 0;
+        if value & Self::SHIFT_REGISTER_RESET != 0 {
+            self.shift_register = Self::SHIFT_REGISTER_INIT;
             self.control_register.reset();
             return;
         }
-        // println!(
-        //     "WRITE  {value:b} {value:x} {:x} {:b}",
-        //     address + 0x8000,
-        //     self.shift_register
-        // );
-        self.shift_register |= (value & 1) << self.shift_register_pos;
-        self.shift_register_pos += 1;
-        if self.shift_register_pos >= 5 {
-            // println!("WRITE");
+        let write = self.shift_register & 1 == 1;
+        self.shift_register >>= 1;
+        self.shift_register |= (value & 1) << 4;
+        if write {
             match address + 0x8000 {
                 Self::CONTROL_REGISTER_START..=Self::CONTROL_REGISTER_END => {
                     self.control_register.set(self.shift_register);
                 }
                 Self::CHR_BANK_0_START..=Self::CHR_BANK_0_END => {
-                    // if self.shift_register != 0 {
-                    //     //println!("wrote chr bank 0 {}", self.shift_register);
-                    // }
                     self.chr_bank0_register = self.shift_register;
                 }
                 Self::CHR_BANK_1_START..=Self::CHR_BANK_1_END => {
-                    // if self.shift_register != 0 {
-                    //     //println!("wrote chr bank 1 {}", self.shift_register);
-                    // }
                     self.chr_bank1_register = self.shift_register;
                 }
                 Self::PRG_BANK_START..=Self::PRG_BANK_END => {
                     self.prg_bank_register = self.shift_register;
                 }
-                _ => (),
+                _ => unreachable!(),
             }
             self.update_from_registers();
-            self.shift_register = 0;
-            self.shift_register_pos = 0;
+            self.shift_register = Self::SHIFT_REGISTER_INIT;
         }
     }
 
     fn read_cartridge_ram(&self, address: u16) -> u8 {
-        if self.prg_bank_register & 0b10000 == 0 {
-            return 0;
-        }
         if let Some(ram) = &self.prg_ram {
             ram[address as usize]
         } else {
@@ -356,6 +334,14 @@ impl Mapper for MMC1Mapper {
             ram[address as usize] = value
         } else {
             //println!("Writing to cartridge ram failed.");
+        }
+    }
+
+    fn write_chr_ram(&mut self, address: u16, value: u8) {
+        if address < Self::BANK_SIZE_4K as u16 {
+            self.chr_rom[address as usize + self.chr_rom_bank0_offset] = value;
+        } else {
+            self.chr_rom[address as usize - Self::BANK_SIZE_4K + self.chr_rom_bank1_offset] = value;
         }
     }
 
