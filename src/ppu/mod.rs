@@ -20,6 +20,7 @@ use crate::rendering::frame::SCREEN_WIDTH;
 use crate::rendering::render_bg;
 use crate::rendering::scanline::{Scanline, SpriteColor};
 use crate::rom::{Mirroring, Rom};
+use bitflags::Flags;
 use std::cmp::{max, min};
 use std::ops::Range;
 
@@ -56,6 +57,61 @@ impl PollNMI for PPU {
             true
         } else {
             false
+        }
+    }
+}
+
+const PPU_REGISTERS_MIRRORS_END: u16 = 0x3FFF;
+
+impl PPU {
+    pub fn mem_read(&mut self, addr: u16, rom: &Rom) -> Option<u8> {
+        match addr {
+            0x2000 | 0x2001 | 0x2003 | 0x2005 | 0x2006 => None,
+            0x2002 => Some(self.read_status()),
+            0x2004 => Some(self.read_oam_data()),
+            0x2007 => Some(self.read_data(rom)),
+            0x2008..=PPU_REGISTERS_MIRRORS_END => {
+                let mirror_down_addr = addr & 0b00100000_00000111;
+                self.mem_read(mirror_down_addr, rom)
+            }
+            _ => None,
+        }
+    }
+
+    pub fn trace_mem_read(&self, addr: u16, rom: &Rom) -> Option<u8> {
+        match addr {
+            0x2000 => Some(self.control_register.bits()),
+            0x2001 => Some(self.mask_register.bits()),
+            0x2003 => Some(self.oam_addr),
+            0x2005 => Some(self.scroll_register.get_scroll_x()),
+            0x2006 => Some(0),
+            0x2002 => Some(self.status_register.bits()),
+            0x2004 => Some(self.read_oam_data()),
+            0x2007 => Some(self.trace_read_data(rom)),
+            0x2008..=PPU_REGISTERS_MIRRORS_END => {
+                let mirror_down_addr = addr & 0b00100000_00000111;
+                self.trace_mem_read(mirror_down_addr, rom)
+            }
+            0x4014 => Some(0),
+            _ => None,
+        }
+    }
+
+    pub fn mem_write(&mut self, addr: u16, data: u8, rom: &mut Rom) {
+        match addr {
+            0x2000 => self.write_to_ctrl(data),
+            0x2001 => self.write_to_mask(data),
+            0x2002 => panic!("write to PPU status register"),
+            0x2003 => self.write_to_oam_addr(data),
+            0x2004 => self.write_to_oam_data(data),
+            0x2005 => self.write_to_scroll(data),
+            0x2006 => self.write_to_addr(data),
+            0x2007 => self.write_to_data(data, rom),
+            0x2008..=PPU_REGISTERS_MIRRORS_END => {
+                let mirror_down_addr = addr & 0b00100000_00000111;
+                self.mem_write(mirror_down_addr, data, rom);
+            }
+            _ => (), // write not in the address space of the PPU
         }
     }
 }
@@ -357,6 +413,21 @@ impl PPU {
                     self.vram[self.mirror_vram_addr(addr - 0x1000, mirroring) as usize];
                 self.read_palette_table((addr - 0x3F00) as usize)
             }
+            _ => panic!("unexpected access to mirrored space, requested = {}", addr),
+        }
+    }
+
+    pub fn trace_read_data(&self, rom: &Rom) -> u8 {
+        let addr = self.address_register.data_alt;
+
+        match addr {
+            0x0000..=0x1FFF => self.internal_data_buffer,
+            0x2000..=0x2FFF => self.internal_data_buffer,
+            0x3000..=0x3EFF => self.internal_data_buffer,
+            0x3F10 | 0x3F14 | 0x3F18 | 0x3F1C => {
+                self.read_palette_table((addr - 0x10 - 0x3F00) as usize)
+            }
+            0x3F00..=0x3FFF => self.read_palette_table((addr - 0x3F00) as usize),
             _ => panic!("unexpected access to mirrored space, requested = {}", addr),
         }
     }

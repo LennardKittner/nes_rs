@@ -47,6 +47,67 @@ impl PollIRQ for APU {
     }
 }
 
+const APU_REGISTERS_START: u16 = 0x4000;
+const APU_REGISTERS_END: u16 = 0x4013;
+
+impl APU {
+    pub fn mem_read(&mut self, addr: u16) -> Option<u8> {
+        match addr {
+            APU_REGISTERS_START..=APU_REGISTERS_END => None,
+            0x4015 => Some(self.get_status()),
+            _ => None,
+        }
+    }
+
+    pub fn trace_mem_read(&self, addr: u16) -> Option<u8> {
+        match addr {
+            APU_REGISTERS_START..=APU_REGISTERS_END => None,
+            0x4015 => Some(self.trace_get_status()),
+            _ => None,
+        }
+    }
+
+    pub fn mem_write(&mut self, addr: u16, data: u8) {
+        match addr {
+            // pulse 1
+            0x4000 => self.set_pulse1_main_register(data),
+            0x4001 => self.set_pulse1_sweep_register(data),
+            0x4002 => self.set_pulse1_timer_low_bits(data),
+            0x4003 => self.set_pulse1_LT(data),
+
+            // pulse 2
+            0x4004 => self.set_pulse2_main_register(data),
+            0x4005 => self.set_pulse2_sweep_register(data),
+            0x4006 => self.set_pulse2_timer_low_bits(data),
+            0x4007 => self.set_pulse2_LT(data),
+
+            // triangle
+            0x4008 => self.set_triangle_CR(data),
+            0x4009 => (), // unused
+            0x400A => self.set_triangle_timer_low(data),
+            0x400B => self.set_triangle_LT(data),
+
+            // noise
+            0x400C => self.set_noise_LCV(data),
+            0x400D => (), // unused
+            0x400E => self.set_noise_LP(data),
+            0x400F => self.set_noise_length_counter_load(data),
+
+            // DMC
+            0x4010 => self.set_DMC_ILR(data),
+            0x4011 => self.set_DMC_load_counter(data),
+            0x4012 => self.set_DMC_sample_address(data),
+            0x4013 => self.set_DMC_sample_length(data),
+
+            0x4015 => self.set_status(data),
+
+            0x4017 => self.set_frame_counter(data),
+
+            _ => (),
+        }
+    }
+}
+
 impl APU {
     pub fn new() -> APU {
         Self {
@@ -163,6 +224,12 @@ impl APU {
     /// IF-D NT21
     /// DMC interrupt (I), frame interrupt (F), DMC active (D), length counter > 0 (N/T/2/1)
     pub fn get_status(&mut self) -> u8 {
+        //TODO: If an interrupt flag was set at the same moment of the read, it will read back as 1 but it will not be cleared. what?
+        self.enable_interrupt = false;
+        self.trace_get_status()
+    }
+
+    pub fn trace_get_status(&self) -> u8 {
         let mut status = 0;
         if self.pulse_generator1.is_active() {
             status |= 0b0000_0001;
@@ -185,8 +252,6 @@ impl APU {
         if self.data_modulation_channel.is_interrupt_enabled() {
             status |= 0b1000_0000;
         }
-        //TODO: If an interrupt flag was set at the same moment of the read, it will read back as 1 but it will not be cleared. what?
-        self.enable_interrupt = false;
         status
     }
 

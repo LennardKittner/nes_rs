@@ -88,21 +88,25 @@ impl<'a> Bus<'a> {
     }
 
     pub fn trace_mem_read(&self, addr: u16) -> u8 {
+        if addr == 0x8004 {
+            println!("a")
+        }
+        if let Some(result) = self.ppu.trace_mem_read(addr, &self.rom) {
+            return result;
+        }
+        if let Some(result) = self.rom.mem_read(addr) {
+            return result;
+        }
+        if let Some(result) = self.apu.as_ref().unwrap().trace_mem_read(addr) {
+            return result;
+        }
         match addr {
             RAM..=RAM_MIRRORS_END => {
                 let mirror_down_addr = addr & 0b00000111_11111111;
                 self.cpu_vram[mirror_down_addr as usize]
             }
-            0x2000 | 0x2001 | 0x2002 | 0x2003 | 0x2005 | 0x2006 | 0x4014 => 0,
-            0x2004 => self.ppu.read_oam_data(),
-            0x2007 => 0xFF,                             //TODO: fix
-            0x2008..=PPU_REGISTERS_MIRRORS_END => 0xFF, //TODO: fix
-            CARTRIDGE_RAM_START..=CARTRIDGE_RAM_END => self.rom.read_cartridge_ram(addr - 0x6000),
-            CARTRIDGE_ROM_AND_MAPPER_START..=CARTRIDGE_ROM_AND_MAPPER_END => {
-                self.read_prg_rom(addr - 0x8000)
-            }
             _ => {
-                //panic!("Read will change data and thus trace_mem_read can not be used.");
+                println!("Reading 0 for unknown address: {addr:X}");
                 0
             }
         }
@@ -204,14 +208,6 @@ pub trait Mem {
 
 const RAM: u16 = 0x0000;
 const RAM_MIRRORS_END: u16 = 0x1FFF;
-const PPU_REGISTERS_MIRRORS_END: u16 = 0x3FFF;
-const CARTRIDGE_ROM_AND_MAPPER_START: u16 = 0x8000;
-const CARTRIDGE_ROM_AND_MAPPER_END: u16 = 0xFFFF;
-const CARTRIDGE_RAM_START: u16 = 0x6000;
-const CARTRIDGE_RAM_END: u16 = 0x7FFF;
-const APU_REGISTERS_START: u16 = 0x4000;
-const APU_REGISTERS_END: u16 = 0x4013;
-
 impl PollNMI for Bus<'_> {
     fn poll_nmi_status(&mut self) -> bool {
         self.ppu.poll_nmi_status()
@@ -226,58 +222,20 @@ impl PollIRQ for Bus<'_> {
 
 impl Mem for Bus<'_> {
     fn mem_read(&mut self, addr: u16) -> u8 {
+        if let Some(result) = self.ppu.mem_read(addr, &self.rom) {
+            return result;
+        }
+        if let Some(result) = self.rom.mem_read(addr) {
+            return result;
+        }
+        if let Some(result) = self.apu.as_mut().unwrap().mem_read(addr) {
+            return result;
+        }
         match addr {
             RAM..=RAM_MIRRORS_END => {
                 let mirror_down_addr = addr & 0b00000111_11111111;
-                let tmp = self.cpu_vram[mirror_down_addr as usize];
-                tmp
+                self.cpu_vram[mirror_down_addr as usize]
             }
-            0x2000 | 0x2001 | 0x2003 | 0x2005 | 0x2006 | 0x4014 => {
-                //panic!("Attempt to read from write-only PPU address {:x}", addr);
-                0
-            }
-            0x2002 => {
-                if self.get_cycle_count_cpu() == 87106 {
-                    0x30
-                } else {
-                    self.ppu.read_status()
-                }
-            }
-            0x2004 => self.ppu.read_oam_data(),
-            0x2007 => self.ppu.read_data(&self.rom),
-            0x2008..=PPU_REGISTERS_MIRRORS_END => {
-                let mirror_down_addr = addr & 0b00100000_00000111;
-                self.mem_read(mirror_down_addr)
-            }
-            0x4001 => {
-                if self.get_cycle_count_cpu() == 58284 {
-                    0x40
-                } else {
-                    0
-                }
-            } //TODO: mocking
-            0x4005 => {
-                if self.get_cycle_count_cpu() == 58288 {
-                    0x40
-                } else {
-                    0
-                }
-            } //TODO: mocking
-            0x4010 => {
-                if self.get_cycle_count_cpu() == 58427 {
-                    0x40
-                } else {
-                    0
-                }
-            }
-            APU_REGISTERS_START..=APU_REGISTERS_END => 0,
-            0x4015 => {
-                if self.get_cycle_count_cpu() == 57616 {
-                    0x40
-                } else {
-                    0
-                }
-            } //self.apu.as_mut().unwrap().get_status(), //TODO: mocking
             0x4016 => {
                 (self.controller_callback)(&mut self.controller_1, &mut self.controller_2);
                 self.controller_1.read()
@@ -285,12 +243,6 @@ impl Mem for Bus<'_> {
             0x4017 => {
                 (self.controller_callback)(&mut self.controller_1, &mut self.controller_2);
                 self.controller_2.read()
-            }
-            CARTRIDGE_RAM_START..=CARTRIDGE_RAM_END => self.rom.read_cartridge_ram(addr - 0x6000),
-            CARTRIDGE_ROM_AND_MAPPER_START..=CARTRIDGE_ROM_AND_MAPPER_END => {
-                let tmp = self.read_prg_rom(addr - 0x8000);
-                //println!("{:x}", tmp);
-                tmp
             }
             _ => {
                 println!("Ignoring mem read at {addr:x}");
@@ -300,65 +252,14 @@ impl Mem for Bus<'_> {
     }
 
     fn mem_write(&mut self, addr: u16, data: u8) {
+        self.ppu.mem_write(addr, data, &mut self.rom);
+        self.rom.mem_write(addr, data);
+        self.apu.as_mut().unwrap().mem_write(addr, data);
         match addr {
             RAM..=RAM_MIRRORS_END => {
                 let mirror_down_addr = addr & 0b00000111_11111111;
                 self.cpu_vram[mirror_down_addr as usize] = data;
             }
-            0x2000 => self.ppu.write_to_ctrl(data),
-            0x2001 => self.ppu.write_to_mask(data),
-            0x2002 => (), //panic!("write to PPU status register"),
-            0x2003 => self.ppu.write_to_oam_addr(data),
-            0x2004 => self.ppu.write_to_oam_data(data),
-            0x2005 => self.ppu.write_to_scroll(data),
-            0x2006 => self.ppu.write_to_addr(data),
-            0x2007 => {
-                // println!(
-                //     "Writing data {:x} {:x}",
-                //     self.ppu.address_register.data, data
-                // );
-                self.ppu.write_to_data(data, &mut self.rom)
-            }
-            0x2008..=PPU_REGISTERS_MIRRORS_END => {
-                let mirror_down_addr = addr & 0b00100000_00000111;
-                self.mem_write(mirror_down_addr, data);
-            }
-            //APU:
-
-            // pulse 1
-            0x4000 => self.apu.as_mut().unwrap().set_pulse1_main_register(data),
-            0x4001 => self.apu.as_mut().unwrap().set_pulse1_sweep_register(data),
-            0x4002 => self.apu.as_mut().unwrap().set_pulse1_timer_low_bits(data),
-            0x4003 => self.apu.as_mut().unwrap().set_pulse1_LT(data),
-
-            // pulse 2
-            0x4004 => self.apu.as_mut().unwrap().set_pulse2_main_register(data),
-            0x4005 => self.apu.as_mut().unwrap().set_pulse2_sweep_register(data),
-            0x4006 => self.apu.as_mut().unwrap().set_pulse2_timer_low_bits(data),
-            0x4007 => self.apu.as_mut().unwrap().set_pulse2_LT(data),
-
-            // triangle
-            0x4008 => self.apu.as_mut().unwrap().set_triangle_CR(data),
-            0x4009 => (), // unused
-            0x400A => self.apu.as_mut().unwrap().set_triangle_timer_low(data),
-            0x400B => self.apu.as_mut().unwrap().set_triangle_LT(data),
-
-            // noise
-            0x400C => self.apu.as_mut().unwrap().set_noise_LCV(data),
-            0x400D => (), // unused
-            0x400E => self.apu.as_mut().unwrap().set_noise_LP(data),
-            0x400F => self
-                .apu
-                .as_mut()
-                .unwrap()
-                .set_noise_length_counter_load(data),
-
-            // DMC
-            0x4010 => self.apu.as_mut().unwrap().set_DMC_ILR(data),
-            0x4011 => self.apu.as_mut().unwrap().set_DMC_load_counter(data),
-            0x4012 => self.apu.as_mut().unwrap().set_DMC_sample_address(data),
-            0x4013 => self.apu.as_mut().unwrap().set_DMC_sample_length(data),
-
             0x4014 => {
                 // https://wiki.nesdev.com/w/index.php/PPU_programmer_reference#OAM_DMA_.28.244014.29_.3E_write
                 // https://www.nesdev.org/wiki/PPU_OAM#DMA
@@ -376,21 +277,11 @@ impl Mem for Bus<'_> {
                     self.tick(2);
                 }
             }
-            0x4015 => self.apu.as_mut().unwrap().set_status(data),
             0x4016 => {
                 self.controller_1.write(data);
                 self.controller_2.write(data);
             }
-            0x4017 => self.apu.as_mut().unwrap().set_frame_counter(data),
-            CARTRIDGE_RAM_START..=CARTRIDGE_RAM_END => {
-                self.rom.write_cartridge_ram(addr - 0x6000, data)
-            }
-            CARTRIDGE_ROM_AND_MAPPER_START..=CARTRIDGE_ROM_AND_MAPPER_END => {
-                self.rom.mapper_register_write(addr - 0x8000, data)
-            }
-            _ => {
-                println!("Ignoring mem write at 0x{addr:X}");
-            }
+            _ => (),
         }
     }
 }

@@ -1,3 +1,4 @@
+use crate::bus::Mem;
 #[cfg(test)]
 use crate::cpu::interrupts::RESET_INTERRUPT;
 #[cfg(test)]
@@ -220,6 +221,35 @@ impl NES2Header {
             system_type,
             num_miscellaneous_roms,
         })
+    }
+}
+
+const CARTRIDGE_ROM_AND_MAPPER_START: u16 = 0x8000;
+const CARTRIDGE_ROM_AND_MAPPER_END: u16 = 0xFFFF;
+const CARTRIDGE_RAM_START: u16 = 0x6000;
+const CARTRIDGE_RAM_END: u16 = 0x7FFF;
+
+impl Rom {
+    pub fn mem_read(&self, addr: u16) -> Option<u8> {
+        match addr {
+            CARTRIDGE_RAM_START..=CARTRIDGE_RAM_END => Some(self.read_cartridge_ram(addr - 0x6000)),
+            CARTRIDGE_ROM_AND_MAPPER_START..=CARTRIDGE_ROM_AND_MAPPER_END => {
+                Some(self.read_prg_rom(addr - 0x8000))
+            }
+            _ => None,
+        }
+    }
+
+    pub fn mem_write(&mut self, addr: u16, data: u8) {
+        match addr {
+            CARTRIDGE_RAM_START..=CARTRIDGE_RAM_END => {
+                self.write_cartridge_ram(addr - 0x6000, data)
+            }
+            CARTRIDGE_ROM_AND_MAPPER_START..=CARTRIDGE_ROM_AND_MAPPER_END => {
+                self.mapper_register_write(addr - 0x8000, data)
+            }
+            _ => (),
+        }
     }
 }
 
