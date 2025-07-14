@@ -24,7 +24,8 @@ pub struct Bus<'a> {
     apu: Option<APU>,
     frame: Frame,
     fps_frame: FPSFrame,
-    current_scanline: Scanline,
+    scanline_buffers: [Scanline; 2],
+    current_scanline_buffer: usize,
     last_scanline: i32,
     cycles: usize,
     graphics_callback: GraphicsCallback<'a>,
@@ -64,7 +65,8 @@ impl<'a> Bus<'a> {
             apu: Some(APU::new()),
             frame: Frame::default(),
             fps_frame: FPSFrame::new(0, 0xA, [0x0F, 0x30, 0x21, 0x0F]),
-            current_scanline: Scanline::new(),
+            scanline_buffers: [Scanline::new(), Scanline::new()],
+            current_scanline_buffer: 0,
             last_scanline: 0,
             graphics_callback: Box::from(graphics_callback),
             controller_callback: Box::from(controller_callback),
@@ -131,9 +133,12 @@ impl<'a> Bus<'a> {
         self.apu = Some(apu);
 
         let vblank_before = self.ppu.is_in_vertical_blank();
-        let next_scanline = self
-            .ppu
-            .tick(cycles * 3, &self.rom, &mut self.current_scanline);
+        let next_scanline = self.ppu.tick(
+            cycles * 3,
+            &self.rom,
+            &mut self.scanline_buffers,
+            self.current_scanline_buffer,
+        );
         let vblank_after = self.ppu.is_in_vertical_blank();
 
         // pre render scanline has index -1
@@ -142,9 +147,10 @@ impl<'a> Bus<'a> {
         }
 
         if next_scanline != self.last_scanline && next_scanline <= 240 {
-            self.current_scanline
+            self.scanline_buffers[self.current_scanline_buffer]
                 .write_scanline(&mut self.frame, next_scanline as usize);
             self.last_scanline = next_scanline;
+            self.current_scanline_buffer ^= 1;
         }
 
         if !vblank_before && vblank_after {

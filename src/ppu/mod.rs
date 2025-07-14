@@ -39,7 +39,7 @@ pub struct PPU {
     pub temporary_address_register: TRegister,
     internal_data_buffer: u8,
     write_toggle: bool,
-    sprite_buffer: [Sprite; 8],
+    sprite_buffer: [Sprite; 9], // we only use the first 8 slots the nine is only for the overflow flag
     pub sprite_zero_pos: Range<usize>,
     sprite_zero_was_hit_this_frame: bool,
 
@@ -48,6 +48,10 @@ pub struct PPU {
 
     outstanding_interrupt: bool,
     global_cycle: usize,
+    set_sprite_overflow_on_tick: usize,
+    first_touch: bool,
+
+    is_string_up: bool,
 }
 
 impl PollNMI for PPU {
@@ -99,13 +103,37 @@ impl PPU {
 
     pub fn mem_write(&mut self, addr: u16, data: u8, rom: &mut Rom) {
         match addr {
-            0x2000 => self.write_to_ctrl(data),
-            0x2001 => self.write_to_mask(data),
-            0x2002 => panic!("write to PPU status register"),
+            0x2000 => {
+                if !self.is_string_up {
+                    self.write_to_ctrl(data)
+                } else {
+                    println!("ignore write")
+                }
+            }
+            0x2001 => {
+                if !self.is_string_up {
+                    self.write_to_mask(data)
+                } else {
+                    println!("ignore write")
+                }
+            }
+            0x2002 => println!("write to PPU status register"),
             0x2003 => self.write_to_oam_addr(data),
             0x2004 => self.write_to_oam_data(data),
-            0x2005 => self.write_to_scroll(data),
-            0x2006 => self.write_to_addr(data),
+            0x2005 => {
+                if !self.is_string_up {
+                    self.write_to_scroll(data)
+                } else {
+                    println!("ignore write")
+                }
+            }
+            0x2006 => {
+                if !self.is_string_up {
+                    self.write_to_addr(data)
+                } else {
+                    println!("ignore write")
+                }
+            }
             0x2007 => self.write_to_data(data, rom),
             0x2008..=PPU_REGISTERS_MIRRORS_END => {
                 let mirror_down_addr = addr & 0b00100000_00000111;
@@ -132,26 +160,51 @@ impl PPU {
             temporary_address_register: TRegister::new(),
             internal_data_buffer: 0,
             write_toggle: false,
-            sprite_buffer: [Sprite::default(); 8],
+            sprite_buffer: [Sprite::default(); 9],
             sprite_zero_pos: 0..0,
             sprite_zero_was_hit_this_frame: false,
             scan_line: -1,
             cycles: 0,
             outstanding_interrupt: false,
             global_cycle: 0,
+            set_sprite_overflow_on_tick: 999,
+            first_touch: false,
+            is_string_up: true,
         }
     }
 
-    pub fn tick(&mut self, cycles: u8, rom: &Rom, sprite_pixel_buffer: &mut Scanline) -> i32 {
-        let pixel_range = self.cycles..(self.cycles + cycles as usize);
+    pub fn tick(
+        &mut self,
+        cycles: u8,
+        rom: &Rom,
+        scanline_buffers: &mut [Scanline; 2],
+        current_buffer: usize,
+    ) -> i32 {
+        // TODO: clamp
+        let pixel_range = self.cycles..(self.cycles + cycles as usize).min(256);
         self.cycles += cycles as usize;
         self.global_cycle += cycles as usize;
+
+        if self.cycles >= self.set_sprite_overflow_on_tick {
+            self.set_sprite_overflow();
+            self.set_sprite_overflow_on_tick = 999;
+        }
 
         // The VBL flag ($2002.7) is cleared by the PPU around 2270 CPU clocks after NMI occurs.
         if self.scan_line == 260 && self.cycles >= 308 {
             self.status_register.set_vertical_blank(false);
             self.status_register.set_sprite_zero_hit(false);
             self.outstanding_interrupt = false;
+        }
+
+        if self.scan_line <= 240 && !self.first_touch {
+            self.scan_line += 1;
+            scanline_buffers[current_buffer ^ 1].clear();
+            if self.show_sprites() || self.show_background() {
+                self.compute_sprites_next_scanline(rom, &mut scanline_buffers[current_buffer ^ 1]);
+            }
+            self.scan_line -= 1;
+            self.first_touch = false;
         }
 
         if self.cycles >= 341 {
@@ -165,27 +218,26 @@ impl PPU {
             self.scan_line += 1;
 
             // Handle visible scanlines
-            if self.scan_line < 240 {
-                sprite_pixel_buffer.clear();
-                //TODO: check if sprite rendering is on?
-                self.compute_sprites_next_scanline(rom, sprite_pixel_buffer);
+            if self.scan_line <= 240 {
                 if self.show_background() {
-                    render_bg(self, rom, sprite_pixel_buffer);
+                    render_bg(self, rom, &mut scanline_buffers[current_buffer ^ 1]);
                 }
             }
             // VBlank start at scanline 241
             else if self.scan_line == 241 {
                 self.status_register.set_vertical_blank(true);
-                self.status_register.set_sprite_overflow(false);
                 if self.control_register.generate_nmi() {
                     self.outstanding_interrupt = true;
                 }
             }
             // Reset scanline to -1 after 260 to start pre-render
             else if self.scan_line > 260 {
+                self.is_string_up = false;
                 self.scan_line = -1;
+                self.first_touch = false;
                 self.outstanding_interrupt = false;
                 self.sprite_zero_was_hit_this_frame = false;
+                self.status_register.set_sprite_overflow(false);
                 if self.show_background() {
                     self.address_register
                         .load_y_from(&self.temporary_address_register);
@@ -195,7 +247,7 @@ impl PPU {
 
         // Check for Sprite Zero hit during visible scanlines (0–239)
         if !self.sprite_zero_was_hit_this_frame && self.scan_line >= 0 && self.scan_line < 240 {
-            self.check_sprite_zero_hit(pixel_range, sprite_pixel_buffer);
+            self.check_sprite_zero_hit(pixel_range, &scanline_buffers[current_buffer]);
         }
 
         if self.control_register.get_sprite_size() == 16 {
@@ -222,10 +274,6 @@ impl PPU {
                 {
                     self.set_sprite_zero_hit();
                     self.sprite_zero_was_hit_this_frame = true;
-                    // println!(
-                    //     "HIT {} {} {}",
-                    //     self.scan_line, self.cycles, self.global_cycle
-                    // );
                     break;
                 }
             }
@@ -233,24 +281,41 @@ impl PPU {
     }
 
     fn compute_sprites_next_scanline(&mut self, rom: &Rom, sprite_pixel_buffer: &mut Scanline) {
-        let scan_line = (self.scan_line) as u16;
+        let scan_line = self.scan_line as u16;
         let mut current_sprite_slot = 0;
+        let mut buggy_srpite_scanning = false;
+        // should be always zero, but due to the NES hardware bug is incremented after eight sprites
+        let mut y_cor_offset = 0;
         self.sprite_zero_pos = 0..0;
         for sprite_idx in (0..self.oam_data.len()).step_by(4) {
             let raw = &self.oam_data[sprite_idx..sprite_idx + 4];
-            if raw[0] < 239 && scan_line > raw[0] as u16 && scan_line < (raw[0] + 1 + 8) as u16 {
+            if raw[y_cor_offset] <= 239
+                && scan_line > raw[y_cor_offset] as u16
+                && scan_line < (raw[y_cor_offset] + 8) as u16
+            {
                 self.sprite_buffer[current_sprite_slot] =
                     Sprite::new(raw, sprite_idx == 0).unwrap();
-                current_sprite_slot += 1;
                 if sprite_idx == 0 {
-                    let x_start = self.sprite_buffer[current_sprite_slot - 1].get_x();
+                    let x_start = self.sprite_buffer[current_sprite_slot].get_x();
                     self.sprite_zero_pos = x_start..(x_start + 8);
                 }
-                if current_sprite_slot >= 8 {
-                    self.set_sprite_overflow();
+                current_sprite_slot += 1;
+                buggy_srpite_scanning = current_sprite_slot >= 8;
+                if current_sprite_slot >= 9 {
+                    let sprites_checked = sprite_idx / 4; // excluding current
+                    let sprites_in_range = current_sprite_slot - 1; // sprites in range excluding current and always 8
+                    const INITIAL_DELAY: usize = 65;
+                    const IN_RANGE_SPRITE_DELAY: usize = 8;
+                    const IGNORED_SPRITE_DELAY: usize = 2;
+                    self.set_sprite_overflow_on_tick = INITIAL_DELAY
+                        + sprites_checked * IGNORED_SPRITE_DELAY
+                        + sprites_in_range * (IN_RANGE_SPRITE_DELAY - IGNORED_SPRITE_DELAY);
+                    current_sprite_slot -= 1; // the next loop should not render the ninth sprite
                     break;
                 }
-            }
+            } else if buggy_srpite_scanning {
+                y_cor_offset = (y_cor_offset + 1) % 4;
+            };
         }
 
         for sprite_idx in (0..current_sprite_slot).rev() {
