@@ -24,7 +24,7 @@ pub const BRK_INTERRUPT: Interrupt = Interrupt {
 pub const RESET_INTERRUPT: Interrupt = Interrupt {
     interrupt_vector: RESET_VECTOR,
     b_flag: false,
-    cycles: 7,
+    cycles: 8,
 };
 
 pub struct Interrupt {
