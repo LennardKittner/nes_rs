@@ -93,7 +93,7 @@ impl<'a> Bus<'a> {
         if addr == 0x8004 {
             println!("a")
         }
-        if let Some(result) = self.ppu.trace_mem_read(addr, &self.rom) {
+        if let Some(result) = self.ppu.trace_mem_read(addr) {
             return result;
         }
         if let Some(result) = self.rom.mem_read(addr) {
