@@ -29,7 +29,6 @@ const LAST_SCANLINE: i32 = 260;
 const CYCLES_PER_SCANLINE: usize = 341;
 const DONOT_TRIGGER_OVERFLOW: usize = 999;
 
-//TODO: Sprite scanline missing. Probably rendering bug.
 //TODO: 8x16 sprites
 pub struct PPU {
     palette_table: [u8; 32],
@@ -299,7 +298,7 @@ impl PPU {
             let raw = &self.oam_data[sprite_idx..sprite_idx + 4];
             if raw[y_cor_offset] < (VBLANK_START - 1) as u8
                 && scan_line > raw[y_cor_offset] as u16
-                && scan_line < (raw[y_cor_offset] + 8) as u16
+                && scan_line <= (raw[y_cor_offset] + 8) as u16
             {
                 self.sprite_buffer[current_sprite_slot] =
                     Sprite::new(raw, sprite_idx == 0).unwrap();
