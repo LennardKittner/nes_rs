@@ -1,9 +1,9 @@
 use itertools::Itertools;
 use nes_rs::bus::{Bus, Mem};
-use nes_rs::cpu::CPU;
+use nes_rs::cpu::trace::trace;
+use nes_rs::cpu::{Flags, CPU};
 use nes_rs::ppu::palette::SystemPalette;
 use nes_rs::rom::Rom;
-use nes_rs::trace::trace;
 use std::fs;
 
 fn load_nestest_rom() -> Rom {
@@ -22,6 +22,7 @@ fn test_against_nes_test() {
     );
     let mut cpu = CPU::new_with_bus(bus);
     cpu.reset();
+    cpu.status |= Flags::B2 as u8;
     cpu.program_counter = 0xC000;
     let file_content = fs::read_to_string("./tests/roms/nestest.log").unwrap();
     let test_file = file_content.lines().collect_vec();
@@ -55,6 +56,7 @@ fn test_format_trace() {
     cpu.register_a = 1;
     cpu.register_x = 2;
     cpu.register_y = 3;
+    cpu.status |= Flags::B2 as u8;
 
     let mut result = Vec::new();
     loop {
@@ -101,6 +103,7 @@ fn test_mem_access() {
     let mut cpu = CPU::new_with_bus(bus);
     cpu.program_counter = 0x64;
     cpu.register_y = 0;
+    cpu.status |= Flags::B2 as u8;
     let mut result = Vec::new();
     loop {
         result.push(trace(&mut cpu));
