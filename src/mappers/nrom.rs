@@ -34,7 +34,7 @@ impl Mapper for NROMMapper {
         self.chr_space.len()
     }
     fn read_prg_rom(&self, address: u16) -> u8 {
-        self.prg_rom[address as usize]
+        self.prg_rom[address as usize % self.prg_rom_len()]
     }
     fn read_chr_rom(&self, address: u16) -> u8 {
         self.chr_space[address as usize]
