@@ -29,6 +29,7 @@ const LAST_SCANLINE: i32 = 260;
 const CYCLES_PER_SCANLINE: usize = 341;
 const DONOT_TRIGGER_OVERFLOW: usize = 999;
 
+//TODO: Sprite scanline missing. Probably rendering bug.
 //TODO: 8x16 sprites
 pub struct PPU {
     palette_table: [u8; 32],
@@ -185,7 +186,6 @@ impl PPU {
         scanline_buffers: &mut [Scanline; 2],
         current_buffer: usize,
     ) -> i32 {
-        // TODO: clamp
         let pixel_range = self.cycles..(self.cycles + cycles as usize).min(256);
         self.cycles += cycles as usize;
         self.global_cycle += cycles as usize;
@@ -203,12 +203,14 @@ impl PPU {
         }
 
         if self.scan_line < VBLANK_START && !self.first_touch {
-            self.scan_line += 1;
             scanline_buffers[current_buffer ^ 1].clear();
             if self.show_sprites() || self.show_background() {
-                self.compute_sprites_next_scanline(rom, &mut scanline_buffers[current_buffer ^ 1]);
+                self.sprite_evaluation(
+                    rom,
+                    &mut scanline_buffers[current_buffer ^ 1],
+                    self.scan_line + 1,
+                );
             }
-            self.scan_line -= 1;
             self.first_touch = false;
         }
 
@@ -286,10 +288,10 @@ impl PPU {
         }
     }
 
-    fn compute_sprites_next_scanline(&mut self, rom: &Rom, sprite_pixel_buffer: &mut Scanline) {
-        let scan_line = self.scan_line as u16;
+    fn sprite_evaluation(&mut self, rom: &Rom, sprite_pixel_buffer: &mut Scanline, scan_line: i32) {
+        let scan_line = scan_line as u16;
         let mut current_sprite_slot = 0;
-        let mut buggy_srpite_scanning = false;
+        let mut buggy_sprite_scanning = false;
         // should be always zero, but due to the NES hardware bug is incremented after eight sprites
         let mut y_cor_offset = 0;
         self.sprite_zero_pos = 0..0;
@@ -306,7 +308,7 @@ impl PPU {
                     self.sprite_zero_pos = x_start..(x_start + 8);
                 }
                 current_sprite_slot += 1;
-                buggy_srpite_scanning = current_sprite_slot >= 8;
+                buggy_sprite_scanning = current_sprite_slot >= 8;
                 if current_sprite_slot >= 9 {
                     let sprites_checked = sprite_idx / 4; // excluding current
                     let sprites_in_range = current_sprite_slot - 1; // sprites in range excluding current and always 8
@@ -319,7 +321,7 @@ impl PPU {
                     current_sprite_slot -= 1; // the next loop should not render the ninth sprite
                     break;
                 }
-            } else if buggy_srpite_scanning {
+            } else if buggy_sprite_scanning {
                 y_cor_offset = (y_cor_offset + 1) % 4;
             };
         }
