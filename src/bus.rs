@@ -1,7 +1,7 @@
 use crate::apu::APU;
 use crate::controller::Controller;
 use crate::ppu::palette::SystemPalette;
-use crate::ppu::PPU;
+use crate::ppu::{PPU, PRE_RENDER_SCNALINE};
 use crate::rendering::fps_frame::FPSFrame;
 use crate::rendering::{frame::Frame, scanline::Scanline};
 use crate::ring_buffer::RingBuffer;
@@ -90,9 +90,6 @@ impl<'a> Bus<'a> {
     }
 
     pub fn trace_mem_read(&self, addr: u16) -> u8 {
-        if addr == 0x8004 {
-            println!("a")
-        }
         if let Some(result) = self.ppu.trace_mem_read(addr) {
             return result;
         }
@@ -142,7 +139,7 @@ impl<'a> Bus<'a> {
         let vblank_after = self.ppu.is_in_vertical_blank();
 
         // pre render scanline has index -1
-        if next_scanline < 0 {
+        if next_scanline == PRE_RENDER_SCNALINE {
             return;
         }
 

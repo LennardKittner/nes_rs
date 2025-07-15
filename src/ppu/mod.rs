@@ -20,14 +20,16 @@ use crate::rendering::frame::SCREEN_WIDTH;
 use crate::rendering::render_bg;
 use crate::rendering::scanline::{Scanline, SpriteColor};
 use crate::rom::{Mirroring, Rom};
-use bitflags::Flags;
 use std::cmp::{max, min};
 use std::ops::Range;
 
 const VBLANK_START: i32 = 241;
-const LAST_SCANLINE: i32 = 260;
+const LAST_SCANLINE: i32 = 261;
+pub const PRE_RENDER_SCNALINE: i32 = -1;
 const CYCLES_PER_SCANLINE: usize = 341;
-const DONOT_TRIGGER_OVERFLOW: usize = 999;
+const DO_NOT_TRIGGER_OVERFLOW: usize = 999;
+const POWER_ON_SCNALINE: i32 = 0;
+const POWER_ON_CYCLE: usize = 20;
 
 //TODO: 8x16 sprites
 pub struct PPU {
@@ -38,23 +40,25 @@ pub struct PPU {
     pub oam_data: [u8; 256],
     pub control_register: ControlRegister,
     mask_register: MaskRegister,
-    pub(crate) status_register: StatusRegister,
+    status_register: StatusRegister,
     scroll_register: ScrollRegister,
     pub address_register: AddressRegister,
     pub temporary_address_register: TRegister,
     internal_data_buffer: u8,
     write_toggle: bool,
-    sprite_buffer: [Sprite; 9], // we only use the first 8 slots the nine is only for the overflow flag
+    sprite_buffer: [Sprite; 9], // we only use the first 8 slots the ninth is only for the overflow flag
     pub sprite_zero_pos: Range<usize>,
     sprite_zero_was_hit_this_frame: bool,
 
     pub scan_line: i32,
     pub cycles: usize,
+    frame_counter: usize,
 
     outstanding_interrupt: bool,
     global_cycle: usize,
     set_sprite_overflow_on_tick: usize,
-    first_touch: bool,
+    first_touch_scanline: bool,
+    first_touch_frame: bool,
 
     is_string_up: bool,
 }
@@ -168,12 +172,14 @@ impl PPU {
             sprite_buffer: [Sprite::default(); 9],
             sprite_zero_pos: 0..0,
             sprite_zero_was_hit_this_frame: false,
-            scan_line: -1,
-            cycles: 0,
+            scan_line: POWER_ON_SCNALINE,
+            cycles: POWER_ON_CYCLE,
+            frame_counter: 0,
             outstanding_interrupt: false,
             global_cycle: 0,
-            set_sprite_overflow_on_tick: DONOT_TRIGGER_OVERFLOW,
-            first_touch: false,
+            set_sprite_overflow_on_tick: DO_NOT_TRIGGER_OVERFLOW,
+            first_touch_scanline: true,
+            first_touch_frame: true,
             is_string_up: true,
         }
     }
@@ -191,17 +197,22 @@ impl PPU {
 
         if self.cycles >= self.set_sprite_overflow_on_tick {
             self.set_sprite_overflow();
-            self.set_sprite_overflow_on_tick = DONOT_TRIGGER_OVERFLOW;
+            self.set_sprite_overflow_on_tick = DO_NOT_TRIGGER_OVERFLOW;
         }
 
-        // The VBL flag ($2002.7) is cleared by the PPU around 2270 CPU clocks after NMI occurs.
-        if self.scan_line == LAST_SCANLINE && self.cycles >= 308 {
-            self.status_register.set_vertical_blank(false);
-            self.status_register.set_sprite_zero_hit(false);
-            self.outstanding_interrupt = false;
+        if self.first_touch_frame {
+            if self.scan_line == PRE_RENDER_SCNALINE {
+                if self.frame_counter % 2 == 1 && (self.show_background() || self.show_sprites()) {
+                    self.cycles += 1;
+                }
+                self.status_register.set_vertical_blank(false);
+                self.status_register.set_sprite_zero_hit(false);
+                self.outstanding_interrupt = false;
+            }
+            self.first_touch_frame = false;
         }
 
-        if self.scan_line < VBLANK_START && !self.first_touch {
+        if self.first_touch_scanline {
             scanline_buffers[current_buffer ^ 1].clear();
             if self.show_sprites() || self.show_background() {
                 self.sprite_evaluation(
@@ -210,11 +221,10 @@ impl PPU {
                     self.scan_line + 1,
                 );
             }
-            self.first_touch = false;
+            self.first_touch_scanline = false;
         }
 
         if self.cycles >= CYCLES_PER_SCANLINE {
-            //println!("Scan line done {} {}", self.scan_line, self.global_cycle);
             if self.show_background() {
                 self.address_register
                     .load_x_from(&self.temporary_address_register);
@@ -222,32 +232,28 @@ impl PPU {
 
             self.cycles -= CYCLES_PER_SCANLINE;
             self.scan_line += 1;
+            self.first_touch_scanline = true;
 
-            // Handle visible scanlines
             if self.scan_line < VBLANK_START {
                 if self.show_background() {
                     render_bg(self, rom, &mut scanline_buffers[current_buffer ^ 1]);
                 }
-            }
-            // VBlank start at scanline 241
-            else if self.scan_line == VBLANK_START {
+            } else if self.scan_line == VBLANK_START {
                 self.status_register.set_vertical_blank(true);
                 if self.control_register.generate_nmi() {
                     self.outstanding_interrupt = true;
                 }
-            }
-            // Reset scanline to -1 after 260 to start pre-render
-            else if self.scan_line > LAST_SCANLINE {
+            } else if self.scan_line == LAST_SCANLINE {
                 self.is_string_up = false;
-                self.scan_line = -1;
-                self.first_touch = false;
-                self.outstanding_interrupt = false;
+                self.scan_line = PRE_RENDER_SCNALINE;
+                self.first_touch_frame = true;
                 self.sprite_zero_was_hit_this_frame = false;
                 self.status_register.set_sprite_overflow(false);
                 if self.show_background() {
                     self.address_register
                         .load_y_from(&self.temporary_address_register);
                 }
+                self.frame_counter += 1;
             }
         }
 
