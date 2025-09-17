@@ -195,12 +195,14 @@ impl PPU {
         self.cycles += cycles as usize;
         self.global_cycle += cycles as usize;
 
-        if self.cycles >= self.set_sprite_overflow_on_tick {
+        if self.scan_line == VBLANK_START && self.first_touch_scanline && self.status_register.vertical_blank() {
+            if self.control_register.generate_nmi() {
+                self.outstanding_interrupt = true;
+            }
+        } else if self.cycles >= self.set_sprite_overflow_on_tick {
             self.set_sprite_overflow();
             self.set_sprite_overflow_on_tick = DO_NOT_TRIGGER_OVERFLOW;
-        }
-
-        if self.first_touch_frame {
+        } else if self.first_touch_frame {
             if self.scan_line == PRE_RENDER_SCNALINE {
                 if self.frame_counter % 2 == 1 && (self.show_background() || self.show_sprites()) {
                     self.cycles += 1;
@@ -240,9 +242,6 @@ impl PPU {
                 }
             } else if self.scan_line == VBLANK_START {
                 self.status_register.set_vertical_blank(true);
-                if self.control_register.generate_nmi() {
-                    self.outstanding_interrupt = true;
-                }
             } else if self.scan_line == LAST_SCANLINE {
                 self.is_string_up = false;
                 self.scan_line = PRE_RENDER_SCNALINE;
