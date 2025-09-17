@@ -104,7 +104,7 @@ impl AddressingMode {
                     offset = offset.wrapping_neg();
                     Some(cpu.program_counter.wrapping_sub(offset as u16))
                 } else {
-                    Some(cpu.program_counter + (offset as u16))
+                    Some(cpu.program_counter.wrapping_add(offset as u16))
                 }
             }
             AddressingMode::Accumulator | AddressingMode::NonAddressing => None,
