@@ -449,7 +449,7 @@ impl PPU {
     }
 
     pub fn read_palette_table(&self, idx: usize) -> u8 {
-        let mut palette = self.palette_table[idx];
+        let mut palette = self.palette_table[idx % self.palette_table.len()];
         if self.mask_register.is_grayscale() {
             palette &= 0x30;
         }
