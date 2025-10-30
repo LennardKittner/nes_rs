@@ -133,9 +133,9 @@ impl CPU<'_> {
 
         let instruction = CPU_INSTRUCTIONS[op_code as usize];
         instruction.execute(self);
-        if op_code == 0x00 {
-            return false;
-        }
+        // if op_code == 0x00 {
+        //     return false;
+        // }
 
         self.bus.tick(instruction.cycles + self.additional_cycles);
         self.additional_cycles = 0;
