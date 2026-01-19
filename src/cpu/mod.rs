@@ -1,5 +1,5 @@
 use crate::bus::{Bus, Mem, PollIRQ, PollNMI};
-use crate::cpu::addressing_mode::{AddressingMode, Load, Store, page_cross};
+use crate::cpu::addressing_mode::{page_cross, AddressingMode, Load, Store};
 use crate::cpu::interrupts::{
     Interrupt, BRK_INTERRUPT, IRQ_INTERRUPT, NMI_INTERRUPT, RESET_INTERRUPT,
 };
@@ -116,7 +116,7 @@ impl CPU<'_> {
     }
 
     pub fn run(&mut self) {
-            loop {
+        loop {
             if !self.step() {
                 return;
             }
@@ -339,7 +339,9 @@ impl CPU<'_> {
             self.register_a
         } else {
             addr = mode.get_operand_address::<Load>(self).unwrap().0;
-            self.mem_read(addr)
+            let value = self.mem_read(addr);
+            self.mem_write(addr, value);
+            value
         };
         let carry = value & 0b1000_0000 != 0;
         value = value.wrapping_shl(1);
@@ -474,7 +476,9 @@ impl CPU<'_> {
 
     fn dec(&mut self, mode: &AddressingMode) {
         let (addr, _, _) = mode.get_operand_address::<Load>(self).unwrap();
-        let value = self.mem_read(addr).wrapping_sub(1);
+        let value = self.mem_read(addr);
+        self.mem_write(addr, value);
+        let value = value.wrapping_sub(1);
         self.update_zero_and_negative_flags(value);
         self.mem_write(addr, value);
     }
@@ -491,7 +495,9 @@ impl CPU<'_> {
 
     fn inc(&mut self, mode: &AddressingMode) {
         let (addr, _, _) = mode.get_operand_address::<Load>(self).unwrap();
-        let value = self.mem_read(addr).wrapping_add(1);
+        let value = self.mem_read(addr);
+        self.mem_write(addr, value);
+        let value = value.wrapping_add(1);
         self.update_zero_and_negative_flags(value);
         self.mem_write(addr, value);
     }
@@ -515,8 +521,13 @@ impl CPU<'_> {
     }
 
     fn jsr(&mut self, mode: &AddressingMode) {
-        let (addr, _, _) = mode.get_operand_address::<Load>(self).unwrap();
+        assert_eq!(*mode, AddressingMode::Absolute);
+        let operand_location = self.program_counter.wrapping_add(1);
+        let lo = self.mem_read(operand_location) as u16;
+        let _ = self.mem_read(CPU::STACK_BASE_ADDRESS + self.register_s.wrapping_add(1) as u16);
         self.push_u16(self.program_counter.wrapping_add(2)); // +2 because the program_counter was not incremented yet
+        let hi = self.mem_read(operand_location.wrapping_add(1)) as u16;
+        let addr = (hi << 8) | lo;
         self.program_counter = addr.wrapping_sub(CPU_INSTRUCTIONS[0x20].size); // because the program_counter will be incremented by the size of the instruction
     }
 
@@ -526,7 +537,9 @@ impl CPU<'_> {
             self.register_a
         } else {
             addr = mode.get_operand_address::<Load>(self).unwrap().0;
-            self.mem_read(addr)
+            let value = self.mem_read(addr);
+            self.mem_write(addr, value);
+            value
         };
         let carry = value & 0b0000_0001 != 0;
         self.update_flag(Flags::Carry, carry);
@@ -575,6 +588,7 @@ impl CPU<'_> {
         } else {
             let (addr, _, _) = mode.get_operand_address::<Load>(self).unwrap();
             let mut value = self.mem_read(addr);
+            self.mem_write(addr, value);
             let carry = value & 0b1000_0000 != 0;
             value = value.wrapping_shl(1);
             value |= if self.get_flag(Flags::Carry) { 1 } else { 0 };
@@ -604,6 +618,7 @@ impl CPU<'_> {
         } else {
             let (addr, _, _) = mode.get_operand_address::<Load>(self).unwrap();
             let mut value = self.mem_read(addr);
+            self.mem_write(addr, value);
             let carry = value & 0b0000_0001 != 0;
             value = value.wrapping_shr(1);
             value |= if self.get_flag(Flags::Carry) {
@@ -674,14 +689,18 @@ impl CPU<'_> {
 
     fn dcp(&mut self, mode: &AddressingMode) {
         let (addr, _, _) = mode.get_operand_address::<Load>(self).unwrap();
-        let value = self.mem_read(addr).wrapping_sub(1);
+        let value = self.mem_read(addr);
+        self.mem_write(addr, value);
+        let value = value.wrapping_sub(1);
         self.mem_write(addr, value);
         self.compare(self.register_a, value);
     }
 
     fn isb(&mut self, mode: &AddressingMode) {
         let (addr, _, _) = mode.get_operand_address::<Load>(self).unwrap();
-        let value = self.mem_read(addr).wrapping_add(1);
+        let value = self.mem_read(addr);
+        self.mem_write(addr, value);
+        let value = value.wrapping_add(1);
         self.mem_write(addr, value);
         // The value has to be bitwise negated instead of arithmetically negated because of the carry
         self.add_to_a(!value);

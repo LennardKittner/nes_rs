@@ -28,6 +28,7 @@ pub struct Bus<'a> {
     current_scanline_buffer: usize,
     last_scanline: i32,
     cycles: usize,
+    open_bus: u8,
     graphics_callback: GraphicsCallback<'a>,
     controller_callback: ControllerCallback<'a>,
     controller_1: Controller,
@@ -61,6 +62,7 @@ impl<'a> Bus<'a> {
             cpu_vram: [0; 2048],
             rom,
             cycles: 0,
+            open_bus: 0,
             ppu,
             apu: Some(APU::new()),
             frame: Frame::default(),
@@ -225,35 +227,38 @@ impl PollIRQ for Bus<'_> {
 
 impl Mem for Bus<'_> {
     fn mem_read(&mut self, addr: u16) -> u8 {
-        if let Some(result) = self.ppu.mem_read(addr, &self.rom) {
-            return result;
-        }
-        if let Some(result) = self.rom.mem_read(addr) {
-            return result;
-        }
-        if let Some(result) = self.apu.as_mut().unwrap().mem_read(addr) {
-            return result;
-        }
-        match addr {
-            RAM..=RAM_MIRRORS_END => {
-                let mirror_down_addr = addr & 0b00000111_11111111;
-                self.cpu_vram[mirror_down_addr as usize]
+        let value = if let Some(result) = self.ppu.mem_read(addr, &self.rom) {
+            result
+        } else if let Some(result) = self.rom.mem_read(addr) {
+            result
+        } else if let Some(result) = self.apu.as_mut().unwrap().mem_read(addr, self.open_bus) {
+            result
+        } else {
+            match addr {
+                RAM..=RAM_MIRRORS_END => {
+                    let mirror_down_addr = addr & 0b00000111_11111111;
+                    self.cpu_vram[mirror_down_addr as usize]
+                }
+                0x4016 => {
+                    (self.controller_callback)(&mut self.controller_1, &mut self.controller_2);
+                    (self.open_bus & 0b1110_0000) | (self.controller_1.read() & 0b0001_1111)
+                }
+                0x4017 => {
+                    (self.controller_callback)(&mut self.controller_1, &mut self.controller_2);
+                    (self.open_bus & 0b1110_0000) | (self.controller_2.read() & 0b0001_1111)
+                }
+                _ => self.open_bus,
             }
-            0x4016 => {
-                (self.controller_callback)(&mut self.controller_1, &mut self.controller_2);
-                self.controller_1.read()
-            }
-            0x4017 => {
-                (self.controller_callback)(&mut self.controller_1, &mut self.controller_2);
-                self.controller_2.read()
-            }
-            _ => {
-                0
-            }
+        };
+        // internal CPU register
+        if addr != 0x4015 {
+            self.open_bus = value;
         }
+        value
     }
 
     fn mem_write(&mut self, addr: u16, data: u8) {
+        self.open_bus = data;
         self.ppu.mem_write(addr, data, &mut self.rom);
         self.rom.mem_write(addr, data);
         self.apu.as_mut().unwrap().mem_write(addr, data);

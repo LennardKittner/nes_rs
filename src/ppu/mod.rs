@@ -45,6 +45,7 @@ pub struct PPU {
     pub address_register: AddressRegister,
     pub temporary_address_register: TRegister,
     internal_data_buffer: u8,
+    open_bus: u8,
     write_toggle: bool,
     sprite_buffer: [Sprite; 9], // we only use the first 8 slots the ninth is only for the overflow flag
     pub sprite_zero_pos: Range<usize>,
@@ -78,8 +79,11 @@ const PPU_REGISTERS_MIRRORS_END: u16 = 0x3FFF;
 
 impl PPU {
     pub fn mem_read(&mut self, addr: u16, rom: &Rom) -> Option<u8> {
-        match addr {
-            0x2000 | 0x2001 | 0x2003 | 0x2005 | 0x2006 => None,
+        if addr < 0x2000 || addr > PPU_REGISTERS_MIRRORS_END {
+            return None;
+        }
+        let value = match addr {
+            0x2000 | 0x2001 | 0x2003 | 0x2005 | 0x2006 => Some(self.open_bus),
             0x2002 => Some(self.read_status()),
             0x2004 => Some(self.read_oam_data()),
             0x2007 => Some(self.read_data(rom)),
@@ -87,8 +91,10 @@ impl PPU {
                 let mirror_down_addr = addr & 0b00100000_00000111;
                 self.mem_read(mirror_down_addr, rom)
             }
-            _ => None,
-        }
+            _ => unreachable!(),
+        };
+        self.open_bus = value.unwrap();
+        value
     }
 
     pub fn trace_mem_read(&self, addr: u16) -> Option<u8> {
@@ -111,36 +117,32 @@ impl PPU {
     }
 
     pub fn mem_write(&mut self, addr: u16, data: u8, rom: &mut Rom) {
+        if addr < 0x2000 || addr > PPU_REGISTERS_MIRRORS_END {
+            return;
+        }
+        self.open_bus = data;
         match addr {
             0x2000 => {
                 if !self.is_string_up {
                     self.write_to_ctrl(data)
-                } else {
-                    println!("ignore write")
                 }
             }
             0x2001 => {
                 if !self.is_string_up {
                     self.write_to_mask(data)
-                } else {
-                    println!("ignore write")
                 }
             }
-            0x2002 => println!("write to PPU status register"),
+            0x2002 => (),
             0x2003 => self.write_to_oam_addr(data),
             0x2004 => self.write_to_oam_data(data),
             0x2005 => {
                 if !self.is_string_up {
                     self.write_to_scroll(data)
-                } else {
-                    println!("ignore write")
                 }
             }
             0x2006 => {
                 if !self.is_string_up {
                     self.write_to_addr(data)
-                } else {
-                    println!("ignore write")
                 }
             }
             0x2007 => self.write_to_data(data, rom),
@@ -148,7 +150,7 @@ impl PPU {
                 let mirror_down_addr = addr & 0b00100000_00000111;
                 self.mem_write(mirror_down_addr, data, rom);
             }
-            _ => (), // write not in the address space of the PPU
+            _ => unreachable!(), // write not in the address space of the PPU
         }
     }
 }
@@ -168,6 +170,7 @@ impl PPU {
             address_register: AddressRegister::new(),
             temporary_address_register: TRegister::new(),
             internal_data_buffer: 0,
+            open_bus: 0,
             write_toggle: false,
             sprite_buffer: [Sprite::default(); 9],
             sprite_zero_pos: 0..0,
@@ -554,7 +557,7 @@ impl PPU {
         let status = self.status_register.bits();
         self.write_toggle = false;
         self.status_register.set_vertical_blank(false);
-        status
+        (status & 0xE0) | (self.open_bus & 0x1F)
     }
 
     pub fn write_to_scroll(&mut self, value: u8) {

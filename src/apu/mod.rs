@@ -51,10 +51,10 @@ const APU_REGISTERS_START: u16 = 0x4000;
 const APU_REGISTERS_END: u16 = 0x4013;
 
 impl APU {
-    pub fn mem_read(&mut self, addr: u16) -> Option<u8> {
+    pub fn mem_read(&mut self, addr: u16, open_bus: u8) -> Option<u8> {
         match addr {
             APU_REGISTERS_START..=APU_REGISTERS_END => None,
-            0x4015 => Some(self.get_status()),
+            0x4015 => Some((self.get_status() & 0b1101_1111) | (open_bus & 0b0010_0000)),
             _ => None,
         }
     }
