@@ -195,7 +195,10 @@ impl PPU {
         self.cycles += cycles as usize;
         self.global_cycle += cycles as usize;
 
-        if self.scan_line == VBLANK_START && self.first_touch_scanline && self.status_register.vertical_blank() {
+        if self.scan_line == VBLANK_START
+            && self.first_touch_scanline
+            && self.status_register.vertical_blank()
+        {
             if self.control_register.generate_nmi() {
                 self.outstanding_interrupt = true;
             }
