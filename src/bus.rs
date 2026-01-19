@@ -248,7 +248,6 @@ impl Mem for Bus<'_> {
                 self.controller_2.read()
             }
             _ => {
-                println!("Ignoring mem read at {addr:x}");
                 0
             }
         }

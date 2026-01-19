@@ -6,37 +6,37 @@ lazy_static! {
         let mut arr: [OpCode; 256] = [OpCode::new(0, "", 0, 0, false, AddressingMode::NonAddressing, Operation::FnCpu(|cpu| CPU::brk(cpu))); 256];
         // size of brk is 0 so the target jump location is one less
         arr[0x00] = OpCode::new(0x00, "BRK", 0, 7, false, AddressingMode::NonAddressing, Operation::FnCpu(|cpu| CPU::brk(cpu)));
-        arr[0xEA] = OpCode::new(0xEA, "NOP", 1, 2, false, AddressingMode::NonAddressing, Operation::Fn(CPU::nop));
+        arr[0xEA] = OpCode::new(0xEA, "NOP", 1, 2, false, AddressingMode::NonAddressing, Operation::FnCpuAndAddressing(|cpu, mode| CPU::nop(cpu, mode)));
 
-        arr[0x04] = OpCode::new(0x04, "*NOP", 2, 3, false, AddressingMode::ZeroPage, Operation::Fn(CPU::nop));
-        arr[0x14] = OpCode::new(0x14, "*NOP", 2, 4, false, AddressingMode::ZeroPage_X, Operation::Fn(CPU::nop));
-        arr[0x34] = OpCode::new(0x34, "*NOP", 2, 4, false, AddressingMode::ZeroPage_X, Operation::Fn(CPU::nop));
-        arr[0x44] = OpCode::new(0x44, "*NOP", 2, 3, false, AddressingMode::ZeroPage, Operation::Fn(CPU::nop));
-        arr[0x54] = OpCode::new(0x54, "*NOP", 2, 4, false, AddressingMode::ZeroPage_X, Operation::Fn(CPU::nop));
-        arr[0x64] = OpCode::new(0x64, "*NOP", 2, 3, false, AddressingMode::ZeroPage, Operation::Fn(CPU::nop));
-        arr[0x74] = OpCode::new(0x74, "*NOP", 2, 4, false, AddressingMode::ZeroPage_X, Operation::Fn(CPU::nop));
-        arr[0x80] = OpCode::new(0x80, "*NOP", 2, 2, false, AddressingMode::Immediate, Operation::Fn(CPU::nop));
-        arr[0x82] = OpCode::new(0x82, "*NOP", 2, 2, false, AddressingMode::Immediate, Operation::Fn(CPU::nop));
-        arr[0x89] = OpCode::new(0x89, "*NOP", 2, 2, false, AddressingMode::Immediate, Operation::Fn(CPU::nop));
-        arr[0xC2] = OpCode::new(0xC2, "*NOP", 2, 2, false, AddressingMode::Immediate, Operation::Fn(CPU::nop));
-        arr[0xD4] = OpCode::new(0xD4, "*NOP", 2, 4, false, AddressingMode::ZeroPage_X, Operation::Fn(CPU::nop));
-        arr[0xE2] = OpCode::new(0xE2, "*NOP", 2, 2, false, AddressingMode::Immediate, Operation::Fn(CPU::nop));
-        arr[0xF4] = OpCode::new(0xF4, "*NOP", 2, 4, false, AddressingMode::ZeroPage_X, Operation::Fn(CPU::nop));
+        arr[0x04] = OpCode::new(0x04, "*NOP", 2, 3, false, AddressingMode::ZeroPage, Operation::FnCpuAndAddressing(|cpu, mode| CPU::nop(cpu, mode)));
+        arr[0x14] = OpCode::new(0x14, "*NOP", 2, 4, false, AddressingMode::ZeroPage_X, Operation::FnCpuAndAddressing(|cpu, mode| CPU::nop(cpu, mode)));
+        arr[0x34] = OpCode::new(0x34, "*NOP", 2, 4, false, AddressingMode::ZeroPage_X, Operation::FnCpuAndAddressing(|cpu, mode| CPU::nop(cpu, mode)));
+        arr[0x44] = OpCode::new(0x44, "*NOP", 2, 3, false, AddressingMode::ZeroPage, Operation::FnCpuAndAddressing(|cpu, mode| CPU::nop(cpu, mode)));
+        arr[0x54] = OpCode::new(0x54, "*NOP", 2, 4, false, AddressingMode::ZeroPage_X, Operation::FnCpuAndAddressing(|cpu, mode| CPU::nop(cpu, mode)));
+        arr[0x64] = OpCode::new(0x64, "*NOP", 2, 3, false, AddressingMode::ZeroPage, Operation::FnCpuAndAddressing(|cpu, mode| CPU::nop(cpu, mode)));
+        arr[0x74] = OpCode::new(0x74, "*NOP", 2, 4, false, AddressingMode::ZeroPage_X, Operation::FnCpuAndAddressing(|cpu, mode| CPU::nop(cpu, mode)));
+        arr[0x80] = OpCode::new(0x80, "*NOP", 2, 2, false, AddressingMode::Immediate, Operation::FnCpuAndAddressing(|cpu, mode| CPU::nop(cpu, mode)));
+        arr[0x82] = OpCode::new(0x82, "*NOP", 2, 2, false, AddressingMode::Immediate, Operation::FnCpuAndAddressing(|cpu, mode| CPU::nop(cpu, mode)));
+        arr[0x89] = OpCode::new(0x89, "*NOP", 2, 2, false, AddressingMode::Immediate, Operation::FnCpuAndAddressing(|cpu, mode| CPU::nop(cpu, mode)));
+        arr[0xC2] = OpCode::new(0xC2, "*NOP", 2, 2, false, AddressingMode::Immediate, Operation::FnCpuAndAddressing(|cpu, mode| CPU::nop(cpu, mode)));
+        arr[0xD4] = OpCode::new(0xD4, "*NOP", 2, 4, false, AddressingMode::ZeroPage_X, Operation::FnCpuAndAddressing(|cpu, mode| CPU::nop(cpu, mode)));
+        arr[0xE2] = OpCode::new(0xE2, "*NOP", 2, 2, false, AddressingMode::Immediate, Operation::FnCpuAndAddressing(|cpu, mode| CPU::nop(cpu, mode)));
+        arr[0xF4] = OpCode::new(0xF4, "*NOP", 2, 4, false, AddressingMode::ZeroPage_X, Operation::FnCpuAndAddressing(|cpu, mode| CPU::nop(cpu, mode)));
 
-        arr[0x0C] = OpCode::new(0x0C, "*NOP", 3, 4, false, AddressingMode::Absolute, Operation::Fn(CPU::nop));
-        arr[0x1C] = OpCode::new(0x1C, "*NOP", 3, 4, true, AddressingMode::Absolute_X, Operation::Fn(CPU::nop));
-        arr[0x3C] = OpCode::new(0x3C, "*NOP", 3, 4, true, AddressingMode::Absolute_X, Operation::Fn(CPU::nop));
-        arr[0x5C] = OpCode::new(0x5C, "*NOP", 3, 4, true, AddressingMode::Absolute_X, Operation::Fn(CPU::nop));
-        arr[0x7C] = OpCode::new(0x7C, "*NOP", 3, 4, true, AddressingMode::Absolute_X, Operation::Fn(CPU::nop));
-        arr[0xDC] = OpCode::new(0xDC, "*NOP", 3, 4, true, AddressingMode::Absolute_X, Operation::Fn(CPU::nop));
-        arr[0xFC] = OpCode::new(0xFC, "*NOP", 3, 4, true, AddressingMode::Absolute_X, Operation::Fn(CPU::nop));
+        arr[0x0C] = OpCode::new(0x0C, "*NOP", 3, 4, false, AddressingMode::Absolute, Operation::FnCpuAndAddressing(|cpu, mode| CPU::nop(cpu, mode)));
+        arr[0x1C] = OpCode::new(0x1C, "*NOP", 3, 4, true, AddressingMode::Absolute_X, Operation::FnCpuAndAddressing(|cpu, mode| CPU::nop(cpu, mode)));
+        arr[0x3C] = OpCode::new(0x3C, "*NOP", 3, 4, true, AddressingMode::Absolute_X, Operation::FnCpuAndAddressing(|cpu, mode| CPU::nop(cpu, mode)));
+        arr[0x5C] = OpCode::new(0x5C, "*NOP", 3, 4, true, AddressingMode::Absolute_X, Operation::FnCpuAndAddressing(|cpu, mode| CPU::nop(cpu, mode)));
+        arr[0x7C] = OpCode::new(0x7C, "*NOP", 3, 4, true, AddressingMode::Absolute_X, Operation::FnCpuAndAddressing(|cpu, mode| CPU::nop(cpu, mode)));
+        arr[0xDC] = OpCode::new(0xDC, "*NOP", 3, 4, true, AddressingMode::Absolute_X, Operation::FnCpuAndAddressing(|cpu, mode| CPU::nop(cpu, mode)));
+        arr[0xFC] = OpCode::new(0xFC, "*NOP", 3, 4, true, AddressingMode::Absolute_X, Operation::FnCpuAndAddressing(|cpu, mode| CPU::nop(cpu, mode)));
 
-        arr[0x1A] = OpCode::new(0x1A, "*NOP", 1, 2, false, AddressingMode::NonAddressing, Operation::Fn(CPU::nop));
-        arr[0x3A] = OpCode::new(0x3A, "*NOP", 1, 2, false, AddressingMode::NonAddressing, Operation::Fn(CPU::nop));
-        arr[0x5A] = OpCode::new(0x5A, "*NOP", 1, 2, false, AddressingMode::NonAddressing, Operation::Fn(CPU::nop));
-        arr[0x7A] = OpCode::new(0x7A, "*NOP", 1, 2, false, AddressingMode::NonAddressing, Operation::Fn(CPU::nop));
-        arr[0xDA] = OpCode::new(0xDA, "*NOP", 1, 2, false, AddressingMode::NonAddressing, Operation::Fn(CPU::nop));
-        arr[0xFA] = OpCode::new(0xFA, "*NOP", 1, 2, false, AddressingMode::NonAddressing, Operation::Fn(CPU::nop));
+        arr[0x1A] = OpCode::new(0x1A, "*NOP", 1, 2, false, AddressingMode::NonAddressing, Operation::FnCpuAndAddressing(|cpu, mode| CPU::nop(cpu, mode)));
+        arr[0x3A] = OpCode::new(0x3A, "*NOP", 1, 2, false, AddressingMode::NonAddressing, Operation::FnCpuAndAddressing(|cpu, mode| CPU::nop(cpu, mode)));
+        arr[0x5A] = OpCode::new(0x5A, "*NOP", 1, 2, false, AddressingMode::NonAddressing, Operation::FnCpuAndAddressing(|cpu, mode| CPU::nop(cpu, mode)));
+        arr[0x7A] = OpCode::new(0x7A, "*NOP", 1, 2, false, AddressingMode::NonAddressing, Operation::FnCpuAndAddressing(|cpu, mode| CPU::nop(cpu, mode)));
+        arr[0xDA] = OpCode::new(0xDA, "*NOP", 1, 2, false, AddressingMode::NonAddressing, Operation::FnCpuAndAddressing(|cpu, mode| CPU::nop(cpu, mode)));
+        arr[0xFA] = OpCode::new(0xFA, "*NOP", 1, 2, false, AddressingMode::NonAddressing, Operation::FnCpuAndAddressing(|cpu, mode| CPU::nop(cpu, mode)));
 
         arr[0x02] = OpCode::new(0x02, "*KIL", 1, 0, false, AddressingMode::NonAddressing, Operation::FnCpu(|cpu| CPU::kil(cpu)));
         arr[0x12] = OpCode::new(0x12, "*KIL", 1, 0, false, AddressingMode::NonAddressing, Operation::FnCpu(|cpu| CPU::kil(cpu)));
@@ -436,9 +436,6 @@ impl OpCode {
             Operation::FnCpuAndAddressing(op) => op(cpu, &self.mode),
             Operation::FnCpu(op) => op(cpu),
             Operation::Fn(op) => op(),
-        }
-        if self.bonus_cycle_on_page_cross && self.mode.access_crosses_page_border(cpu) {
-            cpu.additional_cycles += 1;
         }
         cpu.program_counter = cpu.program_counter.wrapping_add(self.size);
     }
