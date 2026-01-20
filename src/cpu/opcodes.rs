@@ -5,7 +5,8 @@ lazy_static! {
     pub static ref CPU_INSTRUCTIONS: [OpCode; 256] = #[allow(clippy::redundant_closure)] { // clippy suggests to use the function reference directly, but this causes an error.
         let mut arr: [OpCode; 256] = [OpCode::new(0, "", 0, 0, false, AddressingMode::NonAddressing, Operation::FnCpu(|cpu| CPU::brk(cpu))); 256];
         // size of brk is 0 so the target jump location is one less
-        arr[0x00] = OpCode::new(0x00, "BRK", 0, 7, false, AddressingMode::NonAddressing, Operation::FnCpu(|cpu| CPU::brk(cpu)));
+        // 4 cycles because brk already ticks 3 cycles internally
+        arr[0x00] = OpCode::new(0x00, "BRK", 0, 4, false, AddressingMode::NonAddressing, Operation::FnCpu(|cpu| CPU::brk(cpu)));
         arr[0xEA] = OpCode::new(0xEA, "NOP", 1, 2, false, AddressingMode::NonAddressing, Operation::FnCpuAndAddressing(|cpu, mode| CPU::nop(cpu, mode)));
 
         arr[0x04] = OpCode::new(0x04, "*NOP", 2, 3, false, AddressingMode::ZeroPage, Operation::FnCpuAndAddressing(|cpu, mode| CPU::nop(cpu, mode)));

@@ -14,7 +14,6 @@ pub const IRQ_INTERRUPT: Interrupt = Interrupt {
     cycles: 7,
 };
 
-#[allow(dead_code)]
 pub const BRK_INTERRUPT: Interrupt = Interrupt {
     interrupt_vector: BRK_IRQ_VECTOR,
     b_flag: true,

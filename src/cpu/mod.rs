@@ -124,13 +124,6 @@ impl CPU<'_> {
     }
 
     pub fn step(&mut self) -> bool {
-        if self.bus.poll_nmi_status() {
-            self.handle_interrupt(NMI_INTERRUPT);
-        }
-        if self.bus.poll_irq() {
-            self.handle_interrupt(IRQ_INTERRUPT);
-        }
-
         let op_code = self.mem_read(self.program_counter);
 
         let instruction = CPU_INSTRUCTIONS[op_code as usize];
@@ -139,6 +132,13 @@ impl CPU<'_> {
 
         self.bus.tick(instruction.cycles + self.additional_cycles);
         self.additional_cycles = 0;
+
+        if self.bus.poll_nmi_status() {
+            self.handle_interrupt(NMI_INTERRUPT);
+        }
+        if self.bus.poll_irq() && !self.get_flag(Flags::InterruptDisabled) {
+            self.handle_interrupt(IRQ_INTERRUPT);
+        }
         true
     }
 
@@ -292,7 +292,18 @@ impl CPU<'_> {
     fn brk(&mut self) {
         // Because BRK skips the following byte, it is often considered a 2-byte instruction.
         self.program_counter += 2;
-        self.handle_interrupt(BRK_INTERRUPT);
+        self.push_u16(self.program_counter);
+        self.bus.tick(3);
+        let nmi_hijack = self.bus.poll_nmi_status();
+        let mut status = self.status | Flags::B2 as u8;
+        status |= Flags::B1 as u8;
+        self.push(status);
+        self.status |= Flags::InterruptDisabled as u8;
+        self.program_counter = self.mem_read_u16(if nmi_hijack {
+            NMI_INTERRUPT.interrupt_vector
+        } else {
+            BRK_INTERRUPT.interrupt_vector
+        });
     }
 
     fn add_to_a(&mut self, value: u8) {

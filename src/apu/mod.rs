@@ -13,7 +13,7 @@ mod sweep_unit;
 mod timer;
 mod triangle_generator;
 
-#[derive(Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 enum FrameCounterMode {
     MODE5STEP,
     MODE4STEP,
@@ -38,12 +38,7 @@ pub struct APU {
 
 impl PollIRQ for APU {
     fn poll_irq(&mut self) -> bool {
-        if self.outstanding_interrupt {
-            self.outstanding_interrupt = false;
-            true
-        } else {
-            false
-        }
+        self.outstanding_interrupt
     }
 }
 
@@ -142,7 +137,7 @@ impl APU {
             self.pulse_generator2.tick();
             self.noise_generator.tick();
             self.data_modulation_channel.tick(bus);
-            self.outstanding_interrupt = self.data_modulation_channel.poll_irq();
+            self.outstanding_interrupt |= self.data_modulation_channel.poll_irq();
             self.next_sample += self.get_output();
             self.num_sub_samples += 1;
             if self.num_sub_samples == SUB_SAMPLES_PER_SAMPLE {
@@ -225,8 +220,9 @@ impl APU {
     /// DMC interrupt (I), frame interrupt (F), DMC active (D), length counter > 0 (N/T/2/1)
     pub fn get_status(&mut self) -> u8 {
         //TODO: If an interrupt flag was set at the same moment of the read, it will read back as 1 but it will not be cleared. what?
-        self.enable_interrupt = false;
-        self.trace_get_status()
+        let status = self.trace_get_status();
+        self.outstanding_interrupt = false;
+        status
     }
 
     pub fn trace_get_status(&self) -> u8 {
