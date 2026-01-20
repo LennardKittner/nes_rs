@@ -77,12 +77,21 @@ pub fn render_bg(ppu: &mut PPU, rom: &Rom, scanline: &mut Scanline) {
     for tile_x in tile_x..32 {
         let tile_idx = main_name_table[32 * tile_y + tile_x] as u16;
 
+        let palette = get_bg_palette(ppu, attribute_table, tile_x, tile_y);
         let tile = rom.read_tile_chr_rom(bank + tile_idx * 16);
         if !ppu.show_background_left() && tile_x == 0 {
+            for x in (0..8).rev() {
+                let rgb = ppu.get_color_from_current_system_palette(
+                    ppu.get_universal_background_color() as usize,
+                );
+                scanline.data[x].background_color = BackgroundColor {
+                    color: rgb,
+                    transparent: true,
+                };
+            }
             continue;
         }
 
-        let palette = get_bg_palette(ppu, attribute_table, tile_x, tile_y);
         let mut upper = tile[line];
         let mut lower = tile[line + 8];
 
@@ -93,7 +102,7 @@ pub fn render_bg(ppu: &mut PPU, rom: &Rom, scanline: &mut Scanline) {
 
             let pixel_x = tile_x * 8 + x;
 
-            if pixel_x > shift_x {
+            if pixel_x >= shift_x {
                 let rgb =
                     ppu.get_color_from_current_system_palette(palette[color_idx as usize] as usize);
                 scanline.data[pixel_x - shift_x].background_color = BackgroundColor {
@@ -109,11 +118,20 @@ pub fn render_bg(ppu: &mut PPU, rom: &Rom, scanline: &mut Scanline) {
         let tile_idx = second_name_table[32 * tile_y + tile_x] as u16;
 
         let tile = &rom.read_tile_chr_rom(bank + tile_idx * 16);
+        let palette = get_bg_palette(ppu, attribute_table, tile_x, tile_y);
         if !ppu.show_background_left() && tile_x == 0 {
+            for x in (0..8).rev() {
+                let rgb = ppu.get_color_from_current_system_palette(
+                    ppu.get_universal_background_color() as usize,
+                );
+                scanline.data[x].background_color = BackgroundColor {
+                    color: rgb,
+                    transparent: true,
+                };
+            }
             continue;
         }
 
-        let palette = get_bg_palette(ppu, attribute_table, tile_x, tile_y);
         let mut upper = tile[line];
         let mut lower = tile[line + 8];
 
@@ -124,7 +142,7 @@ pub fn render_bg(ppu: &mut PPU, rom: &Rom, scanline: &mut Scanline) {
 
             let pixel_x = tile_x * 8 + x;
 
-            if pixel_x <= shift_x && pixel_x + (256 - shift_x) < 256 {
+            if pixel_x < shift_x && pixel_x + (256 - shift_x) < 256 {
                 let rgb =
                     ppu.get_color_from_current_system_palette(palette[color_idx as usize] as usize);
                 scanline.data[pixel_x + (256 - shift_x)].background_color = BackgroundColor {

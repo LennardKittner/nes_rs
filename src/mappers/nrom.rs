@@ -60,6 +60,8 @@ impl Mapper for NROMMapper {
         self.mirroring
     }
     fn write_chr_ram(&mut self, address: u16, value: u8) {
-        self.chr_space[address as usize] = value;
+        if self.has_chr_ram {
+            self.chr_space[address as usize] = value;
+        }
     }
 }
