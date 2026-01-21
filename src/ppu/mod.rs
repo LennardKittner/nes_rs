@@ -244,19 +244,15 @@ impl PPU {
         }
 
         if self.cycles >= CYCLES_PER_SCANLINE {
-            if self.show_background() {
-                self.address_register
-                    .load_x_from(&self.temporary_address_register);
-            }
+            self.address_register
+                .load_x_from(&self.temporary_address_register);
 
             self.cycles -= CYCLES_PER_SCANLINE;
             self.scan_line += 1;
             self.first_touch_scanline = true;
 
             if self.scan_line < VBLANK_START {
-                if self.show_background() {
-                    render_bg(self, rom, &mut scanline_buffers[current_buffer ^ 1]);
-                }
+                render_bg(self, rom, &mut scanline_buffers[current_buffer ^ 1]);
             } else if self.scan_line == VBLANK_START {
                 self.status_register.set_vertical_blank(true);
             } else if self.scan_line == LAST_SCANLINE {
@@ -265,10 +261,8 @@ impl PPU {
                 self.first_touch_frame = true;
                 self.sprite_zero_was_hit_this_frame = false;
                 self.status_register.set_sprite_overflow(false);
-                if self.show_background() {
-                    self.address_register
-                        .load_y_from(&self.temporary_address_register);
-                }
+                self.address_register
+                    .load_y_from(&self.temporary_address_register);
                 self.frame_counter += 1;
             }
         }

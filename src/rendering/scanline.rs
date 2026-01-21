@@ -56,8 +56,6 @@ pub struct Scanline {
 }
 
 impl Scanline {
-    const EMPTY_SCANLINE: Scanline = Scanline::new();
-
     pub const fn new() -> Scanline {
         Scanline {
             data: [ScanlinePixel::new(); SCREEN_WIDTH],
@@ -71,6 +69,13 @@ impl Scanline {
     }
 
     pub fn clear(&mut self) {
-        *self = Self::EMPTY_SCANLINE;
+        for pixel in &mut self.data {
+            pixel.sprite_color = SpriteColor {
+                color: (0, 0, 0),
+                behind_background: false,
+                transparent: true,
+            };
+            pixel.sprite_zero_opaque = false;
+        }
     }
 }
