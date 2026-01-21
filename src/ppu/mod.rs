@@ -54,6 +54,7 @@ pub struct PPU {
     pub scan_line: i32,
     pub cycles: usize,
     frame_counter: usize,
+    open_bus_value_set_on_frame: usize,
 
     outstanding_interrupt: bool,
     global_cycle: usize,
@@ -82,6 +83,15 @@ impl PPU {
         if addr < 0x2000 || addr > PPU_REGISTERS_MIRRORS_END {
             return None;
         }
+        // value decays after ~1s
+        if self
+            .open_bus_value_set_on_frame
+            .abs_diff(self.frame_counter)
+            > 60
+        {
+            self.open_bus = 0;
+        }
+        self.open_bus_value_set_on_frame = self.frame_counter;
         let value = match addr {
             0x2000 | 0x2001 | 0x2003 | 0x2005 | 0x2006 => Some(self.open_bus),
             0x2002 => Some(self.read_status()),
@@ -178,6 +188,7 @@ impl PPU {
             scan_line: POWER_ON_SCNALINE,
             cycles: POWER_ON_CYCLE,
             frame_counter: 0,
+            open_bus_value_set_on_frame: 0,
             outstanding_interrupt: false,
             global_cycle: 0,
             set_sprite_overflow_on_tick: DO_NOT_TRIGGER_OVERFLOW,
