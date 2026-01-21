@@ -423,7 +423,14 @@ impl PPU {
     }
 
     fn address_to_pattern_table_index(&self, addr: u16) -> u16 {
-        (addr - 0x3F00) % 32
+        let addr = addr & 0x1F;
+
+        let mirrored_addr = if addr >= 0x10 && (addr & 0x03) == 0 {
+            addr & 0x0F
+        } else {
+            addr
+        };
+        mirrored_addr
     }
 
     pub fn write_to_data(&mut self, data: u8, rom: &mut Rom) {
@@ -434,9 +441,6 @@ impl PPU {
             0x2000..=0x2FFF => self.vram[self.mirror_vram_addr(addr, mirroring) as usize] = data,
             0x3000..=0x3EFF => {
                 self.vram[self.mirror_vram_addr(addr - 0x1000, mirroring) as usize] = data
-            }
-            0x3F10 | 0x3F14 | 0x3F18 | 0x3F1C => {
-                self.palette_table[(addr - 0x10 - 0x3F00) as usize] = data
             }
             0x3F00..=0x3FFF => {
                 self.palette_table[(self.address_to_pattern_table_index(addr)) as usize] = data
@@ -466,11 +470,12 @@ impl PPU {
     }
 
     pub fn read_palette_table(&self, idx: usize) -> u8 {
-        let mut palette = self.palette_table[idx % self.palette_table.len()];
+        let mut palette =
+            self.palette_table[self.address_to_pattern_table_index(idx as u16) as usize];
         if self.mask_register.is_grayscale() {
             palette &= 0x30;
         }
-        palette
+        (palette & 0b0011_1111) | (self.open_bus & 0b1100_0000)
     }
 
     pub fn read_data(&mut self, rom: &Rom) -> u8 {
@@ -496,11 +501,6 @@ impl PPU {
                 self.internal_data_buffer =
                     self.vram[self.mirror_vram_addr(addr - 0x1000, mirroring) as usize];
                 result
-            }
-            0x3F10 | 0x3F14 | 0x3F18 | 0x3F1C => {
-                self.internal_data_buffer =
-                    self.vram[self.mirror_vram_addr(addr - 0x1000, mirroring) as usize];
-                self.read_palette_table((addr - 0x10 - 0x3F00) as usize)
             }
             0x3F00..=0x3FFF => {
                 self.internal_data_buffer =

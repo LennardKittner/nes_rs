@@ -39,7 +39,8 @@ pub fn write_tile(frame: &mut Frame, x_pos: usize, y_pos: usize, tile: &[u8], pa
             upper >>= 1;
             lower >>= 1;
 
-            let rgb = SystemPalette::new().get_palette(0)[palette[color_idx as usize] as usize];
+            let rgb = SystemPalette::new().get_palette(0)
+                [(palette[color_idx as usize] & 0b0011_1111) as usize];
             frame.set_pixel(x_pos + x, y_pos + y, rgb);
         }
     }
