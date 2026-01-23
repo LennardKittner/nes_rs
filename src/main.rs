@@ -1,3 +1,4 @@
+use hound::{WavSpec, WavWriter};
 use itertools::Itertools;
 use nes_rs::bus::Bus;
 use nes_rs::controller::{Controller, ControllerButtons};
@@ -14,7 +15,10 @@ use sdl2::pixels::PixelFormatEnum;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
-use std::{env, io};
+use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+use std::{env, io, path};
 
 struct AudioWrapper {
     #[allow(clippy::type_complexity)]
@@ -35,6 +39,15 @@ fn main() {
         return;
     }
     let rom_path = &args[1];
+    let rom_name = Path::new(&args[1])
+        .file_name()
+        .iter()
+        .filter_map(|n| {
+            let name = n.to_str()?;
+            name.split('.').dropping_back(1).last()
+        })
+        .last()
+        .unwrap_or("rom");
     let mut palette_path = None;
     if args.len() >= 3 {
         palette_path = Some(&args[2]);
@@ -45,7 +58,7 @@ fn main() {
     let video_subsystem = sdl_context.video().unwrap();
     let window = video_subsystem
         .window(
-            &format!("NESrs -- {rom_path}"),
+            &format!("NESrs -- {rom_name}"),
             (256.0 * 3.0) as u32,
             (240.0 * 3.0) as u32,
         )
@@ -89,6 +102,9 @@ fn main() {
     key_map_2.insert(Keycode::O, ControllerButtons::SELECT);
     key_map_2.insert(Keycode::P, ControllerButtons::START);
 
+    let should_quit = Arc::new(AtomicBool::new(false));
+    let should_quit_clone = should_quit.clone();
+
     let poll_controller_input =
         move |controller_1: &mut Controller, controller_2: &mut Controller| {
             for event in event_pump.poll_iter() {
@@ -97,7 +113,7 @@ fn main() {
                     | Event::KeyDown {
                         keycode: Some(Keycode::Escape),
                         ..
-                    } => std::process::exit(0),
+                    } => should_quit_clone.store(true, Ordering::SeqCst),
                     Event::KeyDown {
                         keycode: Some(keycode),
                         ..
@@ -135,6 +151,13 @@ fn main() {
         samples: Some(1024),
     };
 
+    let wav_spec = WavSpec {
+        channels: 1,
+        sample_rate: 44100,
+        bits_per_sample: 16,
+        sample_format: hound::SampleFormat::Int,
+    };
+
     let bus = Bus::new(
         rom,
         palette,
@@ -157,21 +180,43 @@ fn main() {
     );
 
     let audio_buffer = bus.audio_ring_buffer.clone();
+    let wav = Arc::new(Mutex::new(Some(
+        WavWriter::create(format!("{rom_name}.wav"), wav_spec).unwrap(),
+    )));
+    let wav_clone = wav.clone();
 
     let audio_device = audio_subsystem
-        .open_playback(None, &desired_spec, |_spec| AudioWrapper {
-            func: Box::new(move |out: &mut [f32]| {
-                for x in out {
-                    *x = audio_buffer.lock().unwrap().next().unwrap_or(0f32);
-                }
-            }),
+        .open_playback(None, &desired_spec, |_spec| {
+            println!("{:?}", _spec);
+            AudioWrapper {
+                func: Box::new(move |out: &mut [f32]| {
+                    let mut buf = audio_buffer.lock().unwrap();
+                    let mut wav = wav_clone.lock().unwrap();
+                    for x in out {
+                        let sample = buf.next().unwrap_or(0f32);
+                        *x = sample;
+                        let sample_i16 = (sample.clamp(-1.0, 1.0) * i16::MAX as f32) as i16;
+                        wav.as_mut().unwrap().write_sample(sample_i16).unwrap();
+                    }
+                }),
+            }
         })
         .unwrap();
 
     let mut cpu = CPU::new_with_bus(bus);
     audio_device.resume();
     cpu.reset();
-    cpu.run();
+    while !should_quit.load(Ordering::Relaxed) {
+        cpu.step();
+    }
+    drop(audio_device);
+    let writer = {
+        let mut guard = wav.lock().unwrap();
+        guard.take()
+    };
+    if let Some(writer) = writer {
+        writer.finalize().unwrap();
+    }
 }
 
 fn read_palette_table(path: &str) -> io::Result<SystemPalette> {
