@@ -43,7 +43,6 @@ impl LengthCounter {
     }
 
     pub fn should_mute(&self) -> bool {
-        //println!("value: {} halted: {}", self.value, self.halt);
         self.value == 0 && !self.is_halted()
     }
 

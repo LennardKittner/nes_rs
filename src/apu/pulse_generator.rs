@@ -59,13 +59,17 @@ impl PulseGenerator {
     }
 
     pub fn set_timer_lower(&mut self, timer: u8) {
-        self.timer.data = (self.timer.data & 0xFF00) | timer as u16;
         self.timer.timer_limit = (self.timer.timer_limit & 0xFF00) | timer as u16;
+        self.timer.data = self.timer.data.clamp(0, self.timer.timer_limit);
     }
 
     pub fn set_timer_upper(&mut self, timer: u8) {
-        self.timer.data = (self.timer.data & 0x00FF) | ((timer as u16) << 8);
         self.timer.timer_limit = (self.timer.timer_limit & 0x00FF) | ((timer as u16) << 8);
+        self.timer.data = self.timer.timer_limit;
+    }
+
+    pub fn reset_phase(&mut self) {
+        self.duty_position = 0;
     }
 
     pub fn is_active(&self) -> bool {
@@ -89,15 +93,11 @@ impl PulseGenerator {
     }
 
     pub fn get_output(&self) -> f32 {
-        let patter = Self::DUTY_PATTERNS[self.duty as usize];
-
-        // if self.sweep_unit.should_mute(self.timer.data) || self.length_counter.get_value() == 0 {
-        //     return 0f32;
-        // }
-        if self.length_counter.should_mute() {
+        if self.sweep_unit.should_mute(self.timer.data) || self.length_counter.should_mute() {
             return 0f32;
         }
 
+        let patter = Self::DUTY_PATTERNS[self.duty as usize];
         patter[self.duty_position] as f32 * self.envelope_generator.get_volume_normalized()
     }
 

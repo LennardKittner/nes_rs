@@ -49,36 +49,36 @@ impl SweepUnit {
     }
 
     pub fn tick(&mut self, current_time: u16) -> u16 {
-        if self.divider_value == 0 && self.enabled && self.shift != 0 {
-            self.divider_value = self.divider_period;
-            self.reload = false;
-            return if self.should_mute(current_time) {
-                current_time
-            } else {
-                self.calculate_period(current_time)
-            };
-        }
-
         if self.reload {
             self.divider_value = self.divider_period;
             self.reload = false;
+            return current_time;
+        } else if self.divider_value > 0 {
+            self.divider_value -= 1;
+        }
+        if self.divider_value == 0 && self.enabled && self.shift != 0 {
+            self.divider_value = self.divider_period;
+            if !self.should_mute(current_time) {
+                return self.calculate_period(current_time);
+            }
         }
 
         current_time
     }
 
     fn calculate_period(&self, current_period: u16) -> u16 {
-        let tmp = current_period.wrapping_shr(self.shift as u32);
-        let upper = (tmp & 0b1111_1000_0000_0000) >> 5;
-        let mut result = tmp | upper;
+        let change_amount = current_period >> self.shift;
+
         if self.negate {
-            //TODO: neg on 16 bit the same as neg on 11 bit?
-            result = result.wrapping_neg();
+            let negate = current_period.saturating_sub(change_amount);
             if self.pulse_generator_id == PulseGeneratorID::One {
-                result = result.wrapping_sub(1);
+                negate.saturating_sub(1)
+            } else {
+                negate
             }
+        } else {
+            current_period.wrapping_add(change_amount)
         }
-        result.saturating_add(current_period)
     }
 
     pub fn should_mute(&self, current_period: u16) -> bool {

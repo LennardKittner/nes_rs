@@ -19,7 +19,7 @@ enum FrameCounterMode {
     MODE4STEP,
 }
 
-const SUB_SAMPLES_PER_SAMPLE: usize = 18;
+const SUB_SAMPLES_PER_SAMPLE: usize = 20;
 
 #[allow(clippy::upper_case_acronyms)]
 pub struct APU {
@@ -34,6 +34,8 @@ pub struct APU {
     outstanding_interrupt: bool,
     next_sample: f32,
     num_sub_samples: usize,
+    frame_counter_write_delay: usize,
+    pending_frame_counter_value: Option<u8>,
 }
 
 impl PollIRQ for APU {
@@ -117,11 +119,21 @@ impl APU {
             outstanding_interrupt: false,
             next_sample: 0f32,
             num_sub_samples: 0,
+            frame_counter_write_delay: 0,
+            pending_frame_counter_value: None,
         }
     }
 
     pub fn tick(&mut self, cycles: u8, bus: &mut Bus) {
         for _ in 0..cycles {
+            if let Some(value) = self.pending_frame_counter_value {
+                if self.frame_counter_write_delay > 0 {
+                    self.frame_counter_write_delay -= 1;
+                } else {
+                    self.apply_frame_counter(value);
+                    self.pending_frame_counter_value = None;
+                }
+            }
             self.cycle_in_frame += 1;
             self.triangle_generator.tick(); // tick every cpu cycle
             if self.cycle_in_frame % 2 == 1 {
@@ -142,8 +154,9 @@ impl APU {
             self.num_sub_samples += 1;
             if self.num_sub_samples == SUB_SAMPLES_PER_SAMPLE {
                 self.next_sample /= SUB_SAMPLES_PER_SAMPLE as f32;
-                self.num_sub_samples = 0;
                 bus.audio_ring_buffer.lock().unwrap().push(self.next_sample);
+                self.num_sub_samples = 0;
+                self.next_sample = 0f32;
             }
         }
     }
@@ -163,31 +176,31 @@ impl APU {
     }
 
     fn tick_4_step(&mut self) {
-        match self.cycle_in_frame {
-            c if c >= 14914 => {
+        match self.cycle_in_frame / 2 {
+            14914 => {
                 self.tick_all_channels_half_frame();
                 if self.enable_interrupt {
                     self.outstanding_interrupt = true;
                 }
                 self.cycle_in_frame = 0;
             }
-            c if c >= 11185 => self.tick_all_channels_quarter_frame(),
-            c if c >= 7456 => self.tick_all_channels_half_frame(),
-            c if c >= 3728 => self.tick_all_channels_quarter_frame(),
+            11185 => self.tick_all_channels_quarter_frame(),
+            7456 => self.tick_all_channels_half_frame(),
+            3728 => self.tick_all_channels_quarter_frame(),
             _ => {}
         }
     }
 
     fn tick_5_step(&mut self) {
-        match self.cycle_in_frame {
-            c if c >= 18640 => {
+        match self.cycle_in_frame / 2 {
+            18640 => {
                 self.tick_all_channels_half_frame();
                 self.cycle_in_frame = 0;
             }
-            c if c >= 14914 => { /* Do Nothing */ }
-            c if c >= 11185 => self.tick_all_channels_quarter_frame(),
-            c if c >= 7456 => self.tick_all_channels_half_frame(),
-            c if c >= 3728 => self.tick_all_channels_quarter_frame(),
+            14914 => { /* Do Nothing */ }
+            11185 => self.tick_all_channels_quarter_frame(),
+            7456 => self.tick_all_channels_half_frame(),
+            3728 => self.tick_all_channels_quarter_frame(),
             _ => {}
         }
     }
@@ -275,12 +288,22 @@ impl APU {
     /// MI-- ----
     /// Mode (M, 0 = 4-step, 1 = 5-step), IRQ inhibit flag (I)
     pub fn set_frame_counter(&mut self, value: u8) {
+        self.pending_frame_counter_value = Some(value);
+        self.frame_counter_write_delay = if self.cycle_in_frame % 2 == 0 { 4 } else { 3 };
+    }
+    pub fn apply_frame_counter(&mut self, value: u8) {
         if value & 0b1000_0000 != 0 {
             self.frame_counter_mode = FrameCounterMode::MODE5STEP;
         } else {
             self.frame_counter_mode = FrameCounterMode::MODE4STEP;
         }
         self.enable_interrupt = value & 0b0100_0000 == 0;
+
+        if !self.enable_interrupt {
+            self.outstanding_interrupt = false;
+        }
+
+        // self.cycle_in_frame = 0;
     }
 
     /// DDLC VVVV
@@ -343,7 +366,8 @@ impl APU {
     #[allow(non_snake_case)]
     pub fn set_pulse1_LT(&mut self, value: u8) {
         self.pulse_generator1.set_length_counter_value(value >> 3);
-        self.pulse_generator1.set_timer_upper(value & 0x7)
+        self.pulse_generator1.set_timer_upper(value & 0x7);
+        self.pulse_generator1.reset_phase();
     }
 
     /// LLLL LTTT
@@ -351,7 +375,8 @@ impl APU {
     #[allow(non_snake_case)]
     pub fn set_pulse2_LT(&mut self, value: u8) {
         self.pulse_generator2.set_length_counter_value(value >> 3);
-        self.pulse_generator2.set_timer_upper(value & 0x7)
+        self.pulse_generator2.set_timer_upper(value & 0x7);
+        self.pulse_generator2.reset_phase();
     }
 
     /// CRRR RRRR
