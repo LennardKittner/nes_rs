@@ -205,7 +205,7 @@ impl APU {
         }
     }
 
-    pub fn get_output(&self) -> f32 {
+    pub fn get_output(&mut self) -> f32 {
         let pulse1 = self.pulse_generator1.get_output();
         let pulse2 = self.pulse_generator2.get_output();
         let pulse_out = if pulse1 + pulse2 <= 0f32 {
@@ -226,7 +226,7 @@ impl APU {
 
         //pulse_out + tnd_out
 
-        pulse1
+        pulse_out
     }
 
     /// IF-D NT21

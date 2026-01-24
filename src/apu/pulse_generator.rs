@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use crate::apu::envelope::EnvelopeGenerator;
 use crate::apu::length_counter::LengthCounter;
 use crate::apu::sweep_unit::SweepUnit;
@@ -19,6 +21,8 @@ pub struct PulseGenerator {
     length_counter: LengthCounter,
     duty: u8,
     duty_position: usize,
+    timer_start: Instant,
+    timer_spike: Instant,
 }
 
 impl PulseGenerator {
@@ -38,6 +42,8 @@ impl PulseGenerator {
             pulse_generator_id,
             duty: 0,
             duty_position: 0,
+            timer_start: Instant::now(),
+            timer_spike: Instant::now(),
         }
     }
 
@@ -92,13 +98,30 @@ impl PulseGenerator {
         self.envelope_generator.tick();
     }
 
-    pub fn get_output(&self) -> f32 {
+    pub fn out(&self) -> f32 {
         if self.sweep_unit.should_mute(self.timer.data) || self.length_counter.should_mute() {
             return 0f32;
         }
 
         let patter = Self::DUTY_PATTERNS[self.duty as usize];
         patter[self.duty_position] as f32 * self.envelope_generator.get_volume_normalized()
+    }
+
+    pub fn get_output(&mut self) -> f32 {
+        let s = self.out();
+        if s > 0f32 && self.timer_spike.elapsed().as_secs_f64() > 0.1f64 {
+            println!("time: {} [{:?}] SPIKE DETECTED! output={:.3}, length={}, env_vol={}, duty_pos={}, start_flag={}",
+                     self.timer_start.elapsed().as_secs_f64(),
+                     self.pulse_generator_id,
+                     s,
+                     self.length_counter.get_value(),
+                     self.envelope_generator.get_volume(),
+                     self.duty_position,
+                     self.envelope_generator.get_start());
+            self.timer_spike = Instant::now();
+        }
+
+        s
     }
 
     pub fn set_sweep_parameters(&mut self, enabled: bool, negate: bool, shift: u8, period: u8) {

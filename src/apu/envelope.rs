@@ -82,6 +82,10 @@ impl EnvelopeGenerator {
         self.start = start;
     }
 
+    pub fn get_start(&self) -> bool {
+        self.start
+    }
+
     /// get current volume
     pub fn get_volume(&self) -> u8 {
         if self.constant_volume_flag {
