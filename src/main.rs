@@ -193,20 +193,17 @@ fn main() {
     let wav_clone = wav.clone();
 
     let audio_device = audio_subsystem
-        .open_playback(None, &desired_spec, |_spec| {
-            println!("{:?}", _spec);
-            AudioWrapper {
-                func: Box::new(move |out: &mut [f32]| {
-                    let mut buf = audio_buffer.lock().unwrap();
-                    let mut wav = wav_clone.lock().unwrap();
-                    for x in out {
-                        let sample = buf.next().unwrap_or(0f32);
-                        *x = sample;
-                        let sample_i16 = (sample.clamp(-1.0, 1.0) * i16::MAX as f32) as i16;
-                        wav.as_mut().unwrap().write_sample(sample_i16).unwrap();
-                    }
-                }),
-            }
+        .open_playback(None, &desired_spec, |_spec| AudioWrapper {
+            func: Box::new(move |out: &mut [f32]| {
+                let mut buf = audio_buffer.lock().unwrap();
+                let mut wav = wav_clone.lock().unwrap();
+                for x in out {
+                    let sample = buf.next().unwrap_or(0f32);
+                    *x = sample;
+                    let sample_i16 = (sample.clamp(-1.0, 1.0) * i16::MAX as f32) as i16;
+                    wav.as_mut().unwrap().write_sample(sample_i16).unwrap();
+                }
+            }),
         })
         .unwrap();
 
