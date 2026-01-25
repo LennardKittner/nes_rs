@@ -94,6 +94,6 @@ impl NoiseGenerator {
             return 0f32;
         }
 
-        self.envelope_generator.get_volume_normalized()
+        self.envelope_generator.get_volume() as f32
     }
 }

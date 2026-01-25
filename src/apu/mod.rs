@@ -1,4 +1,8 @@
+use std::time::Instant;
+use std::usize;
+
 use crate::apu::data_modulation_channel::DataModulationChannel;
+use crate::apu::low_pass_filter::LowPassFilter;
 use crate::apu::noise_generator::NoiseGenerator;
 use crate::apu::pulse_generator::{PulseGenerator, PulseGeneratorID};
 use crate::apu::triangle_generator::TriangleGenerator;
@@ -7,6 +11,7 @@ use crate::bus::{Bus, PollIRQ};
 mod data_modulation_channel;
 mod envelope;
 mod length_counter;
+mod low_pass_filter;
 mod noise_generator;
 mod pulse_generator;
 mod sweep_unit;
@@ -36,6 +41,7 @@ pub struct APU {
     num_sub_samples: usize,
     frame_counter_write_delay: usize,
     pending_frame_counter_value: Option<u8>,
+    low_pass_filter: LowPassFilter,
 }
 
 impl PollIRQ for APU {
@@ -121,6 +127,7 @@ impl APU {
             num_sub_samples: 0,
             frame_counter_write_delay: 0,
             pending_frame_counter_value: None,
+            low_pass_filter: LowPassFilter::from_cutoff(44100.0, 1200.0),
         }
     }
 
@@ -205,7 +212,7 @@ impl APU {
         }
     }
 
-    pub fn get_output(&self) -> f32 {
+    pub fn get_output(&mut self) -> f32 {
         let pulse1 = self.pulse_generator1.get_output();
         let pulse2 = self.pulse_generator2.get_output();
         let pulse_out = if pulse1 + pulse2 <= 0f32 {
@@ -224,9 +231,8 @@ impl APU {
                 / (1f32 / ((triangle / 8227f32) + (noise / 12241f32) + (dmc / 22638f32)) + 100f32)
         };
 
-        //pulse_out + tnd_out
-
-        pulse_out
+        let output = pulse_out + tnd_out;
+        self.low_pass_filter.process(output)
     }
 
     /// IF-D NT21

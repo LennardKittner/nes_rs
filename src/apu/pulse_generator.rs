@@ -98,7 +98,7 @@ impl PulseGenerator {
         }
 
         let patter = Self::DUTY_PATTERNS[self.duty as usize];
-        patter[self.duty_position] as f32 * self.envelope_generator.get_volume_normalized()
+        patter[self.duty_position] as f32 * self.envelope_generator.get_volume() as f32
     }
 
     pub fn set_sweep_parameters(&mut self, enabled: bool, negate: bool, shift: u8, period: u8) {
