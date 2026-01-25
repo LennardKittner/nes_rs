@@ -18,7 +18,14 @@ use std::io::Read;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use std::{env, io, path};
+use std::{env, io};
+
+const SCALING: u32 = 6;
+
+//TODO: CLI
+// - Export wav
+// - Scaling
+// - speed cap on or off
 
 struct AudioWrapper {
     #[allow(clippy::type_complexity)]
@@ -59,8 +66,8 @@ fn main() {
     let window = video_subsystem
         .window(
             &format!("NESrs -- {rom_name}"),
-            (256.0 * 3.0) as u32,
-            (240.0 * 3.0) as u32,
+            (256 * SCALING) as u32,
+            (240 * SCALING) as u32,
         )
         .position_centered()
         .build()
@@ -68,7 +75,7 @@ fn main() {
 
     let mut canvas = window.into_canvas().present_vsync().build().unwrap();
     let mut event_pump = sdl_context.event_pump().unwrap();
-    canvas.set_scale(3.0, 3.0).unwrap();
+    canvas.set_scale(SCALING as f32, SCALING as f32).unwrap();
 
     let creator = canvas.texture_creator();
     let mut texture = creator
