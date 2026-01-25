@@ -89,6 +89,13 @@ impl TriangleGenerator {
     }
 
     pub fn get_output(&self) -> f32 {
+        if self.counter == 0 || self.length_counter.get_value() == 0 {
+            return 0f32;
+        }
+        if self.timer.timer_limit < 2 {
+            return 0f32;
+        }
+
         Self::SEQUENCER_VALUES[self.current_sequencer_index]
     }
 }
