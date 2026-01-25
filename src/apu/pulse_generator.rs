@@ -139,7 +139,6 @@ impl PulseGenerator {
     ) {
         self.envelope_generator.set_loop_envelope(envelope_loop);
         self.envelope_generator.set_constant_volume(constant_volume);
-        self.envelope_generator.set_start(true);
         if constant_volume {
             self.envelope_generator.set_volume(volume_envelope);
         } else {
