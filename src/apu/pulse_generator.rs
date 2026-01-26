@@ -60,7 +60,6 @@ impl PulseGenerator {
 
     pub fn set_timer_lower(&mut self, timer: u8) {
         self.timer.timer_limit = (self.timer.timer_limit & 0xFF00) | timer as u16;
-        self.timer.data = self.timer.data.clamp(0, self.timer.timer_limit);
     }
 
     pub fn set_timer_upper(&mut self, timer: u8) {
@@ -85,7 +84,11 @@ impl PulseGenerator {
     pub fn tick_half_frame(&mut self) {
         self.tick_quarter_frame();
         self.length_counter.tick();
-        self.timer.data = self.sweep_unit.tick(self.timer.data);
+        let new_period = self.sweep_unit.tick(self.timer.timer_limit);
+        if new_period != self.timer.timer_limit {
+            self.timer.timer_limit = new_period;
+            self.timer.data = self.timer.data.clamp(0, self.timer.timer_limit);
+        }
     }
 
     pub fn tick_quarter_frame(&mut self) {
