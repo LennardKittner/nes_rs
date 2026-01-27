@@ -2,6 +2,7 @@ use std::time::Instant;
 use std::usize;
 
 use crate::apu::data_modulation_channel::DataModulationChannel;
+use crate::apu::fractional_resampler::FractionalResampler;
 use crate::apu::low_pass_filter::LowPassFilter;
 use crate::apu::noise_generator::NoiseGenerator;
 use crate::apu::pulse_generator::{PulseGenerator, PulseGeneratorID};
@@ -10,6 +11,7 @@ use crate::bus::{Bus, PollIRQ};
 
 mod data_modulation_channel;
 mod envelope;
+mod fractional_resampler;
 mod length_counter;
 mod low_pass_filter;
 mod noise_generator;
@@ -24,7 +26,8 @@ enum FrameCounterMode {
     MODE4STEP,
 }
 
-const SUB_SAMPLES_PER_SAMPLE: usize = 20;
+const APU_SAMPLE_FREQUENCY: f32 = 1_789_773f32 / 2f32; // CPU clock / 2
+const OUTPUT_FREQUENCY: f32 = 44_100f32;
 
 #[allow(clippy::upper_case_acronyms)]
 pub struct APU {
@@ -37,8 +40,7 @@ pub struct APU {
     enable_interrupt: bool,
     frame_counter_mode: FrameCounterMode,
     outstanding_interrupt: bool,
-    next_sample: f32,
-    num_sub_samples: usize,
+    fractional_resampler: FractionalResampler,
     frame_counter_write_delay: usize,
     pending_frame_counter_value: Option<u8>,
     low_pass_filter: LowPassFilter,
@@ -123,8 +125,7 @@ impl APU {
             enable_interrupt: false,
             frame_counter_mode: FrameCounterMode::MODE4STEP,
             outstanding_interrupt: false,
-            next_sample: 0f32,
-            num_sub_samples: 0,
+            fractional_resampler: FractionalResampler::new(APU_SAMPLE_FREQUENCY, OUTPUT_FREQUENCY),
             frame_counter_write_delay: 0,
             pending_frame_counter_value: None,
             low_pass_filter: LowPassFilter::from_cutoff(44100.0, 1200.0),
@@ -157,13 +158,9 @@ impl APU {
             self.noise_generator.tick();
             self.data_modulation_channel.tick(bus);
             self.outstanding_interrupt |= self.data_modulation_channel.poll_irq();
-            self.next_sample += self.get_output();
-            self.num_sub_samples += 1;
-            if self.num_sub_samples == SUB_SAMPLES_PER_SAMPLE {
-                self.next_sample /= SUB_SAMPLES_PER_SAMPLE as f32;
-                bus.audio_ring_buffer.lock().unwrap().push(self.next_sample);
-                self.num_sub_samples = 0;
-                self.next_sample = 0f32;
+            let current_sub_sample = self.get_output();
+            if let Some(sample) = self.fractional_resampler.add_sample(current_sub_sample) {
+                bus.audio_ring_buffer.lock().unwrap().push(sample);
             }
         }
     }
