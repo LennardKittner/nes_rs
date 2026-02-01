@@ -92,15 +92,12 @@ impl PPU {
             self.open_bus = 0;
         }
         self.open_bus_value_set_on_frame = self.frame_counter;
+        let addr = addr & 0b00100000_00000111;
         let value = match addr {
             0x2000 | 0x2001 | 0x2003 | 0x2005 | 0x2006 => Some(self.open_bus),
             0x2002 => Some(self.read_status()),
             0x2004 => Some(self.read_oam_data()),
             0x2007 => Some(self.read_data(rom)),
-            0x2008..=PPU_REGISTERS_MIRRORS_END => {
-                let mirror_down_addr = addr & 0b00100000_00000111;
-                self.mem_read(mirror_down_addr, rom)
-            }
             _ => unreachable!(),
         };
         self.open_bus = value.unwrap();
@@ -131,6 +128,9 @@ impl PPU {
             return;
         }
         self.open_bus = data;
+        self.open_bus_value_set_on_frame = self.frame_counter;
+
+        let addr = addr & 0b00100000_00000111;
         match addr {
             0x2000 => {
                 if !self.is_string_up {
@@ -156,10 +156,6 @@ impl PPU {
                 }
             }
             0x2007 => self.write_to_data(data, rom),
-            0x2008..=PPU_REGISTERS_MIRRORS_END => {
-                let mirror_down_addr = addr & 0b00100000_00000111;
-                self.mem_write(mirror_down_addr, data, rom);
-            }
             _ => unreachable!(), // write not in the address space of the PPU
         }
     }
