@@ -170,6 +170,7 @@ impl DataModulationChannel {
         }
     }
 
+    #[allow(dead_code)]
     pub fn is_interrupt_enabled(&self) -> bool {
         self.irq_enabled
     }

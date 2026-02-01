@@ -80,7 +80,7 @@ const PPU_REGISTERS_MIRRORS_END: u16 = 0x3FFF;
 
 impl PPU {
     pub fn mem_read(&mut self, addr: u16, rom: &Rom) -> Option<u8> {
-        if addr < 0x2000 || addr > PPU_REGISTERS_MIRRORS_END {
+        if !(0x2000..=PPU_REGISTERS_MIRRORS_END).contains(&addr) {
             return None;
         }
         // value decays after ~1s
@@ -124,7 +124,7 @@ impl PPU {
     }
 
     pub fn mem_write(&mut self, addr: u16, data: u8, rom: &mut Rom) {
-        if addr < 0x2000 || addr > PPU_REGISTERS_MIRRORS_END {
+        if !(0x2000..=PPU_REGISTERS_MIRRORS_END).contains(&addr) {
             return;
         }
         self.open_bus = data;
@@ -415,12 +415,12 @@ impl PPU {
     fn address_to_pattern_table_index(&self, addr: u16) -> u16 {
         let addr = addr & 0x1F;
 
-        let mirrored_addr = if addr >= 0x10 && (addr & 0x03) == 0 {
+        
+        if addr >= 0x10 && (addr & 0x03) == 0 {
             addr & 0x0F
         } else {
             addr
-        };
-        mirrored_addr
+        }
     }
 
     pub fn write_to_data(&mut self, data: u8, rom: &mut Rom) {

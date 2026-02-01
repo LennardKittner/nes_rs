@@ -141,6 +141,7 @@ impl MMC1Mapper {
             .read(true)
             .write(true)
             .create(true)
+            .truncate(false)
             .open("test.sav")
             .expect("Unable to open save file");
 

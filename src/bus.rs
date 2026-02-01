@@ -119,12 +119,6 @@ impl<'a> Bus<'a> {
         (hi << 8) | lo
     }
 
-    fn read_prg_rom(&self, addr: u16) -> u8 {
-        let mut addr = addr as usize;
-        addr %= self.rom.prg_rom_len();
-        self.rom.read_prg_rom(addr as u16)
-    }
-
     pub fn tick(&mut self, cycles: u8) {
         self.cycles += cycles as usize;
         let mut apu = self.apu.take().unwrap();
@@ -166,7 +160,7 @@ impl<'a> Bus<'a> {
                 spin_sleep::sleep(sleep_duration);
             }
 
-            if self.frame_counter % 60 == 0 {
+            if self.frame_counter.is_multiple_of(60) {
                 let fps = (60f64 / self.last_60_frames.elapsed().as_secs_f64()) as usize;
                 self.last_60_frames = Instant::now();
                 self.fps_frame
@@ -271,7 +265,7 @@ impl Mem for Bus<'_> {
                 // https://wiki.nesdev.com/w/index.php/PPU_programmer_reference#OAM_DMA_.28.244014.29_.3E_write
                 // https://www.nesdev.org/wiki/PPU_OAM#DMA
                 // write to oam via dma is directly implemented here instead of using the method from PPU to avoid a buffer and to make it simpler
-                if self.cycles % 2 == 0 {
+                if self.cycles.is_multiple_of(2) {
                     self.tick(1);
                 } else {
                     self.tick(2);

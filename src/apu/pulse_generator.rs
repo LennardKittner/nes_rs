@@ -1,5 +1,3 @@
-use std::time::Instant;
-
 use crate::apu::envelope::EnvelopeGenerator;
 use crate::apu::length_counter::LengthCounter;
 use crate::apu::sweep_unit::SweepUnit;
@@ -14,7 +12,6 @@ pub enum PulseGeneratorID {
 pub struct PulseGenerator {
     timer: Timer,
     sweep_unit: SweepUnit,
-    pulse_generator_id: PulseGeneratorID,
     envelope_generator: EnvelopeGenerator,
     length_counter: LengthCounter,
     duty: u8,
@@ -35,7 +32,6 @@ impl PulseGenerator {
             sweep_unit: SweepUnit::new(pulse_generator_id),
             envelope_generator: EnvelopeGenerator::new(),
             length_counter: LengthCounter::new(),
-            pulse_generator_id,
             duty: 0,
             duty_position: 0,
         }

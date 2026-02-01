@@ -1,5 +1,3 @@
-use std::usize;
-
 use crate::apu::data_modulation_channel::DataModulationChannel;
 use crate::apu::fractional_resampler::FractionalResampler;
 use crate::apu::low_pass_filter::LowPassFilter;
@@ -288,7 +286,11 @@ impl APU {
     /// Mode (M, 0 = 4-step, 1 = 5-step), IRQ inhibit flag (I)
     pub fn set_frame_counter(&mut self, value: u8) {
         self.pending_frame_counter_value = Some(value);
-        self.frame_counter_write_delay = if self.cycle_in_frame % 2 == 0 { 4 } else { 3 };
+        self.frame_counter_write_delay = if self.cycle_in_frame.is_multiple_of(2) {
+            4
+        } else {
+            3
+        };
     }
 
     pub fn apply_frame_counter(&mut self, value: u8) {

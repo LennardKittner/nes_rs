@@ -88,9 +88,6 @@ pub fn trace_mesen(cpu: &CPU) -> String {
             )
         }
         AddressingMode::Indirect_Y => {
-            let lo = cpu.trace_mem_read(instruction_bytes[1] as u16);
-            let hi = cpu.trace_mem_read(instruction_bytes[1].wrapping_add(1) as u16);
-            let deref_base = (hi as u16) << 8 | (lo as u16);
             let value = cpu.trace_mem_read(operand_addr);
             format!(
                 " (${:02X}),Y [${:04X}] = ${:02X}",
@@ -108,8 +105,8 @@ pub fn trace_mesen(cpu: &CPU) -> String {
         "V"
     } else {
         "v"
-    } + if cpu.get_flag(Flags::B2) { "-" } else { "-" }
-        + if cpu.get_flag(Flags::B1) { "-" } else { "-" }
+    } + "-"
+        + "-"
         + if cpu.get_flag(Flags::DecimalMode) {
             "D"
         } else {

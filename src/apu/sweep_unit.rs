@@ -23,11 +23,6 @@ impl SweepUnit {
         }
     }
 
-    pub fn set_enabled(&mut self, enabled: bool) {
-        self.enabled = enabled;
-        self.reload = true;
-    }
-
     pub fn set_divider_period(&mut self, divider: u8) {
         self.divider_period = divider + 1;
         self.reload = true;

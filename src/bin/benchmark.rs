@@ -16,7 +16,7 @@ fn main() {
         return;
     }
     let rom_path = &args[1];
-    let name = rom_path.split('/').last().unwrap();
+    let name = rom_path.split('/').next_back().unwrap();
 
     let cycles = i32::from_str(&args[2]).unwrap();
 

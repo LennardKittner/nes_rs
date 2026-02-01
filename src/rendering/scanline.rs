@@ -20,6 +20,12 @@ pub struct ScanlinePixel {
     pub sprite_zero_opaque: bool,
 }
 
+impl Default for ScanlinePixel {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ScanlinePixel {
     pub const fn new() -> ScanlinePixel {
         ScanlinePixel {
@@ -53,6 +59,12 @@ impl ScanlinePixel {
 #[derive(Debug)]
 pub struct Scanline {
     pub data: [ScanlinePixel; SCREEN_WIDTH],
+}
+
+impl Default for Scanline {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Scanline {

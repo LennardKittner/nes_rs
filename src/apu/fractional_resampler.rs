@@ -22,7 +22,7 @@ impl FractionalResampler {
         self.sample_accumulator += sample;
         self.samples_in_accumulator += 1;
 
-        if (self.accumulator < self.input_rate) {
+        if self.accumulator < self.input_rate {
             return None;
         }
 

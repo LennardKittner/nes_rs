@@ -51,9 +51,9 @@ fn main() {
         .iter()
         .filter_map(|n| {
             let name = n.to_str()?;
-            name.split('.').dropping_back(1).last()
+            name.split('.').dropping_back(1).next_back()
         })
-        .last()
+        .next_back()
         .unwrap_or("rom");
     let mut palette_path = None;
     if args.len() >= 3 {
@@ -66,8 +66,8 @@ fn main() {
     let window = video_subsystem
         .window(
             &format!("NESrs -- {rom_name}"),
-            (256 * SCALING) as u32,
-            (240 * SCALING) as u32,
+            256 * SCALING,
+            240 * SCALING,
         )
         .position_centered()
         .build()

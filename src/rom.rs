@@ -1,4 +1,3 @@
-use crate::bus::Mem;
 #[cfg(test)]
 use crate::cpu::interrupts::RESET_INTERRUPT;
 #[cfg(test)]

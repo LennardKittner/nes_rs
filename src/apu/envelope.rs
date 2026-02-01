@@ -82,6 +82,7 @@ impl EnvelopeGenerator {
         self.start = start;
     }
 
+    #[allow(dead_code)]
     pub fn get_start(&self) -> bool {
         self.start
     }
@@ -93,10 +94,5 @@ impl EnvelopeGenerator {
         } else {
             self.decay_level_counter
         }
-    }
-
-    /// get current normalized volume in [0, 1]
-    pub fn get_volume_normalized(&self) -> f32 {
-        self.get_volume() as f32 / 15.0
     }
 }

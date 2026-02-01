@@ -27,6 +27,7 @@ pub trait Mapper {
     fn write_chr_ram(&mut self, _address: u16, _value: u8) {
         println!("write_chr_ram not implemented")
     }
+    #[allow(dead_code)]
     fn get_battery_backed_ram(&self) -> Option<&[u8]> {
         None
     }

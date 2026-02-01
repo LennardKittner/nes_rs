@@ -41,7 +41,7 @@ impl SystemPalette {
     }
 
     pub fn from_raw(buffer: &[u8]) -> Option<Self> {
-        if buffer.len() % PALETTE_SIZE_B != 0 {
+        if !buffer.len().is_multiple_of(PALETTE_SIZE_B) {
             return None;
         }
         let mut system_palette = SystemPalette::zero();
