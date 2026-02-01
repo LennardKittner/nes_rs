@@ -114,17 +114,19 @@ impl DataModulationChannel {
         }
     }
 
-    pub fn poll_irq(&mut self) -> bool {
-        if self.outstanding_interrupt {
-            self.outstanding_interrupt = false;
-            true
-        } else {
-            false
-        }
+    pub fn poll_irq(&self) -> bool {
+        self.outstanding_interrupt && self.irq_enabled
+    }
+
+    pub fn acknowledge_irq(&mut self) {
+        self.outstanding_interrupt = false;
     }
 
     pub fn set_irq_enable(&mut self, enabled: bool) {
         self.irq_enabled = enabled;
+        if !enabled {
+            self.outstanding_interrupt = false;
+        }
     }
 
     pub fn set_loop_flag(&mut self, enabled: bool) {
@@ -161,8 +163,8 @@ impl DataModulationChannel {
         if self.timer.tick(1) {
             if self.memory_reader.bytes_remaining != 0 && self.memory_reader.sample_buffer.is_none()
             {
-                self.outstanding_interrupt |=
-                    self.irq_enabled & self.memory_reader.load_new_sample(bus, self.loop_flag);
+                self.outstanding_interrupt =
+                    self.memory_reader.load_new_sample(bus, self.loop_flag);
             }
             self.output_unit.tick(&mut self.memory_reader);
         }

@@ -1,4 +1,3 @@
-use std::time::Instant;
 use std::usize;
 
 use crate::apu::data_modulation_channel::DataModulationChannel;
@@ -39,7 +38,7 @@ pub struct APU {
     cycle_in_frame: usize,
     enable_interrupt: bool,
     frame_counter_mode: FrameCounterMode,
-    outstanding_interrupt: bool,
+    outstanding_interrupt_frame: bool,
     fractional_resampler: FractionalResampler,
     frame_counter_write_delay: usize,
     pending_frame_counter_value: Option<u8>,
@@ -48,7 +47,7 @@ pub struct APU {
 
 impl PollIRQ for APU {
     fn poll_irq(&mut self) -> bool {
-        self.outstanding_interrupt
+        self.outstanding_interrupt_frame || self.data_modulation_channel.poll_irq()
     }
 }
 
@@ -124,7 +123,7 @@ impl APU {
             cycle_in_frame: 0,
             enable_interrupt: false,
             frame_counter_mode: FrameCounterMode::MODE4STEP,
-            outstanding_interrupt: false,
+            outstanding_interrupt_frame: false,
             fractional_resampler: FractionalResampler::new(APU_SAMPLE_FREQUENCY, OUTPUT_FREQUENCY),
             frame_counter_write_delay: 0,
             pending_frame_counter_value: None,
@@ -157,7 +156,6 @@ impl APU {
             self.pulse_generator2.tick();
             self.noise_generator.tick();
             self.data_modulation_channel.tick(bus);
-            self.outstanding_interrupt |= self.data_modulation_channel.poll_irq();
             let current_sub_sample = self.get_output();
             if let Some(sample) = self.fractional_resampler.add_sample(current_sub_sample) {
                 bus.audio_ring_buffer.lock().unwrap().push(sample);
@@ -184,7 +182,7 @@ impl APU {
             14914 => {
                 self.tick_all_channels_half_frame();
                 if self.enable_interrupt {
-                    self.outstanding_interrupt = true;
+                    self.outstanding_interrupt_frame = true;
                 }
                 self.cycle_in_frame = 0;
             }
@@ -237,7 +235,7 @@ impl APU {
     pub fn get_status(&mut self) -> u8 {
         //TODO: If an interrupt flag was set at the same moment of the read, it will read back as 1 but it will not be cleared. what?
         let status = self.trace_get_status();
-        self.outstanding_interrupt = false;
+        self.outstanding_interrupt_frame = false;
         status
     }
 
@@ -258,10 +256,10 @@ impl APU {
         if self.data_modulation_channel.get_bytes_remaining() != 0 {
             status |= 0b0001_0000;
         }
-        if self.enable_interrupt {
+        if self.outstanding_interrupt_frame {
             status |= 0b0100_0000;
         }
-        if self.data_modulation_channel.is_interrupt_enabled() {
+        if self.data_modulation_channel.poll_irq() {
             status |= 0b1000_0000;
         }
         status
@@ -280,12 +278,10 @@ impl APU {
             .set_length_counter_enabled(value & 0b0000_1000 != 0);
         if value & 0b0001_0000 == 0 {
             self.data_modulation_channel.set_bytes_remaining(0);
-        } else {
-            if self.data_modulation_channel.get_bytes_remaining() == 0 {
-                self.data_modulation_channel.restart();
-            }
-            self.data_modulation_channel.set_irq_enable(false);
+        } else if self.data_modulation_channel.get_bytes_remaining() == 0 {
+            self.data_modulation_channel.restart();
         }
+        self.data_modulation_channel.acknowledge_irq();
     }
 
     /// MI-- ----
@@ -294,6 +290,7 @@ impl APU {
         self.pending_frame_counter_value = Some(value);
         self.frame_counter_write_delay = if self.cycle_in_frame % 2 == 0 { 4 } else { 3 };
     }
+
     pub fn apply_frame_counter(&mut self, value: u8) {
         if value & 0b1000_0000 != 0 {
             self.frame_counter_mode = FrameCounterMode::MODE5STEP;
@@ -303,10 +300,8 @@ impl APU {
         self.enable_interrupt = value & 0b0100_0000 == 0;
 
         if !self.enable_interrupt {
-            self.outstanding_interrupt = false;
+            self.outstanding_interrupt_frame = false;
         }
-
-        // self.cycle_in_frame = 0;
     }
 
     /// DDLC VVVV

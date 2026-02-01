@@ -1,6 +1,10 @@
 use crate::cpu::{AddressingMode, CPU};
 use lazy_static::lazy_static;
 
+pub const BRANCH_OP_CODES: [u8; 8] = [
+    0x90u8, 0xB0u8, 0xF0u8, 0x30u8, 0xD0u8, 0x10u8, 0x50u8, 0x70u8,
+];
+
 lazy_static! {
     pub static ref CPU_INSTRUCTIONS: [OpCode; 256] = #[allow(clippy::redundant_closure)] { // clippy suggests to use the function reference directly, but this causes an error.
         let mut arr: [OpCode; 256] = [OpCode::new(0, "", 0, 0, false, AddressingMode::NonAddressing, Operation::FnCpu(|cpu| CPU::brk(cpu))); 256];

@@ -3,7 +3,7 @@ use crate::cpu::addressing_mode::{page_cross, AddressingMode, Load, Store};
 use crate::cpu::interrupts::{
     Interrupt, BRK_INTERRUPT, IRQ_INTERRUPT, NMI_INTERRUPT, RESET_INTERRUPT,
 };
-use crate::cpu::opcodes::{OpCode, CPU_INSTRUCTIONS};
+use crate::cpu::opcodes::{OpCode, BRANCH_OP_CODES, CPU_INSTRUCTIONS};
 use crate::ppu::palette::SystemPalette;
 use crate::rom::Rom;
 
@@ -124,19 +124,41 @@ impl CPU<'_> {
     }
 
     pub fn step(&mut self) -> bool {
+        let mut interrupts_enabled = !self.get_flag(Flags::InterruptDisabled);
+        let mut irq_detected = false;
         let op_code = self.mem_read(self.program_counter);
 
         let instruction = CPU_INSTRUCTIONS[op_code as usize];
         self.current_instruction = instruction;
+        if !BRANCH_OP_CODES.contains(&op_code) {
+            irq_detected = self.bus.poll_irq();
+        }
         instruction.execute(self);
 
-        self.bus.tick(instruction.cycles + self.additional_cycles);
+        self.bus.tick(instruction.cycles);
+        if self.additional_cycles > 1 {
+            irq_detected = self.bus.poll_irq();
+        }
+        self.bus.tick(self.additional_cycles);
         self.additional_cycles = 0;
 
         if self.bus.poll_nmi_status() {
             self.handle_interrupt(NMI_INTERRUPT);
         }
-        if self.bus.poll_irq() && !self.get_flag(Flags::InterruptDisabled) {
+
+        // 0x58 == CLI
+        // Interrupt cannot happen during CLI
+        if self.current_instruction.code == 0x58 {
+            return true;
+        }
+
+        // 0x40 == RTI
+        if self.current_instruction.code == 0x40 {
+            interrupts_enabled = !self.get_flag(Flags::InterruptDisabled);
+            irq_detected = self.bus.poll_irq();
+        }
+
+        if irq_detected && interrupts_enabled {
             self.handle_interrupt(IRQ_INTERRUPT);
         }
         true
