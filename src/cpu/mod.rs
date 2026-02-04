@@ -92,6 +92,10 @@ impl CPU<'_> {
         }
     }
 
+    pub fn set_speed_multiplayer(&mut self, speed_multiplier: f64) {
+        self.bus.set_speed_multiplayer(speed_multiplier);
+    }
+
     pub fn load_and_run(&mut self, program: &[u8], at: u16) {
         self.load(program, at);
         self.reset();

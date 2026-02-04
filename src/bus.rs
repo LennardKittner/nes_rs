@@ -83,6 +83,18 @@ impl<'a> Bus<'a> {
         }
     }
 
+    pub fn set_speed_multiplayer(&mut self, speed_multiplier: f64) {
+        let mut speed_multiplier = speed_multiplier;
+        if speed_multiplier <= 0f64 {
+            speed_multiplier = f64::INFINITY;
+        }
+        self.apu
+            .as_mut()
+            .unwrap()
+            .set_speed_multiplayer(speed_multiplier);
+        self.desired_frame_duration = FRAME_DURATION.mul_f64(speed_multiplier.inv());
+    }
+
     pub fn get_cycle_count_cpu(&self) -> usize {
         self.cycles
     }

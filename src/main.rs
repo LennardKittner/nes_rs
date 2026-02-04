@@ -31,7 +31,6 @@ use std::path::Path;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
-
 //TODO: Debug features
 // - tile viewer
 // - palette viewer
@@ -195,17 +194,13 @@ impl FrontEndState {
             .position_centered()
             .build()
             .unwrap();
-        let mut tile_map_canvas = window_tile_map
-            .into_canvas()
-            .present_vsync()
-            .build()
-            .unwrap();
+        let mut tile_map_canvas = window_tile_map.into_canvas().build().unwrap();
         tile_map_canvas
             .set_scale(scaling as f32 / 2f32, scaling as f32 / 2f32)
             .unwrap();
         let tile_map_creator = tile_map_canvas.texture_creator();
 
-        let mut main_canvas = window.into_canvas().present_vsync().build().unwrap();
+        let mut main_canvas = window.into_canvas().build().unwrap();
         let event_pump = sdl_context.event_pump().unwrap();
         main_canvas
             .set_scale(scaling as f32, scaling as f32)
@@ -261,7 +256,7 @@ struct Actions {
     show_fps: bool,
     save_state: bool,
     load_state: bool,
-    speed_cap: bool,
+    speed_multiplier: f64,
 }
 
 impl Actions {
@@ -276,7 +271,7 @@ impl Actions {
             show_fps: false,
             save_state: false,
             load_state: false,
-            speed_cap: true,
+            speed_multiplier: 1f64,
         }
     }
 }
@@ -421,6 +416,7 @@ fn main() {
     let mut cpu = CPU::new_with_bus(bus);
     audio_device_wrapper.audio_device.resume();
     cpu.reset();
+    let mut last_speed = 1f64;
     while !front_end_state.borrow().actions.should_quit {
         let pause = front_end_state.borrow().actions.pause;
         handle_user_input(&mut front_end_state.borrow_mut());
@@ -437,6 +433,12 @@ fn main() {
                 .tile_map_canvas
                 .window_mut()
                 .hide();
+        }
+
+        //TODO: would be nicer to have a nes struct instead of doing this on the CPU
+        if last_speed != front_end_state.borrow().actions.speed_multiplier {
+            last_speed = front_end_state.borrow().actions.speed_multiplier;
+            cpu.set_speed_multiplayer(last_speed);
         }
 
         if !pause {
@@ -479,6 +481,18 @@ fn handle_user_input(front_end: &mut FrontEndState) {
                 keycode: Some(Keycode::Escape),
                 ..
             } => front_end.actions.pause ^= true,
+            Event::KeyDown {
+                keycode: Some(Keycode::Plus),
+                ..
+            } => front_end.actions.speed_multiplier += 1f64,
+            Event::KeyDown {
+                keycode: Some(Keycode::Minus),
+                ..
+            } => {
+                front_end.actions.speed_multiplier -= 1f64;
+                front_end.actions.speed_multiplier =
+                    front_end.actions.speed_multiplier.clamp(0f64, 50f64);
+            }
             Event::KeyDown {
                 keycode: Some(keycode),
                 ..

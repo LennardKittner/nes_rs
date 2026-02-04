@@ -25,6 +25,7 @@ enum FrameCounterMode {
 
 const APU_SAMPLE_FREQUENCY: f32 = 1_789_773f32 / 2f32; // CPU clock / 2
 const OUTPUT_FREQUENCY: f32 = 44_100f32;
+const SPEED_UP_LIMIT: f32 = 10f32;
 
 #[allow(clippy::upper_case_acronyms)]
 pub struct APU {
@@ -127,6 +128,13 @@ impl APU {
             pending_frame_counter_value: None,
             low_pass_filter: LowPassFilter::from_cutoff(44100.0, 1200.0),
         }
+    }
+
+    pub fn set_speed_multiplayer(&mut self, speed_multiplier: f64) {
+        self.fractional_resampler = FractionalResampler::new(
+            (speed_multiplier as f32).clamp(0f32, SPEED_UP_LIMIT) * APU_SAMPLE_FREQUENCY,
+            OUTPUT_FREQUENCY,
+        );
     }
 
     pub fn tick(&mut self, cycles: u8, bus: &mut Bus) {
