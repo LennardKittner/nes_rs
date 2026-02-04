@@ -15,3 +15,7 @@ spin_sleep = "1.2.1"
 num = "0.4.3"
 memmap2 = "0.9.5"
 hound = "3.5"
+
+[features]
+default = []
+bundled-sdl2 = ["sdl2/bundled"]
