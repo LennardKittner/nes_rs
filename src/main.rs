@@ -1,6 +1,8 @@
+use clap::Parser;
 use hound::{WavSpec, WavWriter};
 use itertools::Itertools;
 use nes_rs::bus::Bus;
+use nes_rs::bus::AUDIO_BUFFER_SIZE;
 use nes_rs::controller::{Controller, ControllerButtons, ControllerInput};
 use nes_rs::cpu::CPU;
 use nes_rs::ppu::palette::SystemPalette;
@@ -8,8 +10,10 @@ use nes_rs::ppu::PPU;
 use nes_rs::rendering::fps_frame::FPSFrame;
 use nes_rs::rendering::frame::Frame;
 use nes_rs::rendering::render_nametable;
+use nes_rs::ring_buffer::RingBuffer;
 use nes_rs::rom::Rom;
 use num::Integer;
+use sdl2::audio::AudioDevice;
 use sdl2::audio::{AudioCallback, AudioSpecDesired};
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
@@ -20,24 +24,39 @@ use sdl2::{AudioSubsystem, EventPump, Sdl};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fs::File;
+use std::io;
+use std::io::BufWriter;
 use std::io::Read;
 use std::path::Path;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
-use std::{env, io};
 
-const SCALING: u32 = 6;
-
-//TODO: CLI
-// - Export wav
-// - Scaling
-// - speed cap on or off
 
 //TODO: Debug features
 // - tile viewer
 // - palette viewer
 // - sprite viewer
 // - save state
+// - speed cap on or off
+
+/// A NES emulator
+#[derive(Parser, Debug)]
+struct Args {
+    /// whether to record the in game audio. The recoding is written to "./<rom_name>.wav"
+    #[arg(long, default_value_t = false)]
+    export_wav: bool,
+
+    /// the scaling factor
+    #[arg(long, default_value_t = 6)]
+    scaling: u32,
+
+    /// provide a path to a custom palette
+    #[arg(long)]
+    palette_path: Option<String>,
+
+    /// path to the ROM
+    rom_path: String,
+}
 
 struct AudioWrapper {
     #[allow(clippy::type_complexity)]
@@ -48,6 +67,87 @@ impl AudioCallback for AudioWrapper {
     type Channel = f32;
     fn callback(&mut self, out: &mut [f32]) {
         (self.func)(out);
+    }
+}
+
+struct AudioDeviceWrapper {
+    audio_device: AudioDevice<AudioWrapper>,
+    wav_writer: Option<Arc<Mutex<Option<WavWriter<BufWriter<File>>>>>>,
+}
+
+impl AudioDeviceWrapper {
+    fn new(
+        front_end_state: &FrontEndState,
+        audio_buffer: Arc<Mutex<RingBuffer<f32, AUDIO_BUFFER_SIZE>>>,
+    ) -> Self {
+        let desired_spec = AudioSpecDesired {
+            freq: Some(44100),
+            channels: Some(1),
+            samples: Some(1024),
+        };
+
+        let audio_device = front_end_state
+            .audio_subsystem
+            .open_playback(None, &desired_spec, |_spec| AudioWrapper {
+                func: Box::new(move |out: &mut [f32]| {
+                    let mut buf = audio_buffer.lock().unwrap();
+                    for x in out {
+                        let sample = buf.next().unwrap_or(0f32);
+                        *x = sample;
+                    }
+                }),
+            })
+            .unwrap();
+
+        Self {
+            audio_device,
+            wav_writer: None,
+        }
+    }
+
+    fn new_recording(
+        front_end_state: &FrontEndState,
+        output_path: String,
+        audio_buffer: Arc<Mutex<RingBuffer<f32, AUDIO_BUFFER_SIZE>>>,
+    ) -> Self {
+        let desired_spec = AudioSpecDesired {
+            freq: Some(44100),
+            channels: Some(1),
+            samples: Some(1024),
+        };
+
+        let wav_spec = WavSpec {
+            channels: 1,
+            sample_rate: 44100,
+            bits_per_sample: 16,
+            sample_format: hound::SampleFormat::Int,
+        };
+
+        let wav = Arc::new(Mutex::new(Some(
+            WavWriter::create(output_path, wav_spec).unwrap(),
+        )));
+        let wav_clone = wav.clone();
+
+        let audio_device = front_end_state
+            .audio_subsystem
+            .open_playback(None, &desired_spec, |_spec| AudioWrapper {
+                func: Box::new(move |out: &mut [f32]| {
+                    let mut buf = audio_buffer.lock().unwrap();
+                    let mut wav = wav_clone.lock().unwrap();
+                    for x in out {
+                        let sample = buf.next().unwrap_or(0f32);
+                        *x = sample;
+                        let sample_i16 = (sample.clamp(-1.0, 1.0) * i16::MAX as f32) as i16;
+                        wav.as_mut().unwrap().write_sample(sample_i16).unwrap();
+                    }
+                }),
+            })
+            .unwrap();
+
+        Self {
+            audio_device,
+            wav_writer: Some(wav),
+        }
     }
 }
 
@@ -67,6 +167,7 @@ struct FrontEndState {
 impl FrontEndState {
     fn new(
         rom_name: &str,
+        scaling: u32,
     ) -> (
         Self,
         TextureCreator<WindowContext>,
@@ -78,8 +179,8 @@ impl FrontEndState {
         let window = video_subsystem
             .window(
                 &format!("NESrs -- {rom_name}"),
-                256 * SCALING,
-                240 * SCALING,
+                256 * scaling,
+                240 * scaling,
             )
             .position_centered()
             .build()
@@ -88,8 +189,8 @@ impl FrontEndState {
         let window_tile_map = video_subsystem
             .window(
                 &format!("NESrs -- {rom_name}"),
-                256 * SCALING,
-                240 * SCALING,
+                256 * scaling,
+                240 * scaling,
             )
             .position_centered()
             .build()
@@ -100,14 +201,14 @@ impl FrontEndState {
             .build()
             .unwrap();
         tile_map_canvas
-            .set_scale(SCALING as f32 / 2f32, SCALING as f32 / 2f32)
+            .set_scale(scaling as f32 / 2f32, scaling as f32 / 2f32)
             .unwrap();
         let tile_map_creator = tile_map_canvas.texture_creator();
 
         let mut main_canvas = window.into_canvas().present_vsync().build().unwrap();
         let event_pump = sdl_context.event_pump().unwrap();
         main_canvas
-            .set_scale(SCALING as f32, SCALING as f32)
+            .set_scale(scaling as f32, scaling as f32)
             .unwrap();
 
         let main_creator = main_canvas.texture_creator();
@@ -181,13 +282,9 @@ impl Actions {
 }
 
 fn main() {
-    let args = env::args().collect_vec();
-    if args.len() < 2 {
-        println!("Please provide the path to a NES rom");
-        return;
-    }
-    let rom_path = &args[1];
-    let rom_name = Path::new(&args[1])
+    let args = Args::parse();
+    let rom_path = args.rom_path;
+    let rom_name = Path::new(&rom_path)
         .file_name()
         .iter()
         .filter_map(|n| {
@@ -196,12 +293,10 @@ fn main() {
         })
         .next_back()
         .unwrap_or("rom");
-    let mut palette_path = None;
-    if args.len() >= 3 {
-        palette_path = Some(&args[2]);
-    }
+    let palette_path = args.palette_path;
 
-    let (front_end_state, main_creator, tile_map_creator) = FrontEndState::new(rom_name);
+    let (front_end_state, main_creator, tile_map_creator) =
+        FrontEndState::new(rom_name, args.scaling);
     let front_end_state = Rc::new(RefCell::new(front_end_state));
     let front_end_state_controller = front_end_state.clone();
     let front_end_state_rendering = front_end_state.clone();
@@ -223,11 +318,11 @@ fn main() {
         );
     }
 
-    let bytes: Vec<u8> = std::fs::read(rom_path).unwrap();
+    let bytes: Vec<u8> = std::fs::read(&rom_path).unwrap();
     let rom = Rom::new(&bytes).unwrap();
 
     let palette = if let Some(path) = palette_path {
-        read_palette_table(path).unwrap_or_default()
+        read_palette_table(&path).unwrap_or_default()
     } else {
         SystemPalette::new()
     };
@@ -312,44 +407,19 @@ fn main() {
 
     let bus = Bus::new(rom, palette, 1f64, render_frame, handle_controller_input);
 
-    let desired_spec = AudioSpecDesired {
-        freq: Some(44100),
-        channels: Some(1),
-        samples: Some(1024),
-    };
-
-    let wav_spec = WavSpec {
-        channels: 1,
-        sample_rate: 44100,
-        bits_per_sample: 16,
-        sample_format: hound::SampleFormat::Int,
-    };
-
     let audio_buffer = bus.audio_ring_buffer.clone();
-    let wav = Arc::new(Mutex::new(Some(
-        WavWriter::create(format!("{rom_name}.wav"), wav_spec).unwrap(),
-    )));
-    let wav_clone = wav.clone();
-
-    let audio_device = front_end_state
-        .borrow()
-        .audio_subsystem
-        .open_playback(None, &desired_spec, |_spec| AudioWrapper {
-            func: Box::new(move |out: &mut [f32]| {
-                let mut buf = audio_buffer.lock().unwrap();
-                let mut wav = wav_clone.lock().unwrap();
-                for x in out {
-                    let sample = buf.next().unwrap_or(0f32);
-                    *x = sample;
-                    let sample_i16 = (sample.clamp(-1.0, 1.0) * i16::MAX as f32) as i16;
-                    wav.as_mut().unwrap().write_sample(sample_i16).unwrap();
-                }
-            }),
-        })
-        .unwrap();
+    let audio_device_wrapper = if args.export_wav {
+        AudioDeviceWrapper::new_recording(
+            &front_end_state.borrow(),
+            format!("{rom_name}.wav"),
+            audio_buffer,
+        )
+    } else {
+        AudioDeviceWrapper::new(&front_end_state.borrow(), audio_buffer)
+    };
 
     let mut cpu = CPU::new_with_bus(bus);
-    audio_device.resume();
+    audio_device_wrapper.audio_device.resume();
     cpu.reset();
     while !front_end_state.borrow().actions.should_quit {
         let pause = front_end_state.borrow().actions.pause;
@@ -375,10 +445,14 @@ fn main() {
             }
         }
     }
-    drop(audio_device);
+    drop(audio_device_wrapper.audio_device);
     let writer = {
-        let mut guard = wav.lock().unwrap();
-        guard.take()
+        if let Some(writer) = audio_device_wrapper.wav_writer {
+            let mut guard = writer.lock().unwrap();
+            guard.take()
+        } else {
+            None
+        }
     };
     if let Some(writer) = writer {
         writer.finalize().unwrap();

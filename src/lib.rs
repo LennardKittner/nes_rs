@@ -5,6 +5,6 @@ pub mod cpu;
 mod mappers;
 pub mod ppu;
 pub mod rendering;
-mod ring_buffer;
+pub mod ring_buffer;
 mod rolling_avg;
 pub mod rom;
