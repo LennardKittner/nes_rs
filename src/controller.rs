@@ -13,6 +13,12 @@ bitflags! {
         const A      = 0b0000_0001;
     }
 }
+#[derive(Clone, Copy)]
+pub enum ControllerInput {
+    Controller1(bool, ControllerButtons),
+    Controller2(bool, ControllerButtons),
+}
+
 pub struct Controller {
     strobe: bool,
     button_index: u8,

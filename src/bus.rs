@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 const FRAME_DURATION: Duration = Duration::from_nanos(16666667);
 
 pub const AUDIO_BUFFER_SIZE: usize = 44100;
-type GraphicsCallback<'a> = Box<dyn FnMut(&PPU, &Frame, &FPSFrame) + 'a>;
+type GraphicsCallback<'a> = Box<dyn FnMut(&PPU, &Frame, &FPSFrame, &Rom) + 'a>;
 type ControllerCallback<'a> = Box<dyn FnMut(&mut Controller, &mut Controller) + 'a>;
 
 pub struct Bus<'a> {
@@ -50,7 +50,7 @@ impl<'a> Bus<'a> {
         controller_callback: C1F,
     ) -> Bus<'a>
     where
-        GF: FnMut(&PPU, &Frame, &FPSFrame) + 'a,
+        GF: FnMut(&PPU, &Frame, &FPSFrame, &Rom) + 'a,
         C1F: FnMut(&mut Controller, &mut Controller) + 'a,
     {
         let ppu = PPU::new(system_palette);
@@ -168,7 +168,7 @@ impl<'a> Bus<'a> {
             }
 
             let rendering_start = Instant::now();
-            (self.graphics_callback)(&self.ppu, &self.frame, &self.fps_frame);
+            (self.graphics_callback)(&self.ppu, &self.frame, &self.fps_frame, &self.rom);
             (self.controller_callback)(&mut self.controller_1, &mut self.controller_2);
             let overhead = rendering_start.elapsed().as_nanos() as u64;
             self.rendering_overhead.push(overhead);

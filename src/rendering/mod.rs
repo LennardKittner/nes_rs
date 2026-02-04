@@ -29,7 +29,14 @@ pub fn get_bg_palette(ppu: &PPU, attribute_table: &[u8], x_pos: usize, y_pos: us
     ]
 }
 
-pub fn write_tile(frame: &mut Frame, x_pos: usize, y_pos: usize, tile: &[u8], palette: &[u8; 4]) {
+pub fn write_tile(
+    frame: &mut Frame,
+    x_pos: usize,
+    y_pos: usize,
+    tile: &[u8],
+    system_palette: &SystemPalette,
+    palette: &[u8; 4],
+) {
     for y in 0..8 {
         let mut upper = tile[y];
         let mut lower = tile[y + 8];
@@ -39,8 +46,8 @@ pub fn write_tile(frame: &mut Frame, x_pos: usize, y_pos: usize, tile: &[u8], pa
             upper >>= 1;
             lower >>= 1;
 
-            let rgb = SystemPalette::new().get_palette(0)
-                [(palette[color_idx as usize] & 0b0011_1111) as usize];
+            let rgb =
+                system_palette.get_palette(0)[(palette[color_idx as usize] & 0b0011_1111) as usize];
             frame.set_pixel(x_pos + x, y_pos + y, rgb);
         }
     }
@@ -70,12 +77,12 @@ pub fn render_bg(ppu: &mut PPU, rom: &Rom, scanline: &mut Scanline) {
     let attribute_table = &main_name_table[0x3C0..0x400];
     let line = ppu.address_register.get_inner_tile_y_offset();
 
-    let tile_x = ppu.address_register.get_tile_x();
+    let start_tile_x = ppu.address_register.get_tile_x();
     let tile_y = ppu.address_register.get_tile_y();
 
     let shift_x = ppu.get_scroll_x() as usize;
 
-    for tile_x in tile_x..32 {
+    for tile_x in start_tile_x..32 {
         let tile_idx = main_name_table[32 * tile_y + tile_x] as u16;
 
         let palette = get_bg_palette(ppu, attribute_table, tile_x, tile_y);
@@ -118,7 +125,7 @@ pub fn render_bg(ppu: &mut PPU, rom: &Rom, scanline: &mut Scanline) {
     }
 
     let attribute_table = &second_name_table[0x3C0..0x400];
-    for tile_x in 0..(tile_x + 1) {
+    for tile_x in 0..(start_tile_x + 1) {
         let tile_idx = second_name_table[32 * tile_y + tile_x] as u16;
 
         let tile = &rom.read_tile_chr_rom(bank + tile_idx * 16);
@@ -174,4 +181,46 @@ pub fn render_bg(ppu: &mut PPU, rom: &Rom, scanline: &mut Scanline) {
     }
     ppu.address_register
         .set_inner_tile_y_offset((line + 1) as u8);
+}
+
+pub fn render_nametable(
+    ppu: &PPU,
+    rom: &Rom,
+    nametable_index: usize,
+    frame: &mut Frame,
+    system_palette: &SystemPalette,
+) {
+    let main_name_table = match (rom.get_mirroring_mode(), nametable_index) {
+        //TODO: one scree and four screen
+        (Mirroring::Vertical, 0b00)
+        | (Mirroring::Vertical, 0b10)
+        | (Mirroring::Horizontal, 0b00)
+        | (Mirroring::Horizontal, 0b01) => &ppu.vram[0..0x400],
+        (Mirroring::OneScreenLowerBank, _) => &ppu.vram[0..0x400],
+        (Mirroring::Vertical, 0b01)
+        | (Mirroring::Vertical, 0b11)
+        | (Mirroring::Horizontal, 0b10)
+        | (Mirroring::Horizontal, 0b11) => &ppu.vram[0x400..0x800],
+        (Mirroring::OneScreenUpperBank, _) => &ppu.vram[0x400..0x800],
+        (_, _) => panic!("Unsupported mirroring mode: {:?}", rom.get_mirroring_mode()),
+    };
+
+    let bank = ppu.control_register.get_background_pattern_table_address();
+    let attribute_table = &main_name_table[0x3C0..0x400];
+
+    for tile_y in 0..30 {
+        for tile_x in 0..32 {
+            let tile_idx = main_name_table[32 * tile_y + tile_x] as u16;
+            let palette = get_bg_palette(ppu, attribute_table, tile_x, tile_y);
+            let tile = &rom.read_tile_chr_rom(bank + tile_idx * 16);
+            write_tile(
+                frame,
+                tile_x * 8,
+                tile_y * 8,
+                tile,
+                system_palette,
+                &palette,
+            );
+        }
+    }
 }

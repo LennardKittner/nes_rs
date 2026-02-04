@@ -1,3 +1,4 @@
+use crate::ppu::palette::SystemPalette;
 use crate::rendering::write_tile;
 use crate::rom::Rom;
 
@@ -47,7 +48,8 @@ impl Frame {
     ) {
         assert!(bank <= 1);
         let tile = rom.read_tile_chr_rom_bank(bank as u16, tile_n as u16 * 16);
-        write_tile(self, x_pos, y_pos, tile, pallet);
+        let system_palette = SystemPalette::new();
+        write_tile(self, x_pos, y_pos, tile, &system_palette, pallet);
     }
 }
 

@@ -1,22 +1,28 @@
 use hound::{WavSpec, WavWriter};
 use itertools::Itertools;
 use nes_rs::bus::Bus;
-use nes_rs::controller::{Controller, ControllerButtons};
+use nes_rs::controller::{Controller, ControllerButtons, ControllerInput};
 use nes_rs::cpu::CPU;
 use nes_rs::ppu::palette::SystemPalette;
 use nes_rs::ppu::PPU;
 use nes_rs::rendering::fps_frame::FPSFrame;
 use nes_rs::rendering::frame::Frame;
+use nes_rs::rendering::render_nametable;
 use nes_rs::rom::Rom;
+use num::Integer;
 use sdl2::audio::{AudioCallback, AudioSpecDesired};
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::PixelFormatEnum;
+use sdl2::render::{TextureCreator, WindowCanvas};
+use sdl2::video::WindowContext;
+use sdl2::{AudioSubsystem, EventPump, Sdl};
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::{env, io};
 
@@ -27,6 +33,12 @@ const SCALING: u32 = 6;
 // - Scaling
 // - speed cap on or off
 
+//TODO: Debug features
+// - tile viewer
+// - palette viewer
+// - sprite viewer
+// - save state
+
 struct AudioWrapper {
     #[allow(clippy::type_complexity)]
     func: Box<dyn FnMut(&mut [f32]) + Send>,
@@ -36,6 +48,135 @@ impl AudioCallback for AudioWrapper {
     type Channel = f32;
     fn callback(&mut self, out: &mut [f32]) {
         (self.func)(out);
+    }
+}
+
+#[allow(dead_code)]
+struct FrontEndState {
+    sdl_context: Sdl,
+    actions: Actions,
+    audio_subsystem: AudioSubsystem,
+    tile_map_canvas: WindowCanvas,
+    event_pump: EventPump,
+    main_canvas: WindowCanvas,
+    key_map_1: HashMap<Keycode, ControllerButtons>,
+    key_map_2: HashMap<Keycode, ControllerButtons>,
+    nes_controller_input: Vec<ControllerInput>,
+}
+
+impl FrontEndState {
+    fn new(
+        rom_name: &str,
+    ) -> (
+        Self,
+        TextureCreator<WindowContext>,
+        TextureCreator<WindowContext>,
+    ) {
+        let sdl_context = sdl2::init().unwrap();
+        let audio_subsystem = sdl_context.audio().unwrap();
+        let video_subsystem = sdl_context.video().unwrap();
+        let window = video_subsystem
+            .window(
+                &format!("NESrs -- {rom_name}"),
+                256 * SCALING,
+                240 * SCALING,
+            )
+            .position_centered()
+            .build()
+            .unwrap();
+
+        let window_tile_map = video_subsystem
+            .window(
+                &format!("NESrs -- {rom_name}"),
+                256 * SCALING,
+                240 * SCALING,
+            )
+            .position_centered()
+            .build()
+            .unwrap();
+        let mut tile_map_canvas = window_tile_map
+            .into_canvas()
+            .present_vsync()
+            .build()
+            .unwrap();
+        tile_map_canvas
+            .set_scale(SCALING as f32 / 2f32, SCALING as f32 / 2f32)
+            .unwrap();
+        let tile_map_creator = tile_map_canvas.texture_creator();
+
+        let mut main_canvas = window.into_canvas().present_vsync().build().unwrap();
+        let event_pump = sdl_context.event_pump().unwrap();
+        main_canvas
+            .set_scale(SCALING as f32, SCALING as f32)
+            .unwrap();
+
+        let main_creator = main_canvas.texture_creator();
+
+        let mut key_map_1 = HashMap::new();
+        key_map_1.insert(Keycode::Down, ControllerButtons::DOWN);
+        key_map_1.insert(Keycode::Up, ControllerButtons::UP);
+        key_map_1.insert(Keycode::Right, ControllerButtons::RIGHT);
+        key_map_1.insert(Keycode::Left, ControllerButtons::LEFT);
+        key_map_1.insert(Keycode::A, ControllerButtons::A);
+        key_map_1.insert(Keycode::S, ControllerButtons::B);
+        key_map_1.insert(Keycode::Space, ControllerButtons::SELECT);
+        key_map_1.insert(Keycode::Return, ControllerButtons::START);
+
+        let mut key_map_2 = HashMap::new();
+        key_map_2.insert(Keycode::J, ControllerButtons::DOWN);
+        key_map_2.insert(Keycode::K, ControllerButtons::UP);
+        key_map_2.insert(Keycode::L, ControllerButtons::RIGHT);
+        key_map_2.insert(Keycode::H, ControllerButtons::LEFT);
+        key_map_2.insert(Keycode::U, ControllerButtons::A);
+        key_map_2.insert(Keycode::I, ControllerButtons::B);
+        key_map_2.insert(Keycode::O, ControllerButtons::SELECT);
+        key_map_2.insert(Keycode::P, ControllerButtons::START);
+
+        (
+            Self {
+                sdl_context,
+                actions: Actions::new(),
+                audio_subsystem,
+                tile_map_canvas,
+                event_pump,
+                main_canvas,
+                key_map_1,
+                key_map_2,
+                nes_controller_input: Vec::new(),
+            },
+            main_creator,
+            tile_map_creator,
+        )
+    }
+}
+
+struct Actions {
+    should_quit: bool,
+    pause: bool,
+    show_tile_map: bool,
+    show_tiles: bool,
+    show_palette: bool,
+    show_sprites: bool,
+    show_fps: bool,
+    save_state: bool,
+    load_state: bool,
+    speed_cap: bool,
+}
+
+impl Actions {
+    pub fn new() -> Self {
+        Self {
+            should_quit: false,
+            pause: false,
+            show_tile_map: false,
+            show_tiles: false,
+            show_palette: false,
+            show_sprites: false,
+            show_fps: false,
+            save_state: false,
+            load_state: false,
+            speed_cap: true,
+        }
     }
 }
 
@@ -60,97 +201,116 @@ fn main() {
         palette_path = Some(&args[2]);
     }
 
-    let sdl_context = sdl2::init().unwrap();
-    let audio_subsystem = sdl_context.audio().unwrap();
-    let video_subsystem = sdl_context.video().unwrap();
-    let window = video_subsystem
-        .window(
-            &format!("NESrs -- {rom_name}"),
-            256 * SCALING,
-            240 * SCALING,
-        )
-        .position_centered()
-        .build()
-        .unwrap();
+    let (front_end_state, main_creator, tile_map_creator) = FrontEndState::new(rom_name);
+    let front_end_state = Rc::new(RefCell::new(front_end_state));
+    let front_end_state_controller = front_end_state.clone();
+    let front_end_state_rendering = front_end_state.clone();
 
-    let mut canvas = window.into_canvas().present_vsync().build().unwrap();
-    let mut event_pump = sdl_context.event_pump().unwrap();
-    canvas.set_scale(SCALING as f32, SCALING as f32).unwrap();
-
-    let creator = canvas.texture_creator();
-    let mut texture = creator
+    let mut main_texture = main_creator
         .create_texture_target(PixelFormatEnum::RGB24, 256, 240)
         .unwrap();
 
-    let mut fps_texture = creator
+    let mut fps_texture = main_creator
         .create_texture_target(PixelFormatEnum::RGB24, 48, 8)
         .unwrap();
 
+    let mut nametable_textures = Vec::new();
+    for _ in 0..4 {
+        nametable_textures.push(
+            tile_map_creator
+                .create_texture_target(PixelFormatEnum::RGB24, 256, 240)
+                .unwrap(),
+        );
+    }
+
     let bytes: Vec<u8> = std::fs::read(rom_path).unwrap();
     let rom = Rom::new(&bytes).unwrap();
-
-    let mut key_map_1 = HashMap::new();
-    key_map_1.insert(Keycode::Down, ControllerButtons::DOWN);
-    key_map_1.insert(Keycode::Up, ControllerButtons::UP);
-    key_map_1.insert(Keycode::Right, ControllerButtons::RIGHT);
-    key_map_1.insert(Keycode::Left, ControllerButtons::LEFT);
-    key_map_1.insert(Keycode::A, ControllerButtons::A);
-    key_map_1.insert(Keycode::S, ControllerButtons::B);
-    key_map_1.insert(Keycode::Space, ControllerButtons::SELECT);
-    key_map_1.insert(Keycode::Return, ControllerButtons::START);
-
-    let mut key_map_2 = HashMap::new();
-    key_map_2.insert(Keycode::J, ControllerButtons::DOWN);
-    key_map_2.insert(Keycode::K, ControllerButtons::UP);
-    key_map_2.insert(Keycode::L, ControllerButtons::RIGHT);
-    key_map_2.insert(Keycode::H, ControllerButtons::LEFT);
-    key_map_2.insert(Keycode::U, ControllerButtons::A);
-    key_map_2.insert(Keycode::I, ControllerButtons::B);
-    key_map_2.insert(Keycode::O, ControllerButtons::SELECT);
-    key_map_2.insert(Keycode::P, ControllerButtons::START);
-
-    let should_quit = Arc::new(AtomicBool::new(false));
-    let should_quit_clone = should_quit.clone();
-
-    let poll_controller_input =
-        move |controller_1: &mut Controller, controller_2: &mut Controller| {
-            for event in event_pump.poll_iter() {
-                match event {
-                    Event::Quit { .. }
-                    | Event::KeyDown {
-                        keycode: Some(Keycode::Escape),
-                        ..
-                    } => should_quit_clone.store(true, Ordering::SeqCst),
-                    Event::KeyDown {
-                        keycode: Some(keycode),
-                        ..
-                    } => {
-                        if let Some(key) = key_map_1.get(&keycode) {
-                            controller_1.set_button_state(true, *key);
-                        } else if let Some(key) = key_map_2.get(&keycode) {
-                            controller_2.set_button_state(true, *key);
-                        }
-                    }
-                    Event::KeyUp {
-                        keycode: Some(keycode),
-                        ..
-                    } => {
-                        if let Some(key) = key_map_1.get(&keycode) {
-                            controller_1.set_button_state(false, *key);
-                        } else if let Some(key) = key_map_2.get(&keycode) {
-                            controller_2.set_button_state(false, *key);
-                        }
-                    }
-                    _ => { /* do nothing */ }
-                }
-            }
-        };
 
     let palette = if let Some(path) = palette_path {
         read_palette_table(path).unwrap_or_default()
     } else {
         SystemPalette::new()
     };
+
+    let handle_controller_input =
+        move |controller_1: &mut Controller, controller_2: &mut Controller| {
+            let mut front_end = front_end_state_controller.borrow_mut();
+            for button in front_end.nes_controller_input.drain(0..) {
+                match button {
+                    ControllerInput::Controller1(pressed, key) => {
+                        controller_1.set_button_state(pressed, key)
+                    }
+                    ControllerInput::Controller2(pressed, key) => {
+                        controller_2.set_button_state(pressed, key)
+                    }
+                }
+            }
+        };
+
+    let mut tmp_frame = Frame::default();
+    let mut frame_counter = 0;
+    let system_palette = SystemPalette::new();
+
+    let render_frame = move |ppu: &PPU, frame: &Frame, fps_frame: &FPSFrame, rom: &Rom| {
+        main_texture
+            .update(None, &frame.data, frame.width * 3)
+            .unwrap();
+
+        fps_texture
+            .update(None, &fps_frame.frame.data, fps_frame.frame.width * 3)
+            .unwrap();
+
+        front_end_state_rendering
+            .borrow_mut()
+            .main_canvas
+            .copy(&main_texture, None, None)
+            .unwrap();
+        if front_end_state_rendering.borrow().actions.show_fps {
+            front_end_state_rendering
+                .borrow_mut()
+                .main_canvas
+                .copy(&fps_texture, None, Some(sdl2::rect::Rect::new(5, 5, 48, 8)))
+                .unwrap();
+        }
+
+        front_end_state_rendering.borrow_mut().main_canvas.present();
+
+        if frame_counter.is_multiple_of(&3) {
+            if front_end_state_rendering.borrow().actions.show_tile_map {
+                nametable_textures
+                    .iter_mut()
+                    .enumerate()
+                    .for_each(|(i, texture)| {
+                        render_nametable(ppu, &rom, i, &mut tmp_frame, &system_palette);
+                        texture
+                            .update(None, &tmp_frame.data, tmp_frame.width * 3)
+                            .unwrap()
+                    });
+
+                nametable_textures
+                    .iter()
+                    .enumerate()
+                    .for_each(|(i, texture)| {
+                        let i = i as i32;
+                        let x: i32 = i % 2 * 256;
+                        let y: i32 = if i < 2 { 0 } else { 240 };
+                        front_end_state_rendering
+                            .borrow_mut()
+                            .tile_map_canvas
+                            .copy(&texture, None, Some(sdl2::rect::Rect::new(x, y, 256, 240)))
+                            .unwrap()
+                    });
+                front_end_state_rendering
+                    .borrow_mut()
+                    .tile_map_canvas
+                    .present();
+            }
+        }
+
+        frame_counter += 1;
+    };
+
+    let bus = Bus::new(rom, palette, 1f64, render_frame, handle_controller_input);
 
     let desired_spec = AudioSpecDesired {
         freq: Some(44100),
@@ -165,34 +325,15 @@ fn main() {
         sample_format: hound::SampleFormat::Int,
     };
 
-    let bus = Bus::new(
-        rom,
-        palette,
-        1f64,
-        move |_: &PPU, frame: &Frame, fps_frame: &FPSFrame| {
-            texture.update(None, &frame.data, frame.width * 3).unwrap();
-
-            fps_texture
-                .update(None, &fps_frame.frame.data, fps_frame.frame.width * 3)
-                .unwrap();
-
-            canvas.copy(&texture, None, None).unwrap();
-            canvas
-                .copy(&fps_texture, None, Some(sdl2::rect::Rect::new(5, 5, 48, 8)))
-                .unwrap();
-
-            canvas.present();
-        },
-        poll_controller_input,
-    );
-
     let audio_buffer = bus.audio_ring_buffer.clone();
     let wav = Arc::new(Mutex::new(Some(
         WavWriter::create(format!("{rom_name}.wav"), wav_spec).unwrap(),
     )));
     let wav_clone = wav.clone();
 
-    let audio_device = audio_subsystem
+    let audio_device = front_end_state
+        .borrow()
+        .audio_subsystem
         .open_playback(None, &desired_spec, |_spec| AudioWrapper {
             func: Box::new(move |out: &mut [f32]| {
                 let mut buf = audio_buffer.lock().unwrap();
@@ -210,8 +351,29 @@ fn main() {
     let mut cpu = CPU::new_with_bus(bus);
     audio_device.resume();
     cpu.reset();
-    while !should_quit.load(Ordering::Relaxed) {
-        cpu.step();
+    while !front_end_state.borrow().actions.should_quit {
+        let pause = front_end_state.borrow().actions.pause;
+        handle_user_input(&mut front_end_state.borrow_mut());
+
+        if front_end_state.borrow().actions.show_tile_map {
+            front_end_state
+                .borrow_mut()
+                .tile_map_canvas
+                .window_mut()
+                .show();
+        } else {
+            front_end_state
+                .borrow_mut()
+                .tile_map_canvas
+                .window_mut()
+                .hide();
+        }
+
+        if !pause {
+            for _ in 0..1000 {
+                cpu.step();
+            }
+        }
     }
     drop(audio_device);
     let writer = {
@@ -220,6 +382,59 @@ fn main() {
     };
     if let Some(writer) = writer {
         writer.finalize().unwrap();
+    }
+}
+
+fn handle_user_input(front_end: &mut FrontEndState) {
+    while let Some(event) = front_end.event_pump.poll_event() {
+        match event {
+            Event::Quit { .. }
+            | Event::KeyDown {
+                keycode: Some(Keycode::Q),
+                ..
+            } => front_end.actions.should_quit = true,
+            Event::KeyDown {
+                keycode: Some(Keycode::M),
+                ..
+            } => front_end.actions.show_tile_map ^= true,
+            Event::KeyDown {
+                keycode: Some(Keycode::F),
+                ..
+            } => front_end.actions.show_fps ^= true,
+            Event::KeyDown {
+                keycode: Some(Keycode::Escape),
+                ..
+            } => front_end.actions.pause ^= true,
+            Event::KeyDown {
+                keycode: Some(keycode),
+                ..
+            } => {
+                if let Some(&key) = front_end.key_map_1.get(&keycode) {
+                    front_end
+                        .nes_controller_input
+                        .push(ControllerInput::Controller1(true, key));
+                } else if let Some(&key) = front_end.key_map_2.get(&keycode) {
+                    front_end
+                        .nes_controller_input
+                        .push(ControllerInput::Controller2(true, key));
+                }
+            }
+            Event::KeyUp {
+                keycode: Some(keycode),
+                ..
+            } => {
+                if let Some(&key) = front_end.key_map_1.get(&keycode) {
+                    front_end
+                        .nes_controller_input
+                        .push(ControllerInput::Controller1(false, key));
+                } else if let Some(&key) = front_end.key_map_2.get(&keycode) {
+                    front_end
+                        .nes_controller_input
+                        .push(ControllerInput::Controller2(false, key));
+                }
+            }
+            _ => { /* do nothing */ }
+        }
     }
 }
 
