@@ -20,6 +20,18 @@ impl Frame {
         }
     }
 
+    pub fn clear(&mut self) {
+        self.data = Self::default().data;
+    }
+
+    pub fn fill(&mut self, rgb: (u8, u8, u8)) {
+        for chunk in self.data.chunks_exact_mut(3) {
+            chunk[0] = rgb.0;
+            chunk[1] = rgb.1;
+            chunk[2] = rgb.2;
+        }
+    }
+
     pub fn set_pixel(&mut self, x: usize, y: usize, rgb: (u8, u8, u8)) {
         let base = y * 3 * self.width + x * 3;
         if base + 2 < self.data.len() {
@@ -37,6 +49,7 @@ impl Frame {
             (0, 0, 0)
         }
     }
+
     pub fn render_tile(
         &mut self,
         x_pos: usize,

@@ -3,8 +3,9 @@ pub mod frame;
 pub mod scanline;
 
 use crate::ppu::palette::SystemPalette;
+use crate::ppu::sprite::Sprite;
 use crate::ppu::PPU;
-use crate::rendering::frame::Frame;
+use crate::rendering::frame::{Frame, SCREEN_WIDTH};
 use crate::rendering::scanline::{BackgroundColor, Scanline};
 use crate::rom::{Mirroring, Rom};
 
@@ -221,6 +222,88 @@ pub fn render_nametable(
                 system_palette,
                 &palette,
             );
+        }
+    }
+}
+
+pub fn render_oam_table(ppu: &PPU, rom: &Rom, frame: &mut Frame) {
+    let sprites = (0..ppu.oam_data.len()).step_by(4).map(|sprite_idx| {
+        Sprite::new(&ppu.oam_data[sprite_idx..sprite_idx + 4], sprite_idx == 0).unwrap_or_default()
+    });
+
+    for (sprite_idx, sprite) in sprites.enumerate() {
+        let palette = ppu.get_sprite_palette(sprite.get_palette_index());
+        let bank = ppu.control_register.get_sprite_pattern_table_address() as usize;
+        let tile = rom.read_tile_chr_rom((bank + sprite.get_pattern_index() * 16) as u16);
+
+        for y in 0..8 {
+            let adjusted_y = if sprite.is_vertical_flip() { 7 - y } else { y };
+            let mut upper = tile[adjusted_y];
+            let mut lower = tile[adjusted_y + 8];
+
+            for x in (0..8).rev() {
+                let color_idx = (1 & lower) << 1 | (1 & upper);
+                upper >>= 1;
+                lower >>= 1;
+
+                if color_idx == 0 {
+                    continue;
+                }
+
+                let x_pos = if sprite.is_horizontal_flip() {
+                    7 - x
+                } else {
+                    x
+                };
+
+                let rgb =
+                    ppu.get_color_from_current_system_palette(palette[color_idx as usize] as usize);
+
+                if x_pos < SCREEN_WIDTH {
+                    frame.set_pixel((sprite_idx % 8) * 8 + x_pos, (sprite_idx / 8) * 8 + y, rgb);
+                }
+            }
+        }
+    }
+}
+
+pub fn render_oam_with_pos(ppu: &PPU, rom: &Rom, frame: &mut Frame) {
+    let sprites = (0..ppu.oam_data.len()).step_by(4).map(|sprite_idx| {
+        Sprite::new(&ppu.oam_data[sprite_idx..sprite_idx + 4], sprite_idx == 0).unwrap_or_default()
+    });
+
+    for sprite in sprites.rev() {
+        let palette = ppu.get_sprite_palette(sprite.get_palette_index());
+        let bank = ppu.control_register.get_sprite_pattern_table_address() as usize;
+        let tile = rom.read_tile_chr_rom((bank + sprite.get_pattern_index() * 16) as u16);
+
+        for y in 0..8 {
+            let adjusted_y = if sprite.is_vertical_flip() { 7 - y } else { y };
+            let mut upper = tile[adjusted_y];
+            let mut lower = tile[adjusted_y + 8];
+
+            for x in (0..8).rev() {
+                let color_idx = (1 & lower) << 1 | (1 & upper);
+                upper >>= 1;
+                lower >>= 1;
+
+                if color_idx == 0 {
+                    continue;
+                }
+
+                let x_pos = if sprite.is_horizontal_flip() {
+                    sprite.get_x() + 7 - x
+                } else {
+                    x + sprite.get_x()
+                };
+
+                let rgb =
+                    ppu.get_color_from_current_system_palette(palette[color_idx as usize] as usize);
+
+                if x_pos < SCREEN_WIDTH {
+                    frame.set_pixel(x_pos, sprite.get_y() + y, rgb);
+                }
+            }
         }
     }
 }

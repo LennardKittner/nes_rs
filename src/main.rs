@@ -10,6 +10,8 @@ use nes_rs::ppu::PPU;
 use nes_rs::rendering::fps_frame::FPSFrame;
 use nes_rs::rendering::frame::Frame;
 use nes_rs::rendering::render_nametable;
+use nes_rs::rendering::render_oam_table;
+use nes_rs::rendering::render_oam_with_pos;
 use nes_rs::rendering::write_tile;
 use nes_rs::ring_buffer::RingBuffer;
 use nes_rs::rom::Rom;
@@ -37,6 +39,8 @@ use std::sync::{Arc, Mutex};
 // - save state
 
 const PALETTE_VIEWER_DIMENSIONS: (u32, u32) = (4 * 8, 8 * 8);
+const SPRITE_TABLE_DIMENSIONS: (u32, u32) = (8 * 8, 8 * 8);
+const SPRITE_VIEW_DIMENSIONS: (u32, u32) = (SPRITE_TABLE_DIMENSIONS.0 + 256, 240);
 
 /// A NES emulator
 #[derive(Parser, Debug)]
@@ -159,6 +163,7 @@ struct FrontEndState {
     main_canvas: WindowCanvas,
     tile_canvas: WindowCanvas,
     palette_canvas: WindowCanvas,
+    sprite_canvas: WindowCanvas,
     event_pump: EventPump,
     key_map_1: HashMap<Keycode, ControllerButtons>,
     key_map_2: HashMap<Keycode, ControllerButtons>,
@@ -171,6 +176,7 @@ impl FrontEndState {
         scaling: u32,
     ) -> (
         Self,
+        TextureCreator<WindowContext>,
         TextureCreator<WindowContext>,
         TextureCreator<WindowContext>,
         TextureCreator<WindowContext>,
@@ -219,6 +225,16 @@ impl FrontEndState {
             .build()
             .unwrap();
 
+        let window_sprite = video_subsystem
+            .window(
+                &format!("Sprite NESrs -- {rom_name}"),
+                SPRITE_VIEW_DIMENSIONS.0 * scaling,
+                SPRITE_VIEW_DIMENSIONS.1 * scaling,
+            )
+            .position_centered()
+            .build()
+            .unwrap();
+
         let mut tile_map_canvas = window_tile_map.into_canvas().build().unwrap();
         tile_map_canvas
             .set_scale(scaling as f32 / 2f32, scaling as f32 / 2f32)
@@ -243,6 +259,12 @@ impl FrontEndState {
             .set_scale(scaling as f32, scaling as f32)
             .unwrap();
         let palette_creator = palette_canvas.texture_creator();
+
+        let mut sprite_canvas = window_sprite.into_canvas().build().unwrap();
+        sprite_canvas
+            .set_scale(scaling as f32, scaling as f32)
+            .unwrap();
+        let sprite_creator = sprite_canvas.texture_creator();
 
         let mut key_map_1 = HashMap::new();
         key_map_1.insert(Keycode::Down, ControllerButtons::DOWN);
@@ -273,6 +295,7 @@ impl FrontEndState {
                 main_canvas,
                 tile_canvas,
                 palette_canvas,
+                sprite_canvas,
                 event_pump,
                 key_map_1,
                 key_map_2,
@@ -282,6 +305,7 @@ impl FrontEndState {
             tile_map_creator,
             tile_creator,
             palette_creator,
+            sprite_creator,
         )
     }
 }
@@ -330,8 +354,14 @@ fn main() {
         .unwrap_or("rom");
     let palette_path = args.palette_path;
 
-    let (front_end_state, main_creator, tile_map_creator, tile_creator, palette_creator) =
-        FrontEndState::new(rom_name, args.scaling);
+    let (
+        front_end_state,
+        main_creator,
+        tile_map_creator,
+        tile_creator,
+        palette_creator,
+        sprite_creator,
+    ) = FrontEndState::new(rom_name, args.scaling);
     let front_end_state = Rc::new(RefCell::new(front_end_state));
     let front_end_state_controller = front_end_state.clone();
     let front_end_state_rendering = front_end_state.clone();
@@ -353,6 +383,14 @@ fn main() {
             PixelFormatEnum::RGB24,
             PALETTE_VIEWER_DIMENSIONS.0,
             PALETTE_VIEWER_DIMENSIONS.1,
+        )
+        .unwrap();
+
+    let mut sprite_texture = sprite_creator
+        .create_texture_target(
+            PixelFormatEnum::RGB24,
+            SPRITE_VIEW_DIMENSIONS.0,
+            SPRITE_VIEW_DIMENSIONS.1,
         )
         .unwrap();
 
@@ -417,76 +455,118 @@ fn main() {
 
         front_end_state_rendering.borrow_mut().main_canvas.present();
 
-        if frame_counter.is_multiple_of(&3) {
-            if front_end_state_rendering.borrow().actions.show_tile_map {
-                nametable_textures
-                    .iter_mut()
-                    .enumerate()
-                    .for_each(|(i, texture)| {
-                        render_nametable(ppu, &rom, i, &mut tmp_frame, &system_palette);
-                        texture
-                            .update(None, &tmp_frame.data, tmp_frame.width * 3)
-                            .unwrap()
-                    });
-
-                nametable_textures
-                    .iter()
-                    .enumerate()
-                    .for_each(|(i, texture)| {
-                        let i = i as i32;
-                        let x: i32 = i % 2 * 256;
-                        let y: i32 = if i < 2 { 0 } else { 240 };
-                        front_end_state_rendering
-                            .borrow_mut()
-                            .tile_map_canvas
-                            .copy(&texture, None, Some(sdl2::rect::Rect::new(x, y, 256, 240)))
-                            .unwrap()
-                    });
-                front_end_state_rendering
-                    .borrow_mut()
-                    .tile_map_canvas
-                    .present();
-            }
-
-            if front_end_state_rendering.borrow().actions.show_palette {
-                let palettes = (0..8).map(|idx| {
-                    let idx = idx * 4;
-                    [
-                        ppu.read_palette_table(idx),
-                        ppu.read_palette_table(idx + 1),
-                        ppu.read_palette_table(idx + 2),
-                        ppu.read_palette_table(idx + 3),
-                    ]
+        if front_end_state_rendering.borrow().actions.show_tile_map {
+            nametable_textures
+                .iter_mut()
+                .enumerate()
+                .for_each(|(i, texture)| {
+                    render_nametable(ppu, &rom, i, &mut tmp_frame, &system_palette);
+                    texture
+                        .update(None, &tmp_frame.data, tmp_frame.width * 3)
+                        .unwrap()
                 });
-                for (palette_idx, palette) in palettes.enumerate() {
-                    for (color_idx, &palette_entry) in palette.iter().enumerate() {
-                        write_tile(
-                            &mut tmp_frame,
-                            color_idx * 8,
-                            palette_idx * 8,
-                            &[0u8; 16],
-                            &system_palette,
-                            &[palette_entry, palette_entry, palette_entry, palette_entry],
-                        );
-                    }
+
+            nametable_textures
+                .iter()
+                .enumerate()
+                .for_each(|(i, texture)| {
+                    let i = i as i32;
+                    let x: i32 = i % 2 * 256;
+                    let y: i32 = if i < 2 { 0 } else { 240 };
+                    front_end_state_rendering
+                        .borrow_mut()
+                        .tile_map_canvas
+                        .copy(&texture, None, Some(sdl2::rect::Rect::new(x, y, 256, 240)))
+                        .unwrap()
+                });
+            front_end_state_rendering
+                .borrow_mut()
+                .tile_map_canvas
+                .present();
+        }
+
+        if front_end_state_rendering.borrow().actions.show_palette {
+            let palettes = (0..8).map(|idx| {
+                let idx = idx * 4;
+                [
+                    ppu.read_palette_table(idx),
+                    ppu.read_palette_table(idx + 1),
+                    ppu.read_palette_table(idx + 2),
+                    ppu.read_palette_table(idx + 3),
+                ]
+            });
+            for (palette_idx, palette) in palettes.enumerate() {
+                for (color_idx, &palette_entry) in palette.iter().enumerate() {
+                    write_tile(
+                        &mut tmp_frame,
+                        color_idx * 8,
+                        palette_idx * 8,
+                        &[0u8; 16],
+                        &system_palette,
+                        &[palette_entry, palette_entry, palette_entry, palette_entry],
+                    );
                 }
-                palette_texture
-                    .update(
-                        None,
-                        &tmp_frame.data[0..tmp_frame.width * 3],
-                        tmp_frame.width * 3,
-                    )
-                    .unwrap();
-                front_end_state_rendering
-                    .borrow_mut()
-                    .palette_canvas
-                    .copy(&palette_texture, None, None)
-                    .unwrap();
-                front_end_state_rendering
-                    .borrow_mut()
-                    .palette_canvas
-                    .present();
             }
+            palette_texture
+                .update(
+                    None,
+                    &tmp_frame.data[0..tmp_frame.width * 3],
+                    tmp_frame.width * 3,
+                )
+                .unwrap();
+            front_end_state_rendering
+                .borrow_mut()
+                .palette_canvas
+                .copy(&palette_texture, None, None)
+                .unwrap();
+            front_end_state_rendering
+                .borrow_mut()
+                .palette_canvas
+                .present();
+        }
+
+        if front_end_state_rendering.borrow().actions.show_sprites {
+            tmp_frame.fill(ppu.get_color_from_current_system_palette(
+                ppu.get_universal_background_color() as usize,
+            ));
+            render_oam_table(ppu, rom, &mut tmp_frame);
+            sprite_texture
+                .update(
+                    Some(sdl2::rect::Rect::new(
+                        0,
+                        0,
+                        SPRITE_TABLE_DIMENSIONS.0,
+                        SPRITE_TABLE_DIMENSIONS.0,
+                    )),
+                    &tmp_frame.data[0..tmp_frame.width * 3],
+                    tmp_frame.width * 3,
+                )
+                .unwrap();
+            tmp_frame.fill(ppu.get_color_from_current_system_palette(
+                ppu.get_universal_background_color() as usize,
+            ));
+            render_oam_with_pos(ppu, rom, &mut tmp_frame);
+            sprite_texture
+                .update(
+                    Some(sdl2::rect::Rect::new(
+                        SPRITE_TABLE_DIMENSIONS.0 as i32,
+                        0,
+                        256,
+                        240,
+                    )),
+                    &tmp_frame.data[0..tmp_frame.width * 3],
+                    tmp_frame.width * 3,
+                )
+                .unwrap();
+            front_end_state_rendering
+                .borrow_mut()
+                .sprite_canvas
+                .copy(&sprite_texture, None, None)
+                .unwrap();
+            front_end_state_rendering
+                .borrow_mut()
+                .sprite_canvas
+                .present();
         }
 
         if frame_counter.is_multiple_of(&10) {
@@ -576,6 +656,20 @@ fn main() {
                 .hide();
         }
 
+        if front_end_state.borrow().actions.show_sprites {
+            front_end_state
+                .borrow_mut()
+                .sprite_canvas
+                .window_mut()
+                .show();
+        } else {
+            front_end_state
+                .borrow_mut()
+                .sprite_canvas
+                .window_mut()
+                .hide();
+        }
+
         //TODO: would be nicer to have a nes struct instead of doing this on the CPU
         if last_speed != front_end_state.borrow().actions.speed_multiplier {
             last_speed = front_end_state.borrow().actions.speed_multiplier;
@@ -622,6 +716,10 @@ fn handle_user_input(front_end: &mut FrontEndState) {
                 keycode: Some(Keycode::P),
                 ..
             } => front_end.actions.show_palette ^= true,
+            Event::KeyDown {
+                keycode: Some(Keycode::O),
+                ..
+            } => front_end.actions.show_sprites ^= true,
             Event::KeyDown {
                 keycode: Some(Keycode::F),
                 ..

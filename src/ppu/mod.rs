@@ -381,7 +381,7 @@ impl PPU {
         }
     }
 
-    fn get_sprite_palette(&self, palette_idx: usize) -> [u8; 4] {
+    pub fn get_sprite_palette(&self, palette_idx: usize) -> [u8; 4] {
         let start = 0x11 + palette_idx * 4; // + 0x11 is the offset for the sprite palette tables
         [
             0,
@@ -415,7 +415,6 @@ impl PPU {
     fn address_to_pattern_table_index(&self, addr: u16) -> u16 {
         let addr = addr & 0x1F;
 
-        
         if addr >= 0x10 && (addr & 0x03) == 0 {
             addr & 0x0F
         } else {
