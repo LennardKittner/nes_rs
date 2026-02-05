@@ -34,9 +34,12 @@ use std::path::Path;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
+//TODO: split crate in core and front end and add old front end as minimal example
+
 //TODO: Debug features
-// - sprite viewer
 // - save state
+
+//TODO: use x macro to build windows and canvas
 
 const PALETTE_VIEWER_DIMENSIONS: (u32, u32) = (4 * 8, 8 * 8);
 const SPRITE_TABLE_DIMENSIONS: (u32, u32) = (8 * 8, 8 * 8);
@@ -56,6 +59,10 @@ struct Args {
     /// provide a path to a custom palette
     #[arg(long)]
     palette_path: Option<String>,
+
+    /// enables integer scaling
+    #[arg(long, default_value_t = false)]
+    enable_integer_scaling: bool,
 
     /// path to the ROM
     rom_path: String,
@@ -174,6 +181,7 @@ impl FrontEndState {
     fn new(
         rom_name: &str,
         scaling: u32,
+        integer_scaling: bool,
     ) -> (
         Self,
         TextureCreator<WindowContext>,
@@ -191,7 +199,7 @@ impl FrontEndState {
                 256 * scaling,
                 240 * scaling,
             )
-            .position_centered()
+            .resizable()
             .build()
             .unwrap();
 
@@ -201,7 +209,7 @@ impl FrontEndState {
                 256 * scaling,
                 240 * scaling,
             )
-            .position_centered()
+            .resizable()
             .build()
             .unwrap();
 
@@ -211,7 +219,7 @@ impl FrontEndState {
                 256 * scaling,
                 240 * scaling,
             )
-            .position_centered()
+            .resizable()
             .build()
             .unwrap();
 
@@ -221,7 +229,7 @@ impl FrontEndState {
                 PALETTE_VIEWER_DIMENSIONS.0 * scaling,
                 PALETTE_VIEWER_DIMENSIONS.1 * scaling,
             )
-            .position_centered()
+            .resizable()
             .build()
             .unwrap();
 
@@ -231,40 +239,50 @@ impl FrontEndState {
                 SPRITE_VIEW_DIMENSIONS.0 * scaling,
                 SPRITE_VIEW_DIMENSIONS.1 * scaling,
             )
-            .position_centered()
+            .resizable()
             .build()
             .unwrap();
 
         let mut tile_map_canvas = window_tile_map.into_canvas().build().unwrap();
-        tile_map_canvas
-            .set_scale(scaling as f32 / 2f32, scaling as f32 / 2f32)
-            .unwrap();
+        tile_map_canvas.set_logical_size(256 * 2, 240 * 2).unwrap();
+        if integer_scaling {
+            tile_map_canvas.set_integer_scale(true).unwrap();
+        }
         let tile_map_creator = tile_map_canvas.texture_creator();
 
         let mut tile_canvas = window_tile.into_canvas().build().unwrap();
-        tile_canvas
-            .set_scale(scaling as f32, scaling as f32)
-            .unwrap();
+        tile_canvas.set_logical_size(256, 240).unwrap();
+        if integer_scaling {
+            tile_canvas.set_integer_scale(true).unwrap();
+        }
         let tile_creator = tile_canvas.texture_creator();
 
         let mut main_canvas = window.into_canvas().build().unwrap();
-        let event_pump = sdl_context.event_pump().unwrap();
-        main_canvas
-            .set_scale(scaling as f32, scaling as f32)
-            .unwrap();
+        main_canvas.set_logical_size(256, 240).unwrap();
+        if integer_scaling {
+            main_canvas.set_integer_scale(true).unwrap();
+        }
         let main_creator = main_canvas.texture_creator();
 
         let mut palette_canvas = window_palette.into_canvas().build().unwrap();
         palette_canvas
-            .set_scale(scaling as f32, scaling as f32)
+            .set_logical_size(PALETTE_VIEWER_DIMENSIONS.0, PALETTE_VIEWER_DIMENSIONS.1)
             .unwrap();
+        if integer_scaling {
+            palette_canvas.set_integer_scale(true).unwrap();
+        }
         let palette_creator = palette_canvas.texture_creator();
 
         let mut sprite_canvas = window_sprite.into_canvas().build().unwrap();
         sprite_canvas
-            .set_scale(scaling as f32, scaling as f32)
+            .set_logical_size(SPRITE_VIEW_DIMENSIONS.0, SPRITE_VIEW_DIMENSIONS.1)
             .unwrap();
+        if integer_scaling {
+            sprite_canvas.set_integer_scale(true).unwrap();
+        }
         let sprite_creator = sprite_canvas.texture_creator();
+
+        let event_pump = sdl_context.event_pump().unwrap();
 
         let mut key_map_1 = HashMap::new();
         key_map_1.insert(Keycode::Down, ControllerButtons::DOWN);
@@ -361,7 +379,7 @@ fn main() {
         tile_creator,
         palette_creator,
         sprite_creator,
-    ) = FrontEndState::new(rom_name, args.scaling);
+    ) = FrontEndState::new(rom_name, args.scaling, args.enable_integer_scaling);
     let front_end_state = Rc::new(RefCell::new(front_end_state));
     let front_end_state_controller = front_end_state.clone();
     let front_end_state_rendering = front_end_state.clone();
