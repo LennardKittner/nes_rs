@@ -39,6 +39,8 @@ use std::io::Read;
 use std::path::Path;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
+use std::thread;
+use std::time::Duration;
 
 //TODO: split crate in core and front end and add old front end as minimal example
 //TODO: avoid unwrap
@@ -716,6 +718,11 @@ fn main() {
             for _ in 0..1000 {
                 cpu.step();
             }
+        } else {
+            thread::sleep(Duration::from_millis(16)); // Roughly 60FPS avoids wasting resources
+                                                      // when the emulation is paused
+            cpu.manuel_re_render(); // without this windows such as the tile map would only show
+                                    // once the emulation gets resumed
         }
     }
     drop(audio_device_wrapper.audio_device);

@@ -131,6 +131,10 @@ impl<'a> Bus<'a> {
         (hi << 8) | lo
     }
 
+    pub fn manual_re_render(&mut self) {
+        (self.graphics_callback)(&self.ppu, &self.frame, &self.fps_frame, &self.rom);
+    }
+
     pub fn tick(&mut self, cycles: u8) {
         self.cycles += cycles as usize;
         let mut apu = self.apu.take().unwrap();
