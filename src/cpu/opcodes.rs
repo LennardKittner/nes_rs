@@ -397,7 +397,7 @@ fn test_opcode_matches_key() {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct OpCode {
     pub code: u8,
     pub mnemonics: &'static str,
@@ -408,7 +408,7 @@ pub struct OpCode {
     operation: Operation,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum Operation {
     FnCpuAndAddressing(fn(&mut CPU, &AddressingMode)),
     FnCpu(fn(&mut CPU)),
