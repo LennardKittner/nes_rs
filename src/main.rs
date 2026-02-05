@@ -10,6 +10,7 @@ use nes_rs::ppu::PPU;
 use nes_rs::rendering::fps_frame::FPSFrame;
 use nes_rs::rendering::frame::Frame;
 use nes_rs::rendering::render_nametable;
+use nes_rs::rendering::write_tile;
 use nes_rs::ring_buffer::RingBuffer;
 use nes_rs::rom::Rom;
 use num::Integer;
@@ -32,9 +33,10 @@ use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 //TODO: Debug features
-// - palette viewer
 // - sprite viewer
 // - save state
+
+const PALETTE_VIEWER_DIMENSIONS: (u32, u32) = (4 * 8, 8 * 8);
 
 /// A NES emulator
 #[derive(Parser, Debug)]
@@ -156,6 +158,7 @@ struct FrontEndState {
     tile_map_canvas: WindowCanvas,
     main_canvas: WindowCanvas,
     tile_canvas: WindowCanvas,
+    palette_canvas: WindowCanvas,
     event_pump: EventPump,
     key_map_1: HashMap<Keycode, ControllerButtons>,
     key_map_2: HashMap<Keycode, ControllerButtons>,
@@ -168,6 +171,7 @@ impl FrontEndState {
         scaling: u32,
     ) -> (
         Self,
+        TextureCreator<WindowContext>,
         TextureCreator<WindowContext>,
         TextureCreator<WindowContext>,
         TextureCreator<WindowContext>,
@@ -205,6 +209,16 @@ impl FrontEndState {
             .build()
             .unwrap();
 
+        let window_palette = video_subsystem
+            .window(
+                &format!("Palette NESrs -- {rom_name}"),
+                PALETTE_VIEWER_DIMENSIONS.0 * scaling,
+                PALETTE_VIEWER_DIMENSIONS.1 * scaling,
+            )
+            .position_centered()
+            .build()
+            .unwrap();
+
         let mut tile_map_canvas = window_tile_map.into_canvas().build().unwrap();
         tile_map_canvas
             .set_scale(scaling as f32 / 2f32, scaling as f32 / 2f32)
@@ -223,6 +237,12 @@ impl FrontEndState {
             .set_scale(scaling as f32, scaling as f32)
             .unwrap();
         let main_creator = main_canvas.texture_creator();
+
+        let mut palette_canvas = window_palette.into_canvas().build().unwrap();
+        palette_canvas
+            .set_scale(scaling as f32, scaling as f32)
+            .unwrap();
+        let palette_creator = palette_canvas.texture_creator();
 
         let mut key_map_1 = HashMap::new();
         key_map_1.insert(Keycode::Down, ControllerButtons::DOWN);
@@ -252,6 +272,7 @@ impl FrontEndState {
                 tile_map_canvas,
                 main_canvas,
                 tile_canvas,
+                palette_canvas,
                 event_pump,
                 key_map_1,
                 key_map_2,
@@ -260,6 +281,7 @@ impl FrontEndState {
             main_creator,
             tile_map_creator,
             tile_creator,
+            palette_creator,
         )
     }
 }
@@ -308,7 +330,7 @@ fn main() {
         .unwrap_or("rom");
     let palette_path = args.palette_path;
 
-    let (front_end_state, main_creator, tile_map_creator, tile_creator) =
+    let (front_end_state, main_creator, tile_map_creator, tile_creator, palette_creator) =
         FrontEndState::new(rom_name, args.scaling);
     let front_end_state = Rc::new(RefCell::new(front_end_state));
     let front_end_state_controller = front_end_state.clone();
@@ -324,6 +346,14 @@ fn main() {
 
     let mut tile_texture = tile_creator
         .create_texture_target(PixelFormatEnum::RGB24, 256, 240)
+        .unwrap();
+
+    let mut palette_texture = palette_creator
+        .create_texture_target(
+            PixelFormatEnum::RGB24,
+            PALETTE_VIEWER_DIMENSIONS.0,
+            PALETTE_VIEWER_DIMENSIONS.1,
+        )
         .unwrap();
 
     let mut nametable_textures = Vec::new();
@@ -363,6 +393,7 @@ fn main() {
     let mut frame_counter = 0;
     let system_palette = SystemPalette::new();
 
+    //TODO: move fps rendering out of bus
     let render_frame = move |ppu: &PPU, frame: &Frame, fps_frame: &FPSFrame, rom: &Rom| {
         main_texture
             .update(None, &frame.data, frame.width * 3)
@@ -414,6 +445,46 @@ fn main() {
                 front_end_state_rendering
                     .borrow_mut()
                     .tile_map_canvas
+                    .present();
+            }
+
+            if front_end_state_rendering.borrow().actions.show_palette {
+                let palettes = (0..8).map(|idx| {
+                    let idx = idx * 4;
+                    [
+                        ppu.read_palette_table(idx),
+                        ppu.read_palette_table(idx + 1),
+                        ppu.read_palette_table(idx + 2),
+                        ppu.read_palette_table(idx + 3),
+                    ]
+                });
+                for (palette_idx, palette) in palettes.enumerate() {
+                    for (color_idx, &palette_entry) in palette.iter().enumerate() {
+                        write_tile(
+                            &mut tmp_frame,
+                            color_idx * 8,
+                            palette_idx * 8,
+                            &[0u8; 16],
+                            &system_palette,
+                            &[palette_entry, palette_entry, palette_entry, palette_entry],
+                        );
+                    }
+                }
+                palette_texture
+                    .update(
+                        None,
+                        &tmp_frame.data[0..tmp_frame.width * 3],
+                        tmp_frame.width * 3,
+                    )
+                    .unwrap();
+                front_end_state_rendering
+                    .borrow_mut()
+                    .palette_canvas
+                    .copy(&palette_texture, None, None)
+                    .unwrap();
+                front_end_state_rendering
+                    .borrow_mut()
+                    .palette_canvas
                     .present();
             }
         }
@@ -491,6 +562,20 @@ fn main() {
             front_end_state.borrow_mut().tile_canvas.window_mut().hide();
         }
 
+        if front_end_state.borrow().actions.show_palette {
+            front_end_state
+                .borrow_mut()
+                .palette_canvas
+                .window_mut()
+                .show();
+        } else {
+            front_end_state
+                .borrow_mut()
+                .palette_canvas
+                .window_mut()
+                .hide();
+        }
+
         //TODO: would be nicer to have a nes struct instead of doing this on the CPU
         if last_speed != front_end_state.borrow().actions.speed_multiplier {
             last_speed = front_end_state.borrow().actions.speed_multiplier;
@@ -533,6 +618,10 @@ fn handle_user_input(front_end: &mut FrontEndState) {
                 keycode: Some(Keycode::T),
                 ..
             } => front_end.actions.show_tiles ^= true,
+            Event::KeyDown {
+                keycode: Some(Keycode::P),
+                ..
+            } => front_end.actions.show_palette ^= true,
             Event::KeyDown {
                 keycode: Some(Keycode::F),
                 ..
