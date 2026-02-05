@@ -19,6 +19,7 @@ pub type Pallet = [(u8, u8, u8); PALETTE_SIZE_E];
 // 101 -> blue & red   = 5
 // 110 -> blue & green = 6
 // 111 -> all          = 7
+#[derive(Clone)]
 pub struct SystemPalette {
     palettes: [Pallet; NUMBER_PALETTES],
 }

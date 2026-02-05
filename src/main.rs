@@ -9,20 +9,26 @@ use nes_rs::ppu::palette::SystemPalette;
 use nes_rs::ppu::PPU;
 use nes_rs::rendering::fps_frame::FPSFrame;
 use nes_rs::rendering::frame::Frame;
+use nes_rs::rendering::frame::SCREEN_HEIGHT;
+use nes_rs::rendering::frame::SCREEN_WIDTH;
 use nes_rs::rendering::render_nametable;
 use nes_rs::rendering::render_oam_table;
 use nes_rs::rendering::render_oam_with_pos;
 use nes_rs::rendering::write_tile;
 use nes_rs::ring_buffer::RingBuffer;
 use nes_rs::rom::Rom;
-use num::Integer;
 use sdl2::audio::AudioDevice;
 use sdl2::audio::{AudioCallback, AudioSpecDesired};
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::PixelFormatEnum;
+use sdl2::render::Canvas;
+use sdl2::render::Texture;
 use sdl2::render::{TextureCreator, WindowCanvas};
+use sdl2::video::Window;
+use sdl2::video::WindowBuildError;
 use sdl2::video::WindowContext;
+use sdl2::VideoSubsystem;
 use sdl2::{AudioSubsystem, EventPump, Sdl};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -35,11 +41,10 @@ use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 //TODO: split crate in core and front end and add old front end as minimal example
+//TODO: avoid unwrap
 
 //TODO: Debug features
 // - save state
-
-//TODO: use x macro to build windows and canvas
 
 const PALETTE_VIEWER_DIMENSIONS: (u32, u32) = (4 * 8, 8 * 8);
 const SPRITE_TABLE_DIMENSIONS: (u32, u32) = (8 * 8, 8 * 8);
@@ -161,6 +166,35 @@ impl AudioDeviceWrapper {
     }
 }
 
+fn create_window(
+    video_subsystem: &VideoSubsystem,
+    title: &str,
+    width: u32,
+    height: u32,
+) -> Result<Window, WindowBuildError> {
+    video_subsystem
+        .window(title, width, height)
+        .resizable()
+        .build()
+}
+
+fn creates_canvas_and_texture_creator(
+    window: Window,
+    logical_width: u32,
+    logical_height: u32,
+    integer_scaling: bool,
+) -> (Canvas<Window>, TextureCreator<WindowContext>) {
+    let mut canvas = window.into_canvas().build().unwrap();
+    canvas
+        .set_logical_size(logical_width, logical_height)
+        .unwrap();
+    if integer_scaling {
+        canvas.set_integer_scale(true).unwrap();
+    }
+    let creator = canvas.texture_creator();
+    (canvas, creator)
+}
+
 #[allow(dead_code)]
 struct FrontEndState {
     sdl_context: Sdl,
@@ -177,110 +211,316 @@ struct FrontEndState {
     nes_controller_input: Vec<ControllerInput>,
 }
 
-impl FrontEndState {
-    fn new(
-        rom_name: &str,
-        scaling: u32,
-        integer_scaling: bool,
-    ) -> (
-        Self,
-        TextureCreator<WindowContext>,
-        TextureCreator<WindowContext>,
-        TextureCreator<WindowContext>,
-        TextureCreator<WindowContext>,
-        TextureCreator<WindowContext>,
+struct TextureCreators {
+    main_creator: TextureCreator<WindowContext>,
+    tile_map_creator: TextureCreator<WindowContext>,
+    tile_creator: TextureCreator<WindowContext>,
+    palette_creator: TextureCreator<WindowContext>,
+    sprite_creator: TextureCreator<WindowContext>,
+}
+
+struct Textures<'a> {
+    main_texture: Texture<'a>,
+    fps_texture: Texture<'a>,
+    tile_texture: Texture<'a>,
+    palette_texture: Texture<'a>,
+    sprite_texture: Texture<'a>,
+    nametable_textures: Vec<Texture<'a>>,
+
+    frame_buffer: Frame,
+    frame_counter: u32,
+    system_palette: SystemPalette,
+}
+
+impl<'a> Textures<'a> {
+    fn new(texture_creators: &'a TextureCreators, system_palette: SystemPalette) -> Textures<'a> {
+        let main_texture = texture_creators
+            .main_creator
+            .create_texture_target(PixelFormatEnum::RGB24, 256, 240)
+            .unwrap();
+
+        let fps_texture = texture_creators
+            .main_creator
+            .create_texture_target(PixelFormatEnum::RGB24, 48, 8)
+            .unwrap();
+
+        let tile_texture = texture_creators
+            .tile_creator
+            .create_texture_target(PixelFormatEnum::RGB24, 256, 240)
+            .unwrap();
+
+        let palette_texture = texture_creators
+            .palette_creator
+            .create_texture_target(
+                PixelFormatEnum::RGB24,
+                PALETTE_VIEWER_DIMENSIONS.0,
+                PALETTE_VIEWER_DIMENSIONS.1,
+            )
+            .unwrap();
+
+        let sprite_texture = texture_creators
+            .sprite_creator
+            .create_texture_target(
+                PixelFormatEnum::RGB24,
+                SPRITE_VIEW_DIMENSIONS.0,
+                SPRITE_VIEW_DIMENSIONS.1,
+            )
+            .unwrap();
+
+        let mut nametable_textures = Vec::new();
+        for _ in 0..4 {
+            nametable_textures.push(
+                texture_creators
+                    .tile_map_creator
+                    .create_texture_target(PixelFormatEnum::RGB24, 256, 240)
+                    .unwrap(),
+            );
+        }
+        Textures {
+            main_texture,
+            fps_texture,
+            tile_texture,
+            palette_texture,
+            sprite_texture,
+            nametable_textures,
+            frame_buffer: Frame::default(),
+            system_palette,
+            frame_counter: 0,
+        }
+    }
+
+    fn update_textures(
+        &mut self,
+        emulation_frame: &Frame,
+        fps_frame: &Frame,
+        front_end_state: &mut FrontEndState,
+        ppu: &PPU,
+        rom: &Rom,
     ) {
+        self.main_texture
+            .update(None, &emulation_frame.data, emulation_frame.width * 3)
+            .unwrap();
+        front_end_state
+            .main_canvas
+            .copy(&self.main_texture, None, None)
+            .unwrap();
+
+        if front_end_state.actions.show_fps {
+            self.fps_texture
+                .update(None, &fps_frame.data, fps_frame.width * 3)
+                .unwrap();
+            front_end_state
+                .main_canvas
+                .copy(
+                    &self.fps_texture,
+                    None,
+                    Some(sdl2::rect::Rect::new(5, 5, 48, 8)),
+                )
+                .unwrap();
+        }
+
+        front_end_state.main_canvas.present();
+
+        if front_end_state.actions.show_tile_map {
+            self.nametable_textures
+                .iter_mut()
+                .enumerate()
+                .for_each(|(i, texture)| {
+                    render_nametable(ppu, &rom, i, &mut self.frame_buffer, &self.system_palette);
+                    texture
+                        .update(None, &self.frame_buffer.data, self.frame_buffer.width * 3)
+                        .unwrap()
+                });
+
+            self.nametable_textures
+                .iter()
+                .enumerate()
+                .for_each(|(i, texture)| {
+                    let i = i as i32;
+                    let x: i32 = i % 2 * 256;
+                    let y: i32 = if i < 2 { 0 } else { 240 };
+                    front_end_state
+                        .tile_map_canvas
+                        .copy(&texture, None, Some(sdl2::rect::Rect::new(x, y, 256, 240)))
+                        .unwrap()
+                });
+            front_end_state.tile_map_canvas.present();
+        }
+
+        if front_end_state.actions.show_palette {
+            let palettes = (0..8).map(|idx| {
+                let idx = idx * 4;
+                [
+                    ppu.read_palette_table(idx),
+                    ppu.read_palette_table(idx + 1),
+                    ppu.read_palette_table(idx + 2),
+                    ppu.read_palette_table(idx + 3),
+                ]
+            });
+            for (palette_idx, palette) in palettes.enumerate() {
+                for (color_idx, &palette_entry) in palette.iter().enumerate() {
+                    write_tile(
+                        &mut self.frame_buffer,
+                        color_idx * 8,
+                        palette_idx * 8,
+                        &[0u8; 16],
+                        &self.system_palette,
+                        &[palette_entry, palette_entry, palette_entry, palette_entry],
+                    );
+                }
+            }
+            self.palette_texture
+                .update(None, &self.frame_buffer.data, self.frame_buffer.width * 3)
+                .unwrap();
+            front_end_state
+                .palette_canvas
+                .copy(&self.palette_texture, None, None)
+                .unwrap();
+            front_end_state.palette_canvas.present();
+        }
+
+        if front_end_state.actions.show_sprites {
+            self.frame_buffer
+                .fill(ppu.get_color_from_current_system_palette(
+                    ppu.get_universal_background_color() as usize,
+                ));
+            render_oam_table(ppu, rom, &mut self.frame_buffer);
+            self.sprite_texture
+                .update(
+                    Some(sdl2::rect::Rect::new(
+                        0,
+                        0,
+                        SPRITE_TABLE_DIMENSIONS.0,
+                        SPRITE_TABLE_DIMENSIONS.0,
+                    )),
+                    &self.frame_buffer.data,
+                    self.frame_buffer.width * 3,
+                )
+                .unwrap();
+            self.frame_buffer
+                .fill(ppu.get_color_from_current_system_palette(
+                    ppu.get_universal_background_color() as usize,
+                ));
+            render_oam_with_pos(ppu, rom, &mut self.frame_buffer);
+            self.sprite_texture
+                .update(
+                    Some(sdl2::rect::Rect::new(
+                        SPRITE_TABLE_DIMENSIONS.0 as i32,
+                        0,
+                        256,
+                        240,
+                    )),
+                    &self.frame_buffer.data,
+                    self.frame_buffer.width * 3,
+                )
+                .unwrap();
+            front_end_state
+                .sprite_canvas
+                .copy(&self.sprite_texture, None, None)
+                .unwrap();
+            front_end_state.sprite_canvas.present();
+        }
+
+        if self.frame_counter.is_multiple_of(10u32) {
+            let palette = [
+                ppu.read_palette_table(0),
+                ppu.read_palette_table(1),
+                ppu.read_palette_table(2),
+                ppu.read_palette_table(3),
+            ];
+            if front_end_state.actions.show_tiles {
+                let num_tiles = rom.chr_rom_len() / 16;
+                for i in 0..num_tiles {
+                    self.frame_buffer
+                        .render_tile((i % 32) * 8, (i / 32) * 8, &rom, 0, i, &palette);
+                }
+                let num_rows = num_tiles * 8 / self.frame_buffer.width;
+                self.tile_texture
+                    .update(
+                        Some(sdl2::rect::Rect::new(0, 0, 256, num_rows as u32 * 8)),
+                        &self.frame_buffer.data,
+                        self.frame_buffer.width * 3,
+                    )
+                    .unwrap();
+                front_end_state
+                    .tile_canvas
+                    .copy(&self.tile_texture, None, None)
+                    .unwrap();
+                front_end_state.tile_canvas.present();
+            }
+        }
+
+        self.frame_counter += 1;
+    }
+}
+
+impl FrontEndState {
+    fn new(rom_name: &str, scaling: u32, integer_scaling: bool) -> (Self, TextureCreators) {
         let sdl_context = sdl2::init().unwrap();
         let audio_subsystem = sdl_context.audio().unwrap();
         let video_subsystem = sdl_context.video().unwrap();
-        let window = video_subsystem
-            .window(
-                &format!("NESrs -- {rom_name}"),
-                256 * scaling,
-                240 * scaling,
-            )
-            .resizable()
-            .build()
-            .unwrap();
+        let window = create_window(
+            &video_subsystem,
+            &format!("NESrs -- {rom_name}"),
+            SCREEN_WIDTH as u32 * scaling,
+            SCREEN_HEIGHT as u32 * scaling,
+        )
+        .unwrap();
 
-        let window_tile_map = video_subsystem
-            .window(
-                &format!("Tile Map NESrs -- {rom_name}"),
-                256 * scaling,
-                240 * scaling,
-            )
-            .resizable()
-            .build()
-            .unwrap();
+        let window_tile_map = create_window(
+            &video_subsystem,
+            &format!("Tile Map NESrs -- {rom_name}"),
+            SCREEN_WIDTH as u32 * scaling,
+            SCREEN_HEIGHT as u32 * scaling,
+        )
+        .unwrap();
 
-        let window_tile = video_subsystem
-            .window(
-                &format!("Tiles NESrs -- {rom_name}"),
-                256 * scaling,
-                240 * scaling,
-            )
-            .resizable()
-            .build()
-            .unwrap();
+        let window_tile = create_window(
+            &video_subsystem,
+            &format!("Tiles NESrs -- {rom_name}"),
+            SCREEN_WIDTH as u32 * scaling,
+            SCREEN_HEIGHT as u32 * scaling,
+        )
+        .unwrap();
 
-        let window_palette = video_subsystem
-            .window(
-                &format!("Palette NESrs -- {rom_name}"),
-                PALETTE_VIEWER_DIMENSIONS.0 * scaling,
-                PALETTE_VIEWER_DIMENSIONS.1 * scaling,
-            )
-            .resizable()
-            .build()
-            .unwrap();
+        let window_palette = create_window(
+            &video_subsystem,
+            &format!("Palette NESrs -- {rom_name}"),
+            PALETTE_VIEWER_DIMENSIONS.0 * scaling,
+            PALETTE_VIEWER_DIMENSIONS.1 * scaling,
+        )
+        .unwrap();
 
-        let window_sprite = video_subsystem
-            .window(
-                &format!("Sprite NESrs -- {rom_name}"),
-                SPRITE_VIEW_DIMENSIONS.0 * scaling,
-                SPRITE_VIEW_DIMENSIONS.1 * scaling,
-            )
-            .resizable()
-            .build()
-            .unwrap();
+        let window_sprite = create_window(
+            &video_subsystem,
+            &format!("Sprite NESrs -- {rom_name}"),
+            SPRITE_VIEW_DIMENSIONS.0 * scaling,
+            SPRITE_VIEW_DIMENSIONS.1 * scaling,
+        )
+        .unwrap();
 
-        let mut tile_map_canvas = window_tile_map.into_canvas().build().unwrap();
-        tile_map_canvas.set_logical_size(256 * 2, 240 * 2).unwrap();
-        if integer_scaling {
-            tile_map_canvas.set_integer_scale(true).unwrap();
-        }
-        let tile_map_creator = tile_map_canvas.texture_creator();
+        let (tile_map_canvas, tile_map_creator) =
+            creates_canvas_and_texture_creator(window_tile_map, 256 * 2, 240 * 2, integer_scaling);
 
-        let mut tile_canvas = window_tile.into_canvas().build().unwrap();
-        tile_canvas.set_logical_size(256, 240).unwrap();
-        if integer_scaling {
-            tile_canvas.set_integer_scale(true).unwrap();
-        }
-        let tile_creator = tile_canvas.texture_creator();
+        let (tile_canvas, tile_creator) =
+            creates_canvas_and_texture_creator(window_tile, 256, 240, integer_scaling);
 
-        let mut main_canvas = window.into_canvas().build().unwrap();
-        main_canvas.set_logical_size(256, 240).unwrap();
-        if integer_scaling {
-            main_canvas.set_integer_scale(true).unwrap();
-        }
-        let main_creator = main_canvas.texture_creator();
+        let (main_canvas, main_creator) =
+            creates_canvas_and_texture_creator(window, 256, 240, integer_scaling);
 
-        let mut palette_canvas = window_palette.into_canvas().build().unwrap();
-        palette_canvas
-            .set_logical_size(PALETTE_VIEWER_DIMENSIONS.0, PALETTE_VIEWER_DIMENSIONS.1)
-            .unwrap();
-        if integer_scaling {
-            palette_canvas.set_integer_scale(true).unwrap();
-        }
-        let palette_creator = palette_canvas.texture_creator();
+        let (palette_canvas, palette_creator) = creates_canvas_and_texture_creator(
+            window_palette,
+            PALETTE_VIEWER_DIMENSIONS.0,
+            PALETTE_VIEWER_DIMENSIONS.1,
+            integer_scaling,
+        );
 
-        let mut sprite_canvas = window_sprite.into_canvas().build().unwrap();
-        sprite_canvas
-            .set_logical_size(SPRITE_VIEW_DIMENSIONS.0, SPRITE_VIEW_DIMENSIONS.1)
-            .unwrap();
-        if integer_scaling {
-            sprite_canvas.set_integer_scale(true).unwrap();
-        }
-        let sprite_creator = sprite_canvas.texture_creator();
+        let (sprite_canvas, sprite_creator) = creates_canvas_and_texture_creator(
+            window_sprite,
+            SPRITE_VIEW_DIMENSIONS.0,
+            SPRITE_VIEW_DIMENSIONS.1,
+            integer_scaling,
+        );
 
         let event_pump = sdl_context.event_pump().unwrap();
 
@@ -319,12 +559,40 @@ impl FrontEndState {
                 key_map_2,
                 nes_controller_input: Vec::new(),
             },
-            main_creator,
-            tile_map_creator,
-            tile_creator,
-            palette_creator,
-            sprite_creator,
+            TextureCreators {
+                main_creator,
+                tile_map_creator,
+                tile_creator,
+                palette_creator,
+                sprite_creator,
+            },
         )
+    }
+
+    fn show_active_windows(&mut self) {
+        if self.actions.show_tile_map {
+            self.tile_map_canvas.window_mut().show();
+        } else {
+            self.tile_map_canvas.window_mut().hide();
+        }
+
+        if self.actions.show_tiles {
+            self.tile_canvas.window_mut().show();
+        } else {
+            self.tile_canvas.window_mut().hide();
+        }
+
+        if self.actions.show_palette {
+            self.palette_canvas.window_mut().show();
+        } else {
+            self.palette_canvas.window_mut().hide();
+        }
+
+        if self.actions.show_sprites {
+            self.sprite_canvas.window_mut().show();
+        } else {
+            self.sprite_canvas.window_mut().hide();
+        }
     }
 }
 
@@ -372,54 +640,11 @@ fn main() {
         .unwrap_or("rom");
     let palette_path = args.palette_path;
 
-    let (
-        front_end_state,
-        main_creator,
-        tile_map_creator,
-        tile_creator,
-        palette_creator,
-        sprite_creator,
-    ) = FrontEndState::new(rom_name, args.scaling, args.enable_integer_scaling);
+    let (front_end_state, texture_creators) =
+        FrontEndState::new(rom_name, args.scaling, args.enable_integer_scaling);
     let front_end_state = Rc::new(RefCell::new(front_end_state));
     let front_end_state_controller = front_end_state.clone();
     let front_end_state_rendering = front_end_state.clone();
-
-    let mut main_texture = main_creator
-        .create_texture_target(PixelFormatEnum::RGB24, 256, 240)
-        .unwrap();
-
-    let mut fps_texture = main_creator
-        .create_texture_target(PixelFormatEnum::RGB24, 48, 8)
-        .unwrap();
-
-    let mut tile_texture = tile_creator
-        .create_texture_target(PixelFormatEnum::RGB24, 256, 240)
-        .unwrap();
-
-    let mut palette_texture = palette_creator
-        .create_texture_target(
-            PixelFormatEnum::RGB24,
-            PALETTE_VIEWER_DIMENSIONS.0,
-            PALETTE_VIEWER_DIMENSIONS.1,
-        )
-        .unwrap();
-
-    let mut sprite_texture = sprite_creator
-        .create_texture_target(
-            PixelFormatEnum::RGB24,
-            SPRITE_VIEW_DIMENSIONS.0,
-            SPRITE_VIEW_DIMENSIONS.1,
-        )
-        .unwrap();
-
-    let mut nametable_textures = Vec::new();
-    for _ in 0..4 {
-        nametable_textures.push(
-            tile_map_creator
-                .create_texture_target(PixelFormatEnum::RGB24, 256, 240)
-                .unwrap(),
-        );
-    }
 
     let bytes: Vec<u8> = std::fs::read(&rom_path).unwrap();
     let rom = Rom::new(&bytes).unwrap();
@@ -429,6 +654,8 @@ fn main() {
     } else {
         SystemPalette::new()
     };
+
+    let mut textures = Textures::new(&texture_creators, palette.clone());
 
     let handle_controller_input =
         move |controller_1: &mut Controller, controller_2: &mut Controller| {
@@ -445,178 +672,15 @@ fn main() {
             }
         };
 
-    let mut tmp_frame = Frame::default();
-    let mut frame_counter = 0;
-    let system_palette = SystemPalette::new();
-
     //TODO: move fps rendering out of bus
     let render_frame = move |ppu: &PPU, frame: &Frame, fps_frame: &FPSFrame, rom: &Rom| {
-        main_texture
-            .update(None, &frame.data, frame.width * 3)
-            .unwrap();
-        front_end_state_rendering
-            .borrow_mut()
-            .main_canvas
-            .copy(&main_texture, None, None)
-            .unwrap();
-
-        if front_end_state_rendering.borrow().actions.show_fps {
-            fps_texture
-                .update(None, &fps_frame.frame.data, fps_frame.frame.width * 3)
-                .unwrap();
-            front_end_state_rendering
-                .borrow_mut()
-                .main_canvas
-                .copy(&fps_texture, None, Some(sdl2::rect::Rect::new(5, 5, 48, 8)))
-                .unwrap();
-        }
-
-        front_end_state_rendering.borrow_mut().main_canvas.present();
-
-        if front_end_state_rendering.borrow().actions.show_tile_map {
-            nametable_textures
-                .iter_mut()
-                .enumerate()
-                .for_each(|(i, texture)| {
-                    render_nametable(ppu, &rom, i, &mut tmp_frame, &system_palette);
-                    texture
-                        .update(None, &tmp_frame.data, tmp_frame.width * 3)
-                        .unwrap()
-                });
-
-            nametable_textures
-                .iter()
-                .enumerate()
-                .for_each(|(i, texture)| {
-                    let i = i as i32;
-                    let x: i32 = i % 2 * 256;
-                    let y: i32 = if i < 2 { 0 } else { 240 };
-                    front_end_state_rendering
-                        .borrow_mut()
-                        .tile_map_canvas
-                        .copy(&texture, None, Some(sdl2::rect::Rect::new(x, y, 256, 240)))
-                        .unwrap()
-                });
-            front_end_state_rendering
-                .borrow_mut()
-                .tile_map_canvas
-                .present();
-        }
-
-        if front_end_state_rendering.borrow().actions.show_palette {
-            let palettes = (0..8).map(|idx| {
-                let idx = idx * 4;
-                [
-                    ppu.read_palette_table(idx),
-                    ppu.read_palette_table(idx + 1),
-                    ppu.read_palette_table(idx + 2),
-                    ppu.read_palette_table(idx + 3),
-                ]
-            });
-            for (palette_idx, palette) in palettes.enumerate() {
-                for (color_idx, &palette_entry) in palette.iter().enumerate() {
-                    write_tile(
-                        &mut tmp_frame,
-                        color_idx * 8,
-                        palette_idx * 8,
-                        &[0u8; 16],
-                        &system_palette,
-                        &[palette_entry, palette_entry, palette_entry, palette_entry],
-                    );
-                }
-            }
-            palette_texture
-                .update(
-                    None,
-                    &tmp_frame.data[0..tmp_frame.width * 3],
-                    tmp_frame.width * 3,
-                )
-                .unwrap();
-            front_end_state_rendering
-                .borrow_mut()
-                .palette_canvas
-                .copy(&palette_texture, None, None)
-                .unwrap();
-            front_end_state_rendering
-                .borrow_mut()
-                .palette_canvas
-                .present();
-        }
-
-        if front_end_state_rendering.borrow().actions.show_sprites {
-            tmp_frame.fill(ppu.get_color_from_current_system_palette(
-                ppu.get_universal_background_color() as usize,
-            ));
-            render_oam_table(ppu, rom, &mut tmp_frame);
-            sprite_texture
-                .update(
-                    Some(sdl2::rect::Rect::new(
-                        0,
-                        0,
-                        SPRITE_TABLE_DIMENSIONS.0,
-                        SPRITE_TABLE_DIMENSIONS.0,
-                    )),
-                    &tmp_frame.data[0..tmp_frame.width * 3],
-                    tmp_frame.width * 3,
-                )
-                .unwrap();
-            tmp_frame.fill(ppu.get_color_from_current_system_palette(
-                ppu.get_universal_background_color() as usize,
-            ));
-            render_oam_with_pos(ppu, rom, &mut tmp_frame);
-            sprite_texture
-                .update(
-                    Some(sdl2::rect::Rect::new(
-                        SPRITE_TABLE_DIMENSIONS.0 as i32,
-                        0,
-                        256,
-                        240,
-                    )),
-                    &tmp_frame.data[0..tmp_frame.width * 3],
-                    tmp_frame.width * 3,
-                )
-                .unwrap();
-            front_end_state_rendering
-                .borrow_mut()
-                .sprite_canvas
-                .copy(&sprite_texture, None, None)
-                .unwrap();
-            front_end_state_rendering
-                .borrow_mut()
-                .sprite_canvas
-                .present();
-        }
-
-        if frame_counter.is_multiple_of(&10) {
-            let palette = [
-                ppu.read_palette_table(0),
-                ppu.read_palette_table(1),
-                ppu.read_palette_table(2),
-                ppu.read_palette_table(3),
-            ];
-            if front_end_state_rendering.borrow().actions.show_tiles {
-                let num_tiles = rom.chr_rom_len() / 16;
-                for i in 0..num_tiles {
-                    tmp_frame.render_tile((i % 32) * 8, (i / 32) * 8, &rom, 0, i, &palette);
-                }
-                let num_rows = num_tiles * 8 / tmp_frame.width;
-                tile_texture
-                    .update(
-                        Some(sdl2::rect::Rect::new(0, 0, 256, num_rows as u32 * 8)),
-                        &tmp_frame.data[0..tmp_frame.width * 3],
-                        tmp_frame.width * 3,
-                    )
-                    .unwrap();
-                front_end_state_rendering
-                    .borrow_mut()
-                    .tile_canvas
-                    .copy(&tile_texture, None, None)
-                    .unwrap();
-                front_end_state_rendering.borrow_mut().tile_canvas.present();
-            }
-        }
-
-        frame_counter += 1;
+        textures.update_textures(
+            frame,
+            &fps_frame.frame,
+            &mut front_end_state_rendering.borrow_mut(),
+            ppu,
+            rom,
+        );
     };
 
     let bus = Bus::new(rom, palette, 1f64, render_frame, handle_controller_input);
@@ -640,53 +704,7 @@ fn main() {
         let pause = front_end_state.borrow().actions.pause;
         handle_user_input(&mut front_end_state.borrow_mut());
 
-        if front_end_state.borrow().actions.show_tile_map {
-            front_end_state
-                .borrow_mut()
-                .tile_map_canvas
-                .window_mut()
-                .show();
-        } else {
-            front_end_state
-                .borrow_mut()
-                .tile_map_canvas
-                .window_mut()
-                .hide();
-        }
-
-        if front_end_state.borrow().actions.show_tiles {
-            front_end_state.borrow_mut().tile_canvas.window_mut().show();
-        } else {
-            front_end_state.borrow_mut().tile_canvas.window_mut().hide();
-        }
-
-        if front_end_state.borrow().actions.show_palette {
-            front_end_state
-                .borrow_mut()
-                .palette_canvas
-                .window_mut()
-                .show();
-        } else {
-            front_end_state
-                .borrow_mut()
-                .palette_canvas
-                .window_mut()
-                .hide();
-        }
-
-        if front_end_state.borrow().actions.show_sprites {
-            front_end_state
-                .borrow_mut()
-                .sprite_canvas
-                .window_mut()
-                .show();
-        } else {
-            front_end_state
-                .borrow_mut()
-                .sprite_canvas
-                .window_mut()
-                .hide();
-        }
+        front_end_state.borrow_mut().show_active_windows();
 
         //TODO: would be nicer to have a nes struct instead of doing this on the CPU
         if last_speed != front_end_state.borrow().actions.speed_multiplier {
