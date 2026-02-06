@@ -41,6 +41,6 @@ https://www.nesdev.org/NESDoc.pdf
 ## Font
 Name: omelette_font
 
-Creator: Bananattack - https://github.com/Bananattack/omelette_font
+Created By Bananattack - https://github.com/Bananattack/omelette_font
 
 Licence: https://github.com/Bananattack/omelette_font/blob/master/asset_license.md
