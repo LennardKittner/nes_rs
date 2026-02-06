@@ -64,6 +64,18 @@ impl Frame {
         let system_palette = SystemPalette::new();
         write_tile(self, x_pos, y_pos, tile, &system_palette, pallet);
     }
+    pub fn render_tile_from_chr_rom(
+        &mut self,
+        x_pos: usize,
+        y_pos: usize,
+        chr_rom: &[u8],
+        tile_n: usize,
+        pallet: &[u8; 4],
+    ) {
+        let tile = &chr_rom[(tile_n * 16)..(tile_n * 16 + 16)];
+        let system_palette = SystemPalette::new();
+        write_tile(self, x_pos, y_pos, tile, &system_palette, pallet);
+    }
 }
 
 impl Default for Frame {

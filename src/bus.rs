@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 const FRAME_DURATION: Duration = Duration::from_nanos(16666667);
 
 pub const AUDIO_BUFFER_SIZE: usize = 44100;
-type GraphicsCallback<'a> = Box<dyn FnMut(&PPU, &Frame, &FPSFrame, &Rom) + 'a>;
+type GraphicsCallback<'a> = Box<dyn FnMut(&PPU, &Frame, u32, &Rom) + 'a>;
 type ControllerCallback<'a> = Box<dyn FnMut(&mut Controller, &mut Controller) + 'a>;
 
 pub struct Bus<'a> {
@@ -23,7 +23,6 @@ pub struct Bus<'a> {
     ppu: PPU,
     apu: Option<APU>,
     frame: Frame,
-    fps_frame: FPSFrame,
     scanline_buffers: [Scanline; 2],
     current_scanline_buffer: usize,
     last_scanline: i32,
@@ -36,6 +35,7 @@ pub struct Bus<'a> {
     last_frame: Instant,
     rendering_overhead: RollingAvg<u64>,
     last_60_frames: Instant,
+    current_fps: u32,
     frame_counter: u64,
     desired_frame_duration: Duration,
     pub audio_ring_buffer: Arc<Mutex<RingBuffer<f32, AUDIO_BUFFER_SIZE>>>, // 1s of audio
@@ -50,7 +50,7 @@ impl<'a> Bus<'a> {
         controller_callback: C1F,
     ) -> Bus<'a>
     where
-        GF: FnMut(&PPU, &Frame, &FPSFrame, &Rom) + 'a,
+        GF: FnMut(&PPU, &Frame, u32, &Rom) + 'a,
         C1F: FnMut(&mut Controller, &mut Controller) + 'a,
     {
         let ppu = PPU::new(system_palette);
@@ -66,7 +66,6 @@ impl<'a> Bus<'a> {
             ppu,
             apu: Some(APU::new()),
             frame: Frame::default(),
-            fps_frame: FPSFrame::new(0, 0xA, [0x0F, 0x30, 0x21, 0x0F]),
             scanline_buffers: [Scanline::new(), Scanline::new()],
             current_scanline_buffer: 0,
             last_scanline: 0,
@@ -77,6 +76,7 @@ impl<'a> Bus<'a> {
             last_frame: Instant::now(),
             rendering_overhead: RollingAvg::new(60),
             last_60_frames: Instant::now(),
+            current_fps: 0,
             frame_counter: 0,
             desired_frame_duration: FRAME_DURATION.mul_f64(speed_multiplier.inv()),
             audio_ring_buffer: Arc::new(Mutex::new(RingBuffer::new())),
@@ -132,7 +132,7 @@ impl<'a> Bus<'a> {
     }
 
     pub fn manual_re_render(&mut self) {
-        (self.graphics_callback)(&self.ppu, &self.frame, &self.fps_frame, &self.rom);
+        (self.graphics_callback)(&self.ppu, &self.frame, self.current_fps, &self.rom);
     }
 
     pub fn tick(&mut self, cycles: u8) {
@@ -177,14 +177,12 @@ impl<'a> Bus<'a> {
             }
 
             if self.frame_counter.is_multiple_of(60) {
-                let fps = (60f64 / self.last_60_frames.elapsed().as_secs_f64()) as usize;
+                self.current_fps = (60f64 / self.last_60_frames.elapsed().as_secs_f64()) as u32;
                 self.last_60_frames = Instant::now();
-                self.fps_frame
-                    .update(&self.rom, 1, fps, self.ppu.get_universal_background_color());
             }
 
             let rendering_start = Instant::now();
-            (self.graphics_callback)(&self.ppu, &self.frame, &self.fps_frame, &self.rom);
+            (self.graphics_callback)(&self.ppu, &self.frame, self.current_fps, &self.rom);
             (self.controller_callback)(&mut self.controller_1, &mut self.controller_2);
             let overhead = rendering_start.elapsed().as_nanos() as u64;
             self.rendering_overhead.push(overhead);

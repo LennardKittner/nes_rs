@@ -287,7 +287,7 @@ impl<'a> Textures<'a> {
             sprite_texture,
             nametable_textures,
             frame_buffer: Frame::default(),
-            fps_frame: FPSFrame::new(0, 0xA, [0x0F, 0x30, 0x21, 0x0F]),
+            fps_frame: FPSFrame::new(16, 33, [0x30, 0x30, 0x30, 0x30]),
             system_palette,
             frame_counter: 0,
         }
@@ -300,6 +300,7 @@ impl<'a> Textures<'a> {
         front_end_state: &mut FrontEndState,
         ppu: &PPU,
         rom: &Rom,
+        font_chr_rom: &[u8],
     ) {
         self.main_texture
             .update(None, &emulation_frame.data, emulation_frame.width * 3)
@@ -310,8 +311,11 @@ impl<'a> Textures<'a> {
             .unwrap();
 
         if front_end_state.actions.show_fps {
-            self.fps_frame
-                .update(rom, 1, fps as usize, ppu.get_universal_background_color());
+            self.fps_frame.update(
+                font_chr_rom,
+                fps as usize,
+                ppu.get_universal_background_color(),
+            );
             self.fps_texture
                 .update(
                     None,
@@ -665,6 +669,8 @@ fn main() {
         SystemPalette::new()
     };
 
+    let font_chr_rom = include_bytes!("../om_thick_plain_nes.chr");
+
     let mut textures = Textures::new(&texture_creators, palette.clone());
 
     let handle_controller_input =
@@ -689,6 +695,7 @@ fn main() {
             &mut front_end_state_rendering.borrow_mut(),
             ppu,
             rom,
+            font_chr_rom,
         );
     };
 

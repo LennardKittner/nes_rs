@@ -36,3 +36,11 @@ https://www.oxyron.de/html/opcodes02.html
 https://forums.nesdev.org/viewtopic.php?t=20019
 
 https://www.nesdev.org/NESDoc.pdf
+
+# Attributions
+## Font
+Name: omelette_font
+
+Creator: Bananattack - https://github.com/Bananattack/omelette_font
+
+Licence: https://github.com/Bananattack/omelette_font/blob/master/asset_license.md
