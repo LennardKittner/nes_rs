@@ -230,6 +230,7 @@ struct Textures<'a> {
     nametable_textures: Vec<Texture<'a>>,
 
     frame_buffer: Frame,
+    fps_frame: FPSFrame,
     frame_counter: u32,
     system_palette: SystemPalette,
 }
@@ -286,6 +287,7 @@ impl<'a> Textures<'a> {
             sprite_texture,
             nametable_textures,
             frame_buffer: Frame::default(),
+            fps_frame: FPSFrame::new(0, 0xA, [0x0F, 0x30, 0x21, 0x0F]),
             system_palette,
             frame_counter: 0,
         }
@@ -294,7 +296,7 @@ impl<'a> Textures<'a> {
     fn update_textures(
         &mut self,
         emulation_frame: &Frame,
-        fps_frame: &Frame,
+        fps: u32,
         front_end_state: &mut FrontEndState,
         ppu: &PPU,
         rom: &Rom,
@@ -308,8 +310,14 @@ impl<'a> Textures<'a> {
             .unwrap();
 
         if front_end_state.actions.show_fps {
+            self.fps_frame
+                .update(rom, 1, fps as usize, ppu.get_universal_background_color());
             self.fps_texture
-                .update(None, &fps_frame.data, fps_frame.width * 3)
+                .update(
+                    None,
+                    &self.fps_frame.frame.data,
+                    self.fps_frame.frame.width * 3,
+                )
                 .unwrap();
             front_end_state
                 .main_canvas
@@ -674,11 +682,10 @@ fn main() {
             }
         };
 
-    //TODO: move fps rendering out of bus
-    let render_frame = move |ppu: &PPU, frame: &Frame, fps_frame: &FPSFrame, rom: &Rom| {
+    let render_frame = move |ppu: &PPU, frame: &Frame, fps: u32, rom: &Rom| {
         textures.update_textures(
             frame,
-            &fps_frame.frame,
+            fps,
             &mut front_end_state_rendering.borrow_mut(),
             ppu,
             rom,
