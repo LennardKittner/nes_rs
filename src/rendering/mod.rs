@@ -23,7 +23,7 @@ pub fn get_bg_palette(ppu: &PPU, attribute_table: &[u8], x_pos: usize, y_pos: us
 
     let palette_start = (1 + palette_idx * 4) as usize;
     [
-        ppu.get_universal_background_color(),
+        ppu.get_universal_background_color_idx(),
         ppu.read_palette_table(palette_start),
         ppu.read_palette_table(palette_start + 1),
         ppu.read_palette_table(palette_start + 2),
@@ -55,6 +55,7 @@ pub fn write_tile(
 }
 
 //TODO: maybe extract rendering loop
+//TODO: maybe move into ppu
 pub fn render_bg(ppu: &mut PPU, rom: &Rom, scanline: &mut Scanline) {
     let (main_name_table, second_name_table) = match (
         rom.get_mirroring_mode(),
@@ -90,9 +91,7 @@ pub fn render_bg(ppu: &mut PPU, rom: &Rom, scanline: &mut Scanline) {
         let tile = rom.read_tile_chr_rom(bank + tile_idx * 16);
         if !ppu.show_background_left() && tile_x == 0 || !ppu.show_background() {
             for x in (0..8).rev() {
-                let rgb = ppu.get_color_from_current_system_palette(
-                    ppu.get_universal_background_color() as usize,
-                );
+                let rgb = ppu.get_universal_background_color();
                 let pixel_x = tile_x * 8 + x;
                 if pixel_x >= shift_x {
                     scanline.data[pixel_x - shift_x].background_color = BackgroundColor {
@@ -133,9 +132,7 @@ pub fn render_bg(ppu: &mut PPU, rom: &Rom, scanline: &mut Scanline) {
         let palette = get_bg_palette(ppu, attribute_table, tile_x, tile_y);
         if !ppu.show_background_left() && tile_x == 0 || !ppu.show_background() {
             for x in (0..8).rev() {
-                let rgb = ppu.get_color_from_current_system_palette(
-                    ppu.get_universal_background_color() as usize,
-                );
+                let rgb = ppu.get_universal_background_color();
                 let pixel_x = tile_x * 8 + x;
                 if pixel_x < shift_x && pixel_x + (256 - shift_x) < 256 {
                     scanline.data[pixel_x + (256 - shift_x)].background_color = BackgroundColor {

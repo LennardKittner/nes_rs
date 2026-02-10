@@ -314,7 +314,7 @@ impl<'a> Textures<'a> {
             self.fps_frame.update(
                 font_chr_rom,
                 fps as usize,
-                ppu.get_universal_background_color(),
+                ppu.get_universal_background_color_idx(),
             );
             self.fps_texture
                 .update(
@@ -340,7 +340,7 @@ impl<'a> Textures<'a> {
                 .iter_mut()
                 .enumerate()
                 .for_each(|(i, texture)| {
-                    render_nametable(ppu, &rom, i, &mut self.frame_buffer, &self.system_palette);
+                    render_nametable(ppu, rom, i, &mut self.frame_buffer, &self.system_palette);
                     texture
                         .update(None, &self.frame_buffer.data, self.frame_buffer.width * 3)
                         .unwrap()
@@ -355,7 +355,7 @@ impl<'a> Textures<'a> {
                     let y: i32 = if i < 2 { 0 } else { 240 };
                     front_end_state
                         .tile_map_canvas
-                        .copy(&texture, None, Some(sdl2::rect::Rect::new(x, y, 256, 240)))
+                        .copy(texture, None, Some(sdl2::rect::Rect::new(x, y, 256, 240)))
                         .unwrap()
                 });
             front_end_state.tile_map_canvas.present();
@@ -394,10 +394,7 @@ impl<'a> Textures<'a> {
         }
 
         if front_end_state.actions.show_sprites {
-            self.frame_buffer
-                .fill(ppu.get_color_from_current_system_palette(
-                    ppu.get_universal_background_color() as usize,
-                ));
+            self.frame_buffer.fill(ppu.get_universal_background_color());
             render_oam_table(ppu, rom, &mut self.frame_buffer);
             self.sprite_texture
                 .update(
@@ -411,10 +408,7 @@ impl<'a> Textures<'a> {
                     self.frame_buffer.width * 3,
                 )
                 .unwrap();
-            self.frame_buffer
-                .fill(ppu.get_color_from_current_system_palette(
-                    ppu.get_universal_background_color() as usize,
-                ));
+            self.frame_buffer.fill(ppu.get_universal_background_color());
             render_oam_with_pos(ppu, rom, &mut self.frame_buffer);
             self.sprite_texture
                 .update(
@@ -446,7 +440,7 @@ impl<'a> Textures<'a> {
                 let num_tiles = rom.chr_rom_len() / 16;
                 for i in 0..num_tiles {
                     self.frame_buffer
-                        .render_tile((i % 32) * 8, (i / 32) * 8, &rom, 0, i, &palette);
+                        .render_tile((i % 32) * 8, (i / 32) * 8, rom, 0, i, &palette);
                 }
                 let num_rows = num_tiles * 8 / self.frame_buffer.width;
                 self.tile_texture

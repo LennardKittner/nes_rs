@@ -1,8 +1,7 @@
 use crate::apu::APU;
 use crate::controller::Controller;
 use crate::ppu::palette::SystemPalette;
-use crate::ppu::{PPU, PRE_RENDER_SCNALINE};
-use crate::rendering::fps_frame::FPSFrame;
+use crate::ppu::{PPU, PRE_RENDER_SCNALINE, VBLANK_START};
 use crate::rendering::{frame::Frame, scanline::Scanline};
 use crate::ring_buffer::RingBuffer;
 use crate::rolling_avg::RollingAvg;
@@ -155,7 +154,7 @@ impl<'a> Bus<'a> {
             return;
         }
 
-        if next_scanline != self.last_scanline && next_scanline <= 240 {
+        if next_scanline != self.last_scanline && next_scanline < VBLANK_START {
             self.scanline_buffers[self.current_scanline_buffer]
                 .write_scanline(&mut self.frame, next_scanline as usize);
             self.last_scanline = next_scanline;

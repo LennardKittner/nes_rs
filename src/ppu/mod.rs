@@ -18,13 +18,13 @@ use crate::ppu::status::StatusRegister;
 use crate::ppu::t_register::TRegister;
 use crate::rendering::frame::SCREEN_WIDTH;
 use crate::rendering::render_bg;
-use crate::rendering::scanline::{Scanline, SpriteColor};
+use crate::rendering::scanline::{BackgroundColor, Scanline, SpriteColor};
 use crate::rom::{Mirroring, Rom};
 use std::cmp::{max, min};
 use std::ops::Range;
 
-const VBLANK_START: i32 = 241;
-const LAST_SCANLINE: i32 = 261;
+pub const VBLANK_START: i32 = 240;
+pub const LAST_SCANLINE: i32 = 261;
 pub const PRE_RENDER_SCNALINE: i32 = -1;
 const CYCLES_PER_SCANLINE: usize = 341;
 const DO_NOT_TRIGGER_OVERFLOW: usize = 999;
@@ -240,15 +240,31 @@ impl PPU {
         }
 
         if self.cycles >= CYCLES_PER_SCANLINE {
-            self.address_register
-                .load_x_from(&self.temporary_address_register);
+            if (PRE_RENDER_SCNALINE..VBLANK_START).contains(&self.scan_line) {
+                if self.show_background() || self.show_sprites() {
+                    self.address_register
+                        .load_x_from(&self.temporary_address_register);
+                }
+            }
 
             self.cycles -= CYCLES_PER_SCANLINE;
             self.scan_line += 1;
             self.first_touch_scanline = true;
 
-            if self.scan_line < VBLANK_START {
-                render_bg(self, rom, &mut scanline_buffers[current_buffer ^ 1]);
+            if self.scan_line > PRE_RENDER_SCNALINE && self.scan_line < VBLANK_START {
+                if self.show_background() {
+                    render_bg(self, rom, &mut scanline_buffers[current_buffer]);
+                } else {
+                    scanline_buffers[current_buffer]
+                        .data
+                        .iter_mut()
+                        .for_each(|pixel| {
+                            pixel.background_color = BackgroundColor {
+                                color: self.get_universal_background_color(),
+                                transparent: true,
+                            }
+                        })
+                }
             } else if self.scan_line == VBLANK_START {
                 self.status_register.set_vertical_blank(true);
             } else if self.scan_line == LAST_SCANLINE {
@@ -257,8 +273,11 @@ impl PPU {
                 self.first_touch_frame = true;
                 self.sprite_zero_was_hit_this_frame = false;
                 self.status_register.set_sprite_overflow(false);
-                self.address_register
-                    .load_y_from(&self.temporary_address_register);
+
+                if self.show_background() || self.show_sprites() {
+                    self.address_register
+                        .load_y_from(&self.temporary_address_register);
+                }
                 self.frame_counter += 1;
             }
         }
@@ -270,6 +289,13 @@ impl PPU {
 
         if self.control_register.get_sprite_size() == 16 {
             println!("Sprite size: 16");
+        }
+
+        if (0..VBLANK_START).contains(&self.scan_line) && self.show_background()
+            || self.show_sprites()
+        {
+            self.address_register
+                .load_x_from(&self.temporary_address_register);
         }
 
         self.scan_line
@@ -309,8 +335,8 @@ impl PPU {
         for sprite_idx in (0..self.oam_data.len()).step_by(4) {
             let raw = &self.oam_data[sprite_idx..sprite_idx + 4];
             if raw[y_cor_offset] < (VBLANK_START - 1) as u8
-                && scan_line > raw[y_cor_offset] as u16
-                && scan_line <= (raw[y_cor_offset] + 8) as u16
+                && scan_line >= raw[y_cor_offset] as u16
+                && scan_line < (raw[y_cor_offset] + 8) as u16
             {
                 self.sprite_buffer[current_sprite_slot] =
                     Sprite::new(raw, sprite_idx == 0).unwrap();
@@ -423,7 +449,8 @@ impl PPU {
     }
 
     pub fn write_to_data(&mut self, data: u8, rom: &mut Rom) {
-        let addr = self.address_register.data_alt;
+        let addr = self.address_register.v & 0x3FFF;
+
         let mirroring = rom.get_mirroring_mode();
         match addr {
             0x0000..=0x1FFF => rom.write_chr_ram(addr, data),
@@ -434,28 +461,10 @@ impl PPU {
             0x3F00..=0x3FFF => {
                 self.palette_table[(self.address_to_pattern_table_index(addr)) as usize] = data
             }
-            _ => println!(
-                "unexpected access to mirrored space, requested = {:x}",
-                self.address_register.data_alt
-            ),
+            _ => unreachable!(),
         }
         self.address_register
-            .increment_alt(self.control_register.get_vram_increment());
-
-        // I am unsure why but using the address register that uses the t register to access the pallet table causes problems.
-        // match self.address_register.data_alt {
-        //     0x3F10 | 0x3F14 | 0x3F18 | 0x3F1C => {
-        //         self.palette_table[(self.address_register.data_alt - 0x10 - 0x3F00) as usize] = data
-        //     }
-        //     0x3F00..=0x3FFF => {
-        //         self.palette_table[(self
-        //             .address_to_pattern_table_index(self.address_register.data_alt))
-        //             as usize] = data
-        //     }
-        //     _ => (),
-        // }
-        // self.address_register
-        //     .increment_alt(self.control_register.get_vram_increment());
+            .increment(self.control_register.get_vram_increment());
     }
 
     pub fn read_palette_table(&self, idx: usize) -> u8 {
@@ -468,9 +477,9 @@ impl PPU {
     }
 
     pub fn read_data(&mut self, rom: &Rom) -> u8 {
-        let addr = self.address_register.data_alt;
+        let addr = self.address_register.v & 0x3FFF;
         self.address_register
-            .increment_alt(self.control_register.get_vram_increment());
+            .increment(self.control_register.get_vram_increment());
 
         let mirroring = rom.get_mirroring_mode();
         match addr {
@@ -496,12 +505,12 @@ impl PPU {
                     self.vram[self.mirror_vram_addr(addr - 0x1000, mirroring) as usize];
                 self.read_palette_table((addr - 0x3F00) as usize)
             }
-            _ => panic!("unexpected access to mirrored space, requested = {}", addr),
+            _ => unreachable!(),
         }
     }
 
     pub fn trace_read_data(&self) -> u8 {
-        let addr = self.address_register.data_alt;
+        let addr = self.address_register.v;
 
         match addr {
             0x0000..=0x1FFF => self.internal_data_buffer,
@@ -521,17 +530,6 @@ impl PPU {
         if self.write_toggle {
             self.address_register
                 .update_from(&self.temporary_address_register);
-        }
-
-        self.address_register.data_alt = if self.write_toggle {
-            (self.address_register.data_alt & 0xFF00) | value as u16
-        } else {
-            (self.address_register.data_alt & 0x00FF) | ((value as u16) << 8)
-        };
-
-        // mirror down address above 0x3FFF
-        if self.address_register.data_alt > 0x3FFF {
-            self.address_register.data_alt &= 0b11_1111_1111_1111;
         }
 
         self.write_toggle = !self.write_toggle;
@@ -598,8 +596,14 @@ impl PPU {
         self.address_register.get_tile_y() as u8
     }
 
-    pub fn get_universal_background_color(&self) -> u8 {
+    pub fn get_universal_background_color_idx(&self) -> u8 {
         self.read_palette_table(0)
+    }
+
+    pub fn get_universal_background_color(&self) -> (u8, u8, u8) {
+        self.get_color_from_current_system_palette(
+            self.get_universal_background_color_idx() as usize
+        )
     }
 
     pub fn show_sprites(&self) -> bool {
@@ -642,7 +646,7 @@ pub mod test {
     use super::*;
 
     pub fn new_ppu() -> PPU {
-        PPU::new(Mirroring::Horizontal, SystemPalette::new())
+        PPU::new(SystemPalette::new())
     }
 
     #[test]
@@ -667,7 +671,7 @@ pub mod test {
         ppu.write_to_addr(0x05);
 
         ppu.read_data(&rom); //load_into_buffer
-        assert_eq!(ppu.address_register.data_alt, 0x2306);
+        assert_eq!(ppu.address_register.v, 0x2306);
         assert_eq!(ppu.read_data(&rom), 0x66);
     }
 
@@ -710,7 +714,7 @@ pub mod test {
     //   [0x2800 B ] [0x2C00 b ]
     #[test]
     fn test_vram_horizontal_mirror() {
-        let mut rom = Rom::new_blank_test_rom(0);
+        let mut rom = Rom::new_blank_test_rom_with_mirroring(0, Mirroring::Horizontal);
         let mut ppu = new_ppu();
         ppu.write_to_addr(0x24);
         ppu.write_to_addr(0x05);
@@ -740,8 +744,8 @@ pub mod test {
     //   [0x2800 a ] [0x2C00 b ]
     #[test]
     fn test_vram_vertical_mirror() {
-        let mut rom = Rom::new_blank_test_rom(0);
-        let mut ppu = PPU::new(Mirroring::Vertical, SystemPalette::new());
+        let mut rom = Rom::new_blank_test_rom_with_mirroring(0, Mirroring::Vertical);
+        let mut ppu = PPU::new(SystemPalette::new());
 
         ppu.write_to_addr(0x20);
         ppu.write_to_addr(0x05);

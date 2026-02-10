@@ -27,7 +27,7 @@ impl Sprite {
     }
 
     pub fn get_y(&self) -> usize {
-        self.y_pos as usize + 1
+        self.y_pos as usize
     }
 
     pub fn get_pattern_index(&self) -> usize {

@@ -240,6 +240,7 @@ impl Rom {
     }
 
     pub fn mem_write(&mut self, addr: u16, data: u8) {
+        //TODO: do not subtract offset: should make code simpler
         match addr {
             CARTRIDGE_RAM_START..=CARTRIDGE_RAM_END => {
                 self.write_cartridge_ram(addr - 0x6000, data)
@@ -263,7 +264,10 @@ impl Rom {
     }
 
     #[cfg(test)]
-    pub fn new_blank_test_rom(entry_point_address: u16) -> Rom {
+    pub fn new_blank_test_rom_with_mirroring(
+        entry_point_address: u16,
+        mirroring: Mirroring,
+    ) -> Rom {
         let mut prg_rom = vec![0; PRG_ROM_PAGE_SIZE * 4];
         prg_rom[(RESET_INTERRUPT.interrupt_vector - 0x8000) as usize] = entry_point_address as u8;
         prg_rom[(RESET_INTERRUPT.interrupt_vector - 0x8000 + 1) as usize] =
@@ -272,7 +276,7 @@ impl Rom {
             prg_rom_size: prg_rom.len(),
             prg_ram_size: 0,
             chr_rom_size: CHR_ROM_PAGE_SIZE * 4,
-            mirroring: Mirroring::Vertical,
+            mirroring,
             has_battery_backed_ram: false,
             has_chr_ram: true,
             has_bus_conflicts: false,
@@ -288,9 +292,14 @@ impl Rom {
                 prg_rom,
                 vec![0; CHR_ROM_PAGE_SIZE * 4],
                 true,
-                Mirroring::Vertical,
+                mirroring,
             )),
         }
+    }
+
+    #[cfg(test)]
+    pub fn new_blank_test_rom(entry_point_address: u16) -> Rom {
+        Self::new_blank_test_rom_with_mirroring(entry_point_address, Mirroring::Vertical)
     }
 
     pub fn new(raw: &[u8]) -> Result<Self, String> {
