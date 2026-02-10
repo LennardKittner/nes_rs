@@ -39,6 +39,7 @@ pub fn page_cross(addr1: u16, addr2: u16) -> bool {
     (addr1 & 0xFF00) != (addr2 & 0xFF00)
 }
 
+//TODO: cycle accurate CPU by adding ticks here
 impl AddressingMode {
     /// get the address of an operand
     /// returns none for AddressingMode::Accumulator | AddressingMode::NonAddressing
