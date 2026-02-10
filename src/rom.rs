@@ -6,6 +6,7 @@ use crate::mappers::{create_mapper, Mapper};
 use std::cmp::min;
 use std::fs::File;
 use std::io::Read;
+use std::usize;
 
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub enum Mirroring {
@@ -176,11 +177,31 @@ impl NES2Header {
         let mapper_number = mapper_number | (((raw[8] & 0xF) as usize) << 8);
         let sub_mapper_number = ((raw[9] & 0xF0) as usize) >> 4;
 
-        let prg_ram_size = 64 << ((raw[10] & 0xF) as usize);
-        let prg_nvram_size = 64 << (((raw[10] & 0xF0) as usize) >> 4);
+        let prg_ram_size_raw = raw[10] & 0xF;
+        let prg_ram_size = if prg_ram_size_raw == 0 {
+            0
+        } else {
+            64 << (prg_ram_size_raw as usize)
+        };
+        let prg_nvram_size_raw = (raw[10] & 0xF0) >> 4;
+        let prg_nvram_size = if prg_ram_size_raw == 0 {
+            0
+        } else {
+            64 << (prg_nvram_size_raw as usize)
+        };
 
-        let chr_ram_size = 64 << ((raw[11] & 0xF) as usize);
-        let chr_nvram_size = 64 << (((raw[11] & 0xF0) as usize) >> 4);
+        let chr_ram_size_raw = raw[11] & 0xF;
+        let chr_ram_size = if chr_ram_size_raw == 0 {
+            0
+        } else {
+            64 << (chr_ram_size_raw as usize)
+        };
+        let chr_nvram_size = (raw[11] & 0xF0) >> 4;
+        let chr_nvram_size = if chr_ram_size_raw == 0 {
+            0
+        } else {
+            64 << (chr_nvram_size as usize)
+        };
 
         let region = match raw[12] & 0b11 {
             0 => Region::NTSC,
