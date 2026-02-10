@@ -5,6 +5,21 @@ pub struct RingBuffer<T: Default + Copy, const BUFFER_SIZE: usize> {
     prev: T,
 }
 
+impl<T: Default + Copy, const BUFFER_SIZE: usize> Iterator for RingBuffer<T, BUFFER_SIZE> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.writer_head > self.reader_head {
+            let sample = self.buffer[self.reader_head % BUFFER_SIZE];
+            self.reader_head += 1;
+            self.prev = sample;
+            Some(sample)
+        } else {
+            None
+        }
+    }
+}
+
 impl<T: Default + Copy, const BUFFER_SIZE: usize> RingBuffer<T, BUFFER_SIZE> {
     pub fn new() -> RingBuffer<T, BUFFER_SIZE> {
         RingBuffer {
@@ -18,21 +33,6 @@ impl<T: Default + Copy, const BUFFER_SIZE: usize> RingBuffer<T, BUFFER_SIZE> {
     pub fn push(&mut self, data: T) {
         self.buffer[self.writer_head % BUFFER_SIZE] = data;
         self.writer_head += 1;
-    }
-
-    pub fn next(&mut self) -> Option<T> {
-        if self.writer_head > self.reader_head {
-            let sample = self.buffer[self.reader_head % BUFFER_SIZE];
-            self.reader_head += 1;
-            self.prev = sample;
-            Some(sample)
-        } else {
-            Some(self.prev)
-        }
-    }
-
-    pub fn has_next(&self) -> bool {
-        self.writer_head > self.reader_head
     }
 }
 

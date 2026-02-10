@@ -76,20 +76,23 @@ struct Args {
 }
 
 struct AudioWrapper {
+    last_sample: f32,
     #[allow(clippy::type_complexity)]
-    func: Box<dyn FnMut(&mut [f32]) + Send>,
+    func: Box<dyn FnMut(&mut f32, &mut [f32]) + Send>,
 }
 
 impl AudioCallback for AudioWrapper {
     type Channel = f32;
     fn callback(&mut self, out: &mut [f32]) {
-        (self.func)(out);
+        (self.func)(&mut self.last_sample, out);
     }
 }
 
+type ConcurrentWavWriter = Option<Arc<Mutex<Option<WavWriter<BufWriter<File>>>>>>;
+
 struct AudioDeviceWrapper {
     audio_device: AudioDevice<AudioWrapper>,
-    wav_writer: Option<Arc<Mutex<Option<WavWriter<BufWriter<File>>>>>>,
+    wav_writer: ConcurrentWavWriter,
 }
 
 impl AudioDeviceWrapper {
@@ -106,10 +109,12 @@ impl AudioDeviceWrapper {
         let audio_device = front_end_state
             .audio_subsystem
             .open_playback(None, &desired_spec, |_spec| AudioWrapper {
-                func: Box::new(move |out: &mut [f32]| {
+                last_sample: 0f32,
+                func: Box::new(move |last_sample, out: &mut [f32]| {
                     let mut buf = audio_buffer.lock().unwrap();
                     for x in out {
-                        let sample = buf.next().unwrap_or(0f32);
+                        let sample = buf.next().unwrap_or(*last_sample);
+                        *last_sample = sample;
                         *x = sample;
                     }
                 }),
@@ -148,11 +153,13 @@ impl AudioDeviceWrapper {
         let audio_device = front_end_state
             .audio_subsystem
             .open_playback(None, &desired_spec, |_spec| AudioWrapper {
-                func: Box::new(move |out: &mut [f32]| {
+                last_sample: 0f32,
+                func: Box::new(move |last_sample, out: &mut [f32]| {
                     let mut buf = audio_buffer.lock().unwrap();
                     let mut wav = wav_clone.lock().unwrap();
                     for x in out {
-                        let sample = buf.next().unwrap_or(0f32);
+                        let sample = buf.next().unwrap_or(*last_sample);
+                        *last_sample = sample;
                         *x = sample;
                         let sample_i16 = (sample.clamp(-1.0, 1.0) * i16::MAX as f32) as i16;
                         wav.as_mut().unwrap().write_sample(sample_i16).unwrap();
