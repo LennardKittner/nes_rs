@@ -57,6 +57,9 @@ use std::time::Duration;
 const PALETTE_VIEWER_DIMENSIONS: (u32, u32) = (4 * 8, 8 * 8);
 const SPRITE_TABLE_DIMENSIONS: (u32, u32) = (8 * 8, 8 * 8);
 const SPRITE_VIEW_DIMENSIONS: (u32, u32) = (SPRITE_TABLE_DIMENSIONS.0 + 256, 240);
+const GRID_PIXEL_IN_NES_PIXEL: u32 = 4;
+const FONT_NUMBERS_OFFSET: usize = 16;
+const FONT_LETTERS_OFFSET: usize = 33;
 
 /// A NES emulator
 #[derive(Parser, Debug)]
@@ -242,6 +245,8 @@ struct Textures<'a> {
     sprite_texture: Texture<'a>,
     nametable_textures: Vec<Texture<'a>>,
     nametable_grid_texture: Texture<'a>,
+    sprite_table_grid_texture: Texture<'a>,
+    sprite_view_grid_texture: Texture<'a>,
 
     frame_buffer: Frame,
     fps_frame: FPSFrame,
@@ -360,10 +365,28 @@ impl<'a> Textures<'a> {
         let nametable_grid_texture = create_grid_texture(
             &mut front_end_state.tile_map_canvas,
             &texture_creators.tile_map_creator,
-            (SCREEN_WIDTH * 2 * 2) as u32,
-            (SCREEN_HEIGHT * 2 * 2) as u32,
-            (TILE_WIDTH * 2) as u32,
+            SCREEN_WIDTH as u32 * 2 * GRID_PIXEL_IN_NES_PIXEL,
+            SCREEN_HEIGHT as u32 * 2 * GRID_PIXEL_IN_NES_PIXEL,
+            TILE_WIDTH as u32 * GRID_PIXEL_IN_NES_PIXEL,
             true,
+        );
+
+        let sprite_table_grid_texture = create_grid_texture(
+            &mut front_end_state.sprite_canvas,
+            &texture_creators.sprite_creator,
+            SPRITE_TABLE_DIMENSIONS.0 * GRID_PIXEL_IN_NES_PIXEL,
+            SPRITE_TABLE_DIMENSIONS.1 * GRID_PIXEL_IN_NES_PIXEL,
+            TILE_WIDTH as u32 * GRID_PIXEL_IN_NES_PIXEL,
+            false,
+        );
+
+        let sprite_view_grid_texture = create_grid_texture(
+            &mut front_end_state.sprite_canvas,
+            &texture_creators.sprite_creator,
+            SCREEN_WIDTH as u32 * GRID_PIXEL_IN_NES_PIXEL,
+            SCREEN_HEIGHT as u32 * GRID_PIXEL_IN_NES_PIXEL,
+            TILE_WIDTH as u32 * GRID_PIXEL_IN_NES_PIXEL,
+            false,
         );
 
         Textures {
@@ -374,8 +397,14 @@ impl<'a> Textures<'a> {
             sprite_texture,
             nametable_textures,
             nametable_grid_texture,
+            sprite_table_grid_texture,
+            sprite_view_grid_texture,
             frame_buffer: Frame::default(),
-            fps_frame: FPSFrame::new(16, 33, [0x30, 0x30, 0x30, 0x30]),
+            fps_frame: FPSFrame::new(
+                FONT_NUMBERS_OFFSET,
+                FONT_LETTERS_OFFSET,
+                [0x30, 0x30, 0x30, 0x30],
+            ),
             system_palette,
             frame_counter: 0,
         }
@@ -507,7 +536,7 @@ impl<'a> Textures<'a> {
                         0,
                         0,
                         SPRITE_TABLE_DIMENSIONS.0,
-                        SPRITE_TABLE_DIMENSIONS.0,
+                        SPRITE_TABLE_DIMENSIONS.1,
                     )),
                     &self.frame_buffer.data,
                     self.frame_buffer.width * 3,
@@ -520,8 +549,8 @@ impl<'a> Textures<'a> {
                     Some(sdl2::rect::Rect::new(
                         SPRITE_TABLE_DIMENSIONS.0 as i32,
                         0,
-                        256,
-                        240,
+                        SCREEN_WIDTH as u32,
+                        SCREEN_HEIGHT as u32,
                     )),
                     &self.frame_buffer.data,
                     self.frame_buffer.width * 3,
@@ -531,6 +560,39 @@ impl<'a> Textures<'a> {
                 .sprite_canvas
                 .copy(&self.sprite_texture, None, None)
                 .unwrap();
+
+            if front_end_state.actions.show_grid {
+                front_end_state
+                    .sprite_canvas
+                    .copy(
+                        &self.sprite_view_grid_texture,
+                        None,
+                        Some(sdl2::rect::Rect::new(
+                            SPRITE_TABLE_DIMENSIONS.0 as i32,
+                            0,
+                            SCREEN_WIDTH as u32,
+                            SCREEN_HEIGHT as u32,
+                        )),
+                    )
+                    .unwrap();
+            }
+
+            if front_end_state.actions.show_grid {
+                front_end_state
+                    .sprite_canvas
+                    .copy(
+                        &self.sprite_table_grid_texture,
+                        None,
+                        Some(sdl2::rect::Rect::new(
+                            0,
+                            0,
+                            SPRITE_TABLE_DIMENSIONS.0,
+                            SPRITE_TABLE_DIMENSIONS.1,
+                        )),
+                    )
+                    .unwrap();
+            }
+
             front_end_state.sprite_canvas.present();
         }
 
