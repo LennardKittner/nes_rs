@@ -60,6 +60,7 @@ const SPRITE_VIEW_DIMENSIONS: (u32, u32) = (SPRITE_TABLE_DIMENSIONS.0 + 256, 240
 const GRID_PIXEL_IN_NES_PIXEL: u32 = 2;
 const FONT_NUMBERS_OFFSET: usize = 16;
 const FONT_LETTERS_OFFSET: usize = 33;
+const BACKGROUND_COLOR: Option<(u8, u8, u8)> = Some((0x66, 0x66, 0x66));
 
 /// A NES emulator
 #[derive(Parser, Debug)]
@@ -543,7 +544,11 @@ impl<'a> Textures<'a> {
         }
 
         if front_end_state.actions.show_sprites {
-            self.frame_buffer.fill(ppu.get_universal_background_color());
+            if let Some(color) = BACKGROUND_COLOR {
+                self.frame_buffer.fill(color);
+            } else {
+                self.frame_buffer.fill(ppu.get_universal_background_color());
+            }
             render_oam_table(ppu, rom, &mut self.frame_buffer);
             self.sprite_texture
                 .update(
@@ -557,7 +562,11 @@ impl<'a> Textures<'a> {
                     self.frame_buffer.width * 3,
                 )
                 .unwrap();
-            self.frame_buffer.fill(ppu.get_universal_background_color());
+            if let Some(color) = BACKGROUND_COLOR {
+                self.frame_buffer.fill(color);
+            } else {
+                self.frame_buffer.fill(ppu.get_universal_background_color());
+            }
             render_oam_with_pos(ppu, rom, &mut self.frame_buffer);
             self.sprite_texture
                 .update(
