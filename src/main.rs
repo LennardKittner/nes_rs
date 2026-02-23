@@ -762,6 +762,23 @@ fn handle_user_input(front_end: &mut FrontEndState) {
                 keycode: Some(Keycode::Q),
                 ..
             } => front_end.actions.should_quit = true,
+            Event::Window {
+                timestamp: _,
+                window_id,
+                win_event: WindowEvent::Close,
+            } => {
+                if front_end.main_canvas.window().id() == window_id {
+                    front_end.actions.should_quit = true;
+                } else if front_end.tile_canvas.window().id() == window_id {
+                    front_end.actions.show_tiles = false;
+                } else if front_end.tile_map_canvas.window().id() == window_id {
+                    front_end.actions.show_tile_map = false;
+                } else if front_end.sprite_canvas.window().id() == window_id {
+                    front_end.actions.show_sprites = false;
+                } else if front_end.palette_canvas.window().id() == window_id {
+                    front_end.actions.show_palette = false;
+                }
+            }
             Event::KeyDown {
                 keycode: Some(Keycode::M),
                 ..
