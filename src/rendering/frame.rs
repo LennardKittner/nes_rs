@@ -4,6 +4,10 @@ use crate::rom::Rom;
 
 pub const SCREEN_WIDTH: usize = 256;
 pub const SCREEN_HEIGHT: usize = 240;
+pub const TILE_WIDTH: usize = 8;
+pub const TILE_HEIGHT: usize = 8;
+pub const SCREEN_WIDTH_IN_TILES: usize = SCREEN_WIDTH / TILE_WIDTH;
+pub const SCREEN_HEIGHT_IN_TILES: usize = SCREEN_HEIGHT / TILE_HEIGHT;
 
 pub struct Frame {
     pub data: Vec<u8>,

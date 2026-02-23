@@ -11,6 +11,7 @@ use nes_rs::rendering::fps_frame::FPSFrame;
 use nes_rs::rendering::frame::Frame;
 use nes_rs::rendering::frame::SCREEN_HEIGHT;
 use nes_rs::rendering::frame::SCREEN_WIDTH;
+use nes_rs::rendering::frame::TILE_WIDTH;
 use nes_rs::rendering::render_nametable;
 use nes_rs::rendering::render_oam_table;
 use nes_rs::rendering::render_oam_with_pos;
@@ -20,9 +21,14 @@ use nes_rs::rom::Rom;
 use sdl2::audio::AudioDevice;
 use sdl2::audio::{AudioCallback, AudioSpecDesired};
 use sdl2::event::Event;
+use sdl2::event::WindowEvent;
 use sdl2::keyboard::Keycode;
+use sdl2::pixels::Color;
 use sdl2::pixels::PixelFormatEnum;
+use sdl2::rect::Point;
+use sdl2::render::BlendMode;
 use sdl2::render::Canvas;
+use sdl2::render::ScaleMode;
 use sdl2::render::Texture;
 use sdl2::render::{TextureCreator, WindowCanvas};
 use sdl2::video::Window;
@@ -235,6 +241,7 @@ struct Textures<'a> {
     palette_texture: Texture<'a>,
     sprite_texture: Texture<'a>,
     nametable_textures: Vec<Texture<'a>>,
+    nametable_grid_texture: Texture<'a>,
 
     frame_buffer: Frame,
     fps_frame: FPSFrame,
@@ -242,8 +249,71 @@ struct Textures<'a> {
     system_palette: SystemPalette,
 }
 
+fn create_grid_texture<'a>(
+    canvas: &mut Canvas<Window>,
+    texture_creator: &'a TextureCreator<WindowContext>,
+    grid_width: u32,
+    grid_height: u32,
+    gap: u32,
+    half_way_separator: bool,
+) -> Texture<'a> {
+    let mut texture = texture_creator
+        .create_texture_target(PixelFormatEnum::RGBA8888, grid_width, grid_height)
+        .unwrap();
+    let gap = gap as i32;
+
+    canvas
+        .with_texture_canvas(&mut texture, |texture_canvas| {
+            texture_canvas.set_draw_color(Color::RGBA(0, 0, 0, 0));
+            texture_canvas.clear();
+
+            texture_canvas.set_draw_color(Color::GREEN);
+            for i in 0..(grid_width as i32 / gap) {
+                texture_canvas
+                    .draw_line(
+                        Point::new(i * gap, 0),
+                        Point::new(i * gap, grid_height as i32 - 1),
+                    )
+                    .unwrap();
+            }
+            for i in 0..(grid_height as i32 / gap) {
+                texture_canvas
+                    .draw_line(
+                        Point::new(0, i * gap),
+                        Point::new(grid_width as i32 - 1, i * gap),
+                    )
+                    .unwrap();
+            }
+            if half_way_separator {
+                texture_canvas.set_draw_color(Color::RED);
+                texture_canvas
+                    .draw_line(
+                        Point::new(0, grid_height as i32 / 2),
+                        Point::new(grid_width as i32 - 1, grid_height as i32 / 2),
+                    )
+                    .unwrap();
+
+                texture_canvas
+                    .draw_line(
+                        Point::new(grid_width as i32 / 2, 0),
+                        Point::new(grid_width as i32 / 2, grid_height as i32 - 1),
+                    )
+                    .unwrap();
+            }
+        })
+        .unwrap();
+
+    texture.set_blend_mode(BlendMode::Blend);
+    texture.set_scale_mode(ScaleMode::Nearest);
+    texture
+}
+
 impl<'a> Textures<'a> {
-    fn new(texture_creators: &'a TextureCreators, system_palette: SystemPalette) -> Textures<'a> {
+    fn new(
+        front_end_state: &mut FrontEndState,
+        texture_creators: &'a TextureCreators,
+        system_palette: SystemPalette,
+    ) -> Textures<'a> {
         let main_texture = texture_creators
             .main_creator
             .create_texture_target(PixelFormatEnum::RGB24, 256, 240)
@@ -286,6 +356,16 @@ impl<'a> Textures<'a> {
                     .unwrap(),
             );
         }
+
+        let nametable_grid_texture = create_grid_texture(
+            &mut front_end_state.tile_map_canvas,
+            &texture_creators.tile_map_creator,
+            (SCREEN_WIDTH * 2 * 2) as u32,
+            (SCREEN_HEIGHT * 2 * 2) as u32,
+            (TILE_WIDTH * 2) as u32,
+            true,
+        );
+
         Textures {
             main_texture,
             fps_texture,
@@ -293,6 +373,7 @@ impl<'a> Textures<'a> {
             palette_texture,
             sprite_texture,
             nametable_textures,
+            nametable_grid_texture,
             frame_buffer: Frame::default(),
             fps_frame: FPSFrame::new(16, 33, [0x30, 0x30, 0x30, 0x30]),
             system_palette,
@@ -358,13 +439,30 @@ impl<'a> Textures<'a> {
                 .enumerate()
                 .for_each(|(i, texture)| {
                     let i = i as i32;
-                    let x: i32 = i % 2 * 256;
-                    let y: i32 = if i < 2 { 0 } else { 240 };
+                    let x: i32 = i % 2 * SCREEN_WIDTH as i32;
+                    let y: i32 = if i < 2 { 0 } else { SCREEN_HEIGHT as i32 };
                     front_end_state
                         .tile_map_canvas
-                        .copy(texture, None, Some(sdl2::rect::Rect::new(x, y, 256, 240)))
+                        .copy(
+                            texture,
+                            None,
+                            Some(sdl2::rect::Rect::new(
+                                x * 2,
+                                y * 2,
+                                SCREEN_WIDTH as u32 * 2,
+                                SCREEN_HEIGHT as u32 * 2,
+                            )),
+                        )
                         .unwrap()
                 });
+
+            if front_end_state.actions.show_grid {
+                front_end_state
+                    .tile_map_canvas
+                    .copy(&self.nametable_grid_texture, None, None)
+                    .unwrap();
+            }
+
             front_end_state.tile_map_canvas.present();
         }
 
@@ -514,14 +612,26 @@ impl FrontEndState {
         )
         .unwrap();
 
-        let (tile_map_canvas, tile_map_creator) =
-            creates_canvas_and_texture_creator(window_tile_map, 256 * 2, 240 * 2, integer_scaling);
+        let (tile_map_canvas, tile_map_creator) = creates_canvas_and_texture_creator(
+            window_tile_map,
+            SCREEN_WIDTH as u32 * 2 * 2,
+            SCREEN_HEIGHT as u32 * 2 * 2,
+            integer_scaling,
+        );
 
-        let (tile_canvas, tile_creator) =
-            creates_canvas_and_texture_creator(window_tile, 256, 240, integer_scaling);
+        let (tile_canvas, tile_creator) = creates_canvas_and_texture_creator(
+            window_tile,
+            SCREEN_WIDTH as u32,
+            SCREEN_HEIGHT as u32,
+            integer_scaling,
+        );
 
-        let (main_canvas, main_creator) =
-            creates_canvas_and_texture_creator(window, 256, 240, integer_scaling);
+        let (main_canvas, main_creator) = creates_canvas_and_texture_creator(
+            window,
+            SCREEN_WIDTH as u32,
+            SCREEN_HEIGHT as u32,
+            integer_scaling,
+        );
 
         let (palette_canvas, palette_creator) = creates_canvas_and_texture_creator(
             window_palette,
@@ -619,6 +729,7 @@ struct Actions {
     show_palette: bool,
     show_sprites: bool,
     show_fps: bool,
+    show_grid: bool,
     save_state: bool,
     load_state: bool,
     speed_multiplier: f64,
@@ -634,6 +745,7 @@ impl Actions {
             show_palette: false,
             show_sprites: false,
             show_fps: false,
+            show_grid: false,
             save_state: false,
             load_state: false,
             speed_multiplier: 1f64,
@@ -672,7 +784,11 @@ fn main() {
 
     let font_chr_rom = include_bytes!("../om_thick_plain_nes.chr");
 
-    let mut textures = Textures::new(&texture_creators, palette.clone());
+    let mut textures = Textures::new(
+        &mut front_end_state.borrow_mut(),
+        &texture_creators,
+        palette.clone(),
+    );
 
     let handle_controller_input =
         move |controller_1: &mut Controller, controller_2: &mut Controller| {
@@ -799,6 +915,10 @@ fn handle_user_input(front_end: &mut FrontEndState) {
                 keycode: Some(Keycode::F),
                 ..
             } => front_end.actions.show_fps ^= true,
+            Event::KeyDown {
+                keycode: Some(Keycode::G),
+                ..
+            } => front_end.actions.show_grid ^= true,
             Event::KeyDown {
                 keycode: Some(Keycode::Escape),
                 ..
