@@ -57,7 +57,7 @@ use std::time::Duration;
 const PALETTE_VIEWER_DIMENSIONS: (u32, u32) = (4 * 8, 8 * 8);
 const SPRITE_TABLE_DIMENSIONS: (u32, u32) = (8 * 8, 8 * 8);
 const SPRITE_VIEW_DIMENSIONS: (u32, u32) = (SPRITE_TABLE_DIMENSIONS.0 + 256, 240);
-const GRID_PIXEL_IN_NES_PIXEL: u32 = 4;
+const GRID_PIXEL_IN_NES_PIXEL: u32 = 2;
 const FONT_NUMBERS_OFFSET: usize = 16;
 const FONT_LETTERS_OFFSET: usize = 33;
 
@@ -247,6 +247,7 @@ struct Textures<'a> {
     nametable_grid_texture: Texture<'a>,
     sprite_table_grid_texture: Texture<'a>,
     sprite_view_grid_texture: Texture<'a>,
+    tiles_grid_texture: Texture<'a>,
 
     frame_buffer: Frame,
     fps_frame: FPSFrame,
@@ -331,7 +332,11 @@ impl<'a> Textures<'a> {
 
         let tile_texture = texture_creators
             .tile_creator
-            .create_texture_target(PixelFormatEnum::RGB24, 256, 240)
+            .create_texture_target(
+                PixelFormatEnum::RGB24,
+                SCREEN_WIDTH as u32,
+                SCREEN_HEIGHT as u32,
+            )
             .unwrap();
 
         let palette_texture = texture_creators
@@ -389,6 +394,15 @@ impl<'a> Textures<'a> {
             false,
         );
 
+        let tiles_grid_texture = create_grid_texture(
+            &mut front_end_state.tile_canvas,
+            &texture_creators.tile_creator,
+            SCREEN_WIDTH as u32 * GRID_PIXEL_IN_NES_PIXEL,
+            SCREEN_HEIGHT as u32 * GRID_PIXEL_IN_NES_PIXEL,
+            TILE_WIDTH as u32 * GRID_PIXEL_IN_NES_PIXEL,
+            false,
+        );
+
         Textures {
             main_texture,
             fps_texture,
@@ -399,6 +413,7 @@ impl<'a> Textures<'a> {
             nametable_grid_texture,
             sprite_table_grid_texture,
             sprite_view_grid_texture,
+            tiles_grid_texture,
             frame_buffer: Frame::default(),
             fps_frame: FPSFrame::new(
                 FONT_NUMBERS_OFFSET,
@@ -621,6 +636,14 @@ impl<'a> Textures<'a> {
                     .tile_canvas
                     .copy(&self.tile_texture, None, None)
                     .unwrap();
+
+                if front_end_state.actions.show_grid {
+                    front_end_state
+                        .tile_canvas
+                        .copy(&self.tiles_grid_texture, None, None)
+                        .unwrap();
+                }
+
                 front_end_state.tile_canvas.present();
             }
         }
