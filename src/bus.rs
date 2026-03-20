@@ -168,7 +168,6 @@ impl<'a> Bus<'a> {
                 .desired_frame_duration
                 .checked_sub(self.last_frame.elapsed())
                 .and_then(|d| d.checked_sub(avg_overhead))
-                .map(|d| d.min(FRAME_DURATION))
                 .unwrap_or(Duration::ZERO);
 
             if sleep_duration > Duration::ZERO {
