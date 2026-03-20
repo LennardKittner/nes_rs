@@ -229,7 +229,7 @@ impl PPU {
 
         if self.first_touch_scanline {
             scanline_buffers[current_buffer ^ 1].clear();
-            if self.show_sprites() || self.show_background() {
+            if (self.show_sprites() || self.show_background()) && self.scan_line < VBLANK_START {
                 self.sprite_evaluation(
                     rom,
                     &mut scanline_buffers[current_buffer ^ 1],
