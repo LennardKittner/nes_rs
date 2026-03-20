@@ -284,10 +284,10 @@ impl Mem for Bus<'_> {
                     self.tick(2);
                 }
                 let start_address = (data as u16) << 8;
+                let mut oam_start = self.ppu.oam_addr;
                 for i in 0..256 {
-                    self.ppu.oam_data[self.ppu.oam_addr as usize] =
-                        self.mem_read(start_address + i as u16);
-                    self.ppu.oam_addr = self.ppu.oam_addr.wrapping_add(1);
+                    self.ppu.oam_data[oam_start as usize] = self.mem_read(start_address + i as u16);
+                    oam_start = oam_start.wrapping_add(1);
                     self.tick(2);
                 }
             }
