@@ -249,6 +249,7 @@ struct Textures<'a> {
     sprite_table_grid_texture: Texture<'a>,
     sprite_view_grid_texture: Texture<'a>,
     tiles_grid_texture: Texture<'a>,
+    main_screen_grid_texture: Texture<'a>,
 
     frame_buffer: Frame,
     fps_frame: FPSFrame,
@@ -404,6 +405,15 @@ impl<'a> Textures<'a> {
             false,
         );
 
+        let main_screen_grid_texture = create_grid_texture(
+            &mut front_end_state.main_canvas,
+            &texture_creators.main_creator,
+            SCREEN_WIDTH as u32 * GRID_PIXEL_IN_NES_PIXEL,
+            SCREEN_HEIGHT as u32 * GRID_PIXEL_IN_NES_PIXEL,
+            TILE_WIDTH as u32 * GRID_PIXEL_IN_NES_PIXEL,
+            false,
+        );
+
         Textures {
             main_texture,
             fps_texture,
@@ -415,6 +425,7 @@ impl<'a> Textures<'a> {
             sprite_table_grid_texture,
             sprite_view_grid_texture,
             tiles_grid_texture,
+            main_screen_grid_texture,
             frame_buffer: Frame::default(),
             fps_frame: FPSFrame::new(
                 FONT_NUMBERS_OFFSET,
@@ -442,6 +453,13 @@ impl<'a> Textures<'a> {
             .main_canvas
             .copy(&self.main_texture, None, None)
             .unwrap();
+
+        if front_end_state.actions.show_grid {
+            front_end_state
+                .main_canvas
+                .copy(&self.main_screen_grid_texture, None, None)
+                .unwrap();
+        }
 
         if front_end_state.actions.show_fps {
             self.fps_frame.update(
