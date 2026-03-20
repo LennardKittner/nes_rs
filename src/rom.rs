@@ -164,9 +164,9 @@ impl NES2Header {
         };
 
         let mirroring = if raw[6] & 0b1 == 0 {
-            Mirroring::Vertical
-        } else {
             Mirroring::Horizontal
+        } else {
+            Mirroring::Vertical
         };
         let has_battery_backed_ram = raw[6] & 0b10 != 0;
         let has_trainer = raw[6] & 0b100 != 0;
