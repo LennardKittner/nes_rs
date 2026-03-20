@@ -291,8 +291,8 @@ impl PPU {
             println!("Sprite size: 16");
         }
 
-        if (0..VBLANK_START).contains(&self.scan_line) && self.show_background()
-            || self.show_sprites()
+        if (0..VBLANK_START).contains(&self.scan_line)
+            && (self.show_background() || self.show_sprites())
         {
             self.address_register
                 .load_x_from(&self.temporary_address_register);
