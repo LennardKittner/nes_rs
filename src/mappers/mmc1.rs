@@ -60,7 +60,7 @@ impl ControlRegister {
     }
 
     pub fn chr_8k_mode(&self) -> bool {
-        self.value & 0b1000 == 0b1000
+        self.value & 0b10000 == 0
     }
 }
 
@@ -185,7 +185,7 @@ impl MMC1Mapper {
         let max_16k_banks = self.prg_rom.len() / Self::BANK_SIZE_16K - 1;
         let max_32k_banks = self.prg_rom.len() / Self::BANK_SIZE_32K - 1;
 
-        let first_bank = upper_256kb;
+        let first_bank = upper_256kb * Self::BANK_SIZE_16K;
         let last_bank = if self.prg_rom.len() == 524288 && upper_256kb == 0 {
             (max_16k_banks - 0b10000) * Self::BANK_SIZE_16K
         } else {
@@ -219,7 +219,7 @@ impl MMC1Mapper {
         } else {
             //TODO: there are more modes
             if self.control_register.chr_8k_mode() {
-                (self.chr_bank0_register as usize & 0b11110) * Self::BANK_SIZE_8K
+                (self.chr_bank0_register as usize >> 1) * Self::BANK_SIZE_8K
             } else {
                 self.chr_bank0_register as usize * Self::BANK_SIZE_4K
             }
@@ -328,7 +328,7 @@ impl Mapper for MMC1Mapper {
     }
 
     fn write_cartridge_ram(&mut self, address: u16, value: u8) {
-        if self.prg_bank_register & 0b10000 == 0 {
+        if self.prg_bank_register & 0b10000 != 0 {
             return;
         }
         if let Some(ram) = self.prg_ram.as_mut() {
