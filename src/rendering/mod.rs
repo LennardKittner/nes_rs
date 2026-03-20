@@ -174,8 +174,9 @@ pub fn render_bg(ppu: &mut PPU, rom: &Rom, scanline: &mut Scanline) {
             }
         } else if tile_y == 31 {
             ppu.address_register.set_tile_y(0);
+        } else {
+            ppu.address_register.set_tile_y((tile_y + 1) as u8);
         }
-        ppu.address_register.set_tile_y((tile_y + 1) as u8);
     }
     ppu.address_register
         .set_inner_tile_y_offset((line + 1) as u8);
