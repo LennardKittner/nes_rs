@@ -6,6 +6,7 @@ use crate::mappers::{create_mapper, Mapper};
 use std::cmp::min;
 use std::fs::File;
 use std::io::Read;
+use std::path::PathBuf;
 use std::usize;
 
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -55,7 +56,7 @@ pub struct INESHeader {
     pub prg_ram_size: usize,
     pub chr_rom_size: usize,
     pub mirroring: Mirroring,
-    pub has_battery_backed_ram: bool,
+    pub battery_backed_ram_path: Option<String>,
     pub has_chr_ram: bool,
     /// Unused
     pub has_bus_conflicts: bool,
@@ -77,7 +78,7 @@ pub struct NES2Header {
     pub chr_ram_size: usize,
     pub chr_nvram_size: usize,
     pub mirroring: Mirroring,
-    pub has_battery_backed_ram: bool,
+    pub battery_backed_ram_path: Option<String>,
     pub has_trainer: bool,
     pub mapper_number: usize,
     pub sub_mapper_number: usize,
@@ -90,10 +91,15 @@ pub struct NES2Header {
 }
 
 impl INESHeader {
-    fn new(raw: &[u8]) -> Result<Self, String> {
+    fn new(raw: &[u8], battery_backed_ram_path: Option<&str>) -> Result<Self, String> {
         let mapper_number = ((raw[7] & 0b1111_0000) | (raw[6] >> 4)) as usize;
 
         let has_battery_backed_ram = raw[6] & 0b10 != 0;
+        let battery_backed_ram_path = if has_battery_backed_ram {
+            battery_backed_ram_path.map(|path| path.to_string())
+        } else {
+            None
+        };
         let four_screen = raw[6] & 0b1000 != 0;
         let vertical_mirroring = raw[6] & 1 != 0;
         let mirroring = match (four_screen, vertical_mirroring) {
@@ -125,7 +131,7 @@ impl INESHeader {
             chr_rom_size,
             prg_ram_size,
             mirroring,
-            has_battery_backed_ram,
+            battery_backed_ram_path,
             has_chr_ram,
             has_bus_conflicts,
             has_trainer,
@@ -138,7 +144,7 @@ impl INESHeader {
 }
 
 impl NES2Header {
-    fn new(raw: &[u8]) -> Result<Self, String> {
+    fn new(raw: &[u8], battery_backed_ram_path: Option<&str>) -> Result<Self, String> {
         if raw[7] & 0b11 != 0 {
             return Err("Only the NES is supported".to_string());
         }
@@ -169,6 +175,11 @@ impl NES2Header {
             Mirroring::Vertical
         };
         let has_battery_backed_ram = raw[6] & 0b10 != 0;
+        let battery_backed_ram_path = if has_battery_backed_ram {
+            battery_backed_ram_path.map(|path| path.to_string())
+        } else {
+            None
+        };
         let has_trainer = raw[6] & 0b100 != 0;
         let alternative_nametable = raw[6] & 0b1000 != 0;
 
@@ -232,7 +243,7 @@ impl NES2Header {
             chr_ram_size,
             chr_nvram_size,
             mirroring,
-            has_battery_backed_ram,
+            battery_backed_ram_path,
             has_trainer,
             mapper_number,
             sub_mapper_number,
@@ -281,7 +292,9 @@ impl Rom {
         let file_size = metadata.len() as usize;
         let mut rom_content = Vec::with_capacity(file_size);
         file.read_to_end(&mut rom_content).unwrap();
-        Rom::new(&rom_content)
+        let mut path = PathBuf::from(path);
+        path.set_extension("sav");
+        Rom::new(&rom_content, path.to_str())
     }
 
     #[cfg(test)]
@@ -298,7 +311,7 @@ impl Rom {
             prg_ram_size: 0,
             chr_rom_size: CHR_ROM_PAGE_SIZE * 4,
             mirroring,
-            has_battery_backed_ram: false,
+            battery_backed_ram_path: None,
             has_chr_ram: true,
             has_bus_conflicts: false,
             has_trainer: false,
@@ -323,15 +336,15 @@ impl Rom {
         Self::new_blank_test_rom_with_mirroring(entry_point_address, Mirroring::Vertical)
     }
 
-    pub fn new(raw: &[u8]) -> Result<Self, String> {
+    pub fn new(raw: &[u8], battery_backed_ram_path: Option<&str>) -> Result<Self, String> {
         if &raw[0..4] != NES_TAG.as_bytes() {
             return Err("File is not in iNES file format".to_string());
         }
         let ines_ver = (raw[7] >> 2) & 0b11;
         let header = if ines_ver != 0 {
-            RomHeader::NES2(NES2Header::new(raw)?)
+            RomHeader::NES2(NES2Header::new(raw, battery_backed_ram_path)?)
         } else {
-            RomHeader::INES(INESHeader::new(raw)?)
+            RomHeader::INES(INESHeader::new(raw, battery_backed_ram_path)?)
         };
         let mapper = create_mapper(&header, raw);
         Ok(Rom { header, mapper })

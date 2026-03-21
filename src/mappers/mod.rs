@@ -73,12 +73,12 @@ pub fn create_mapper(rom_header: &RomHeader, raw: &[u8]) -> Box<dyn Mapper> {
             RomHeader::INES(header) => Box::new(MMC1Mapper::new(
                 raw[header.prg_rom_start..(header.prg_rom_start + header.prg_rom_size)].to_vec(),
                 get_chr_space(rom_header, raw),
-                header.has_battery_backed_ram,
+                header.battery_backed_ram_path.as_ref().map(|s| s.as_str()),
             )),
             RomHeader::NES2(header) => Box::new(MMC1Mapper::new(
                 raw[header.prg_rom_start..(header.prg_rom_start + header.prg_rom_size)].to_vec(),
                 get_chr_space(rom_header, raw),
-                header.has_battery_backed_ram,
+                header.battery_backed_ram_path.as_ref().map(|s| s.as_str()),
             )),
         },
         3 => match rom_header {

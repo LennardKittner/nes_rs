@@ -32,7 +32,7 @@ fn main() {
         .unwrap();
 
     let bytes: Vec<u8> = std::fs::read(path).unwrap();
-    let rom = Rom::new(&bytes).unwrap();
+    let rom = Rom::new(&bytes, None).unwrap();
 
     let mut frame = Frame::default();
     for i in 0..(rom.chr_rom_len() / 16) {

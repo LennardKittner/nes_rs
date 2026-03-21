@@ -885,8 +885,7 @@ fn main() {
     let front_end_state_controller = front_end_state.clone();
     let front_end_state_rendering = front_end_state.clone();
 
-    let bytes: Vec<u8> = std::fs::read(&rom_path).unwrap();
-    let rom = Rom::new(&bytes).unwrap();
+    let rom = Rom::load_from_disk(&rom_path).unwrap();
 
     let palette = if let Some(path) = palette_path {
         read_palette_table(&path).unwrap_or_default()

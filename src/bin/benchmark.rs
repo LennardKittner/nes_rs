@@ -21,7 +21,7 @@ fn main() {
     let cycles = i32::from_str(&args[2]).unwrap();
 
     let bytes: Vec<u8> = std::fs::read(rom_path).unwrap();
-    let rom = Rom::new(&bytes).unwrap();
+    let rom = Rom::new(&bytes, None).unwrap();
 
     let palette = SystemPalette::new();
 

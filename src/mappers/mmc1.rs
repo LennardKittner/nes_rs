@@ -1,8 +1,9 @@
 use crate::mappers::Mapper;
 use crate::rom::Mirroring;
+use anyhow::Result;
 use memmap2::MmapMut;
 use std::fs::OpenOptions;
-use std::ops;
+use std::{ops, usize};
 
 // 4bit0
 // -----
@@ -64,41 +65,40 @@ impl ControlRegister {
     }
 }
 
-struct PrgRamWrapper<T> {
-    data: T,
+pub enum PrgRamWrapper {
+    FileBacked(MmapMut),
+    Volatile(Vec<u8>),
 }
 
-impl<T> PrgRamWrapper<T> {
-    pub fn new(data: T) -> Self {
-        PrgRamWrapper { data }
-    }
+pub fn map_save_file(path: &str, size: u64) -> Result<MmapMut> {
+    let file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(path)?;
+    file.set_len(size)?;
+
+    Ok(unsafe { MmapMut::map_mut(&file)? })
 }
 
-impl ops::Index<usize> for PrgRamWrapper<Vec<u8>> {
+impl ops::Index<usize> for PrgRamWrapper {
     type Output = u8;
 
     fn index(&self, index: usize) -> &Self::Output {
-        self.data.index(index)
+        match self {
+            PrgRamWrapper::FileBacked(data) => data.index(index),
+            PrgRamWrapper::Volatile(data) => data.index(index),
+        }
     }
 }
 
-impl ops::IndexMut<usize> for PrgRamWrapper<Vec<u8>> {
+impl ops::IndexMut<usize> for PrgRamWrapper {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        self.data.index_mut(index)
-    }
-}
-
-impl ops::Index<usize> for PrgRamWrapper<MmapMut> {
-    type Output = u8;
-
-    fn index(&self, index: usize) -> &Self::Output {
-        self.data.index(index)
-    }
-}
-
-impl ops::IndexMut<usize> for PrgRamWrapper<MmapMut> {
-    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        self.data.index_mut(index)
+        match self {
+            PrgRamWrapper::FileBacked(data) => data.index_mut(index),
+            PrgRamWrapper::Volatile(data) => data.index_mut(index),
+        }
     }
 }
 
@@ -106,7 +106,7 @@ pub struct MMC1Mapper {
     prg_rom: Vec<u8>,
     prg_rom_bank0_offset: usize,
     prg_rom_bank1_offset: usize,
-    prg_ram: Option<PrgRamWrapper<MmapMut>>,
+    prg_ram: Option<PrgRamWrapper>,
     chr_rom: Vec<u8>,
     chr_rom_bank0_offset: usize,
     chr_rom_bank1_offset: usize,
@@ -136,24 +136,16 @@ impl MMC1Mapper {
     const BANK_SIZE_16K: usize = 0x4000;
     const BANK_SIZE_32K: usize = 0x8000;
 
-    pub fn new(prg_rom: Vec<u8>, chr_rom: Vec<u8>, has_battery_backed_ram: bool) -> Self {
-        let file = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .truncate(false)
-            .open("test.sav")
-            .expect("Unable to open save file");
-
-        file.set_len(32768).expect("Unable to resize file");
-
-        let prg_ram = if has_battery_backed_ram {
-            Some(PrgRamWrapper::new(unsafe {
-                MmapMut::map_mut(&file).expect("Unable to map file")
-            }))
-        } else {
-            None
-        };
+    pub fn new(prg_rom: Vec<u8>, chr_rom: Vec<u8>, battery_backed_ram_path: Option<&str>) -> Self {
+        let prg_ram = battery_backed_ram_path
+            .map(|path| match map_save_file(path, 32768) {
+                Ok(ram) => Some(PrgRamWrapper::FileBacked(ram)),
+                Err(e) => {
+                    eprintln!("Failed to load save {e}");
+                    Some(PrgRamWrapper::Volatile(vec![0u8; 32768]))
+                }
+            })
+            .flatten();
 
         let mut mapper = MMC1Mapper {
             prg_rom,
