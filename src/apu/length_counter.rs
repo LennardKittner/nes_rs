@@ -1,3 +1,6 @@
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct LengthCounter {
     value: u8,
     halt: bool,

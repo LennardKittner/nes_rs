@@ -1,7 +1,10 @@
+use serde::{Deserialize, Serialize};
+
 use crate::apu::envelope::EnvelopeGenerator;
 use crate::apu::length_counter::LengthCounter;
 use crate::apu::timer::Timer;
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct NoiseGenerator {
     timer: Timer,
     length_counter: LengthCounter,

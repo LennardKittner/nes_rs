@@ -1,19 +1,22 @@
+use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
+
 use crate::rendering::frame::{Frame, SCREEN_WIDTH};
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct SpriteColor {
     pub color: (u8, u8, u8),
     pub behind_background: bool,
     pub transparent: bool,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct BackgroundColor {
     pub color: (u8, u8, u8),
     pub transparent: bool,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct ScanlinePixel {
     pub background_color: BackgroundColor,
     pub sprite_color: SpriteColor,
@@ -56,8 +59,10 @@ impl ScanlinePixel {
     }
 }
 
-#[derive(Debug)]
+#[serde_as]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Scanline {
+    #[serde_as(as = "[_; SCREEN_WIDTH]")]
     pub data: [ScanlinePixel; SCREEN_WIDTH],
 }
 

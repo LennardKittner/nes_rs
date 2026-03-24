@@ -1,4 +1,6 @@
-#[derive(Debug, Copy, Clone, Default)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Copy, Clone, Default, Serialize, Deserialize)]
 pub struct Sprite {
     y_pos: u8,
     pattern_index: u8,

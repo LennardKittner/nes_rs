@@ -1,14 +1,17 @@
+use serde::{Deserialize, Serialize};
+
 use crate::apu::envelope::EnvelopeGenerator;
 use crate::apu::length_counter::LengthCounter;
 use crate::apu::sweep_unit::SweepUnit;
 use crate::apu::timer::Timer;
 
-#[derive(Debug, Eq, Copy, Clone, PartialEq)]
+#[derive(Debug, Eq, Copy, Clone, PartialEq, Serialize, Deserialize)]
 pub enum PulseGeneratorID {
     One,
     Two,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PulseGenerator {
     timer: Timer,
     sweep_unit: SweepUnit,

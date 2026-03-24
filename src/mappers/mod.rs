@@ -1,12 +1,38 @@
-use crate::mappers::cnrom::CNROMMapper;
-use crate::mappers::mmc1::MMC1Mapper;
-use crate::mappers::nrom::NROMMapper;
-use crate::rom::{Mirroring, RomHeader, CHR_ROM_PAGE_SIZE};
+use enum_dispatch::enum_dispatch;
+use serde::{Deserialize, Serialize};
+
+use crate::mappers::cnrom::{CNROMMapper, CNROMMapperState};
+use crate::mappers::mmc1::{MMC1Mapper, MMC1MapperState};
+use crate::mappers::nrom::{NROMMapper, NROMMapperState};
+use crate::rom::{Mirroring, Rom, RomHeader, RomHeaderWrapper, CHR_ROM_PAGE_SIZE};
 
 pub mod cnrom;
 mod mmc1;
 pub mod nrom;
 
+#[enum_dispatch]
+#[derive(Debug)]
+#[allow(clippy::enum_variant_names)]
+pub enum MapperWrapper {
+    CNROMMapper,
+    MMC1Mapper,
+    NROMMapper,
+}
+
+#[enum_dispatch]
+#[derive(Serialize, Deserialize, Debug)]
+#[allow(clippy::enum_variant_names)]
+pub enum MapperStateWrapper {
+    CNROMMapperState,
+    MMC1MapperState,
+    NROMMapperState,
+}
+
+#[enum_dispatch(MapperStateWrapper)]
+#[allow(dead_code)]
+pub trait MapperState: Serialize {}
+
+#[enum_dispatch(MapperWrapper)]
 pub trait Mapper {
     fn prg_rom_len(&self) -> usize;
     fn chr_rom_len(&self) -> usize;
@@ -32,69 +58,66 @@ pub trait Mapper {
         None
     }
     fn get_mirroring(&self) -> Mirroring;
+    fn get_state(&self) -> MapperStateWrapper;
 }
 
-fn get_chr_space(header: &RomHeader, raw: &[u8]) -> Vec<u8> {
+fn get_chr_space(header: &RomHeaderWrapper, raw: &[u8]) -> Vec<u8> {
     match header {
-        RomHeader::INES(header) => if header.has_chr_ram {
-            &[0u8; 4 * CHR_ROM_PAGE_SIZE]
-        } else {
-            &raw[header.chr_rom_start..(header.chr_rom_start + header.chr_rom_size)]
-        }
-        .to_vec(),
-        //TODO: nvram and other stuff
-        RomHeader::NES2(header) => {
-            if header.chr_ram_size > 0 {
-                vec![0u8; header.chr_ram_size * CHR_ROM_PAGE_SIZE]
+        RomHeaderWrapper::INESHeader(header) => {
+            if header.get_has_chr_ram() {
+                [0u8; 4 * CHR_ROM_PAGE_SIZE].to_vec()
             } else {
-                raw[header.chr_rom_start..(header.chr_rom_start + header.chr_rom_size)].to_vec()
+                raw[header.get_chr_rom_start()
+                    ..(header.get_chr_rom_start() + header.get_chr_rom_size())]
+                    .to_vec()
+            }
+        }
+        RomHeaderWrapper::NES2Header(header) => {
+            if header.get_has_chr_ram() {
+                vec![0u8; header.get_chr_ram_size().unwrap() * CHR_ROM_PAGE_SIZE]
+            } else {
+                raw[header.get_chr_rom_start()
+                    ..(header.get_chr_rom_start() + header.get_chr_rom_size())]
+                    .to_vec()
             }
         }
     }
 }
 
-pub fn create_mapper(rom_header: &RomHeader, raw: &[u8]) -> Box<dyn Mapper> {
-    match rom_header.get_mapper_number() {
-        0 => match rom_header {
-            RomHeader::INES(header) => Box::new(NROMMapper::new(
-                raw[header.prg_rom_start..(header.prg_rom_start + header.prg_rom_size)].to_vec(),
-                get_chr_space(rom_header, raw),
-                header.has_chr_ram,
-                header.mirroring,
-            )),
-            RomHeader::NES2(header) => Box::new(NROMMapper::new(
-                raw[header.prg_rom_start..(header.prg_rom_start + header.prg_rom_size)].to_vec(),
-                get_chr_space(rom_header, raw),
-                header.chr_ram_size > 0,
-                header.mirroring,
-            )),
-        },
-        1 => match rom_header {
-            RomHeader::INES(header) => Box::new(MMC1Mapper::new(
-                raw[header.prg_rom_start..(header.prg_rom_start + header.prg_rom_size)].to_vec(),
-                get_chr_space(rom_header, raw),
-                header.battery_backed_ram_path.as_ref().map(|s| s.as_str()),
-            )),
-            RomHeader::NES2(header) => Box::new(MMC1Mapper::new(
-                raw[header.prg_rom_start..(header.prg_rom_start + header.prg_rom_size)].to_vec(),
-                get_chr_space(rom_header, raw),
-                header.battery_backed_ram_path.as_ref().map(|s| s.as_str()),
-            )),
-        },
-        3 => match rom_header {
-            RomHeader::INES(header) => Box::new(CNROMMapper::new(
-                raw[header.prg_rom_start..(header.prg_rom_start + header.prg_rom_size)].to_vec(),
-                get_chr_space(rom_header, raw),
-                header.has_chr_ram,
-                header.mirroring,
-            )),
-            RomHeader::NES2(header) => Box::new(CNROMMapper::new(
-                raw[header.prg_rom_start..(header.prg_rom_start + header.prg_rom_size)].to_vec(),
-                get_chr_space(rom_header, raw),
-                header.chr_ram_size > 0,
-                header.mirroring,
-            )),
-        },
+pub fn from_state(mapper_state: MapperStateWrapper, rom: Rom) -> Option<MapperWrapper> {
+    Some(match mapper_state {
+        MapperStateWrapper::CNROMMapperState(state) => CNROMMapper::from_state(state, rom)?.into(),
+        MapperStateWrapper::MMC1MapperState(state) => MMC1Mapper::from_state(state, rom)?.into(),
+        MapperStateWrapper::NROMMapperState(state) => NROMMapper::from_state(state, rom)?.into(),
+    })
+}
+
+pub fn create_mapper(header: &RomHeaderWrapper, raw: &[u8]) -> MapperWrapper {
+    let prg_rom_start = header.get_prg_rom_start();
+    let prg_rom_size = header.get_prg_rom_size();
+    let prg_rom = raw[prg_rom_start..(prg_rom_start + prg_rom_size)].to_vec();
+
+    match header.get_mapper_number() {
+        0 => NROMMapper::new(
+            prg_rom,
+            get_chr_space(header, raw),
+            header.get_has_chr_ram(),
+            header.get_mirroring(),
+        )
+        .into(),
+        1 => MMC1Mapper::new(
+            prg_rom,
+            get_chr_space(header, raw),
+            header.get_battery_backed_ram_path(),
+        )
+        .into(),
+        3 => CNROMMapper::new(
+            prg_rom,
+            get_chr_space(header, raw),
+            header.get_has_chr_ram(),
+            header.get_mirroring(),
+        )
+        .into(),
         _ => panic!("Mapper not implemented"),
     }
 }

@@ -5,21 +5,31 @@ use crate::ppu::{PPU, PRE_RENDER_SCNALINE, VBLANK_START};
 use crate::rendering::{frame::Frame, scanline::Scanline};
 use crate::ring_buffer::RingBuffer;
 use crate::rolling_avg::RollingAvg;
-use crate::rom::Rom;
+use crate::rom::{Rom, RomState};
+use derivative::Derivative;
 use num::traits::Inv;
+use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
+use serde_with::Bytes;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 const FRAME_DURATION: Duration = Duration::from_nanos(16666667);
 
 pub const AUDIO_BUFFER_SIZE: usize = 44100;
-type GraphicsCallback<'a> = Box<dyn FnMut(&PPU, &Frame, u32, &Rom) + 'a>;
-type ControllerCallback<'a> = Box<dyn FnMut(&mut Controller, &mut Controller) + 'a>;
+pub type AudioBuffer = Arc<Mutex<RingBuffer<f32, AUDIO_BUFFER_SIZE>>>;
+pub trait ControllerCallback<'a>: FnMut(&mut Controller, &mut Controller) + 'a {}
+impl<'a, F: FnMut(&mut Controller, &mut Controller) + 'a> ControllerCallback<'a> for F {}
 
+pub trait GraphicsCallback<'a>: FnMut(&PPU, &Frame, u32, &Rom) + 'a {}
+impl<'a, F: FnMut(&PPU, &Frame, u32, &Rom) + 'a> GraphicsCallback<'a> for F {}
+
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct Bus<'a> {
     cpu_vram: [u8; 2048],
     rom: Rom,
-    ppu: PPU,
+    pub ppu: PPU,
     apu: Option<APU>,
     frame: Frame,
     scanline_buffers: [Scanline; 2],
@@ -27,8 +37,10 @@ pub struct Bus<'a> {
     last_scanline: i32,
     cycles: usize,
     open_bus: u8,
-    graphics_callback: GraphicsCallback<'a>,
-    controller_callback: ControllerCallback<'a>,
+    #[derivative(Debug = "ignore")]
+    graphics_callback: Box<dyn GraphicsCallback<'a>>,
+    #[derivative(Debug = "ignore")]
+    controller_callback: Box<dyn ControllerCallback<'a>>,
     controller_1: Controller,
     controller_2: Controller,
     last_frame: Instant,
@@ -37,21 +49,50 @@ pub struct Bus<'a> {
     current_fps: u32,
     frame_counter: u64,
     desired_frame_duration: Duration,
-    pub audio_ring_buffer: Arc<Mutex<RingBuffer<f32, AUDIO_BUFFER_SIZE>>>, // 1s of audio
+    pub audio_ring_buffer: AudioBuffer, // 1s of audio
+}
+
+#[serde_as]
+#[derive(Serialize, Deserialize, Debug)]
+pub struct BusState {
+    #[serde_as(as = "Bytes")]
+    cpu_vram: [u8; 2048],
+    rom: RomState,
+    ppu: PPU,
+    apu: Option<APU>,
+    last_scanline: i32,
+    cycles: usize,
+    open_bus: u8,
+    controller_1: Controller,
+    controller_2: Controller,
+    frame_counter: u64,
+}
+
+impl BusState {
+    pub fn new(bus: &Bus) -> BusState {
+        BusState {
+            cpu_vram: bus.cpu_vram,
+            rom: RomState::new(&bus.rom),
+            ppu: bus.ppu.clone(),
+            apu: bus.apu.clone(),
+            last_scanline: bus.last_scanline,
+            cycles: bus.cycles,
+            open_bus: bus.open_bus,
+            controller_1: bus.controller_1.clone(),
+            controller_2: bus.controller_2.clone(),
+            frame_counter: bus.frame_counter,
+        }
+    }
 }
 
 impl<'a> Bus<'a> {
-    pub fn new<GF, C1F>(
+    pub fn new(
         rom: Rom,
         system_palette: SystemPalette,
         speed_multiplier: f64,
-        graphics_callback: GF,
-        controller_callback: C1F,
-    ) -> Bus<'a>
-    where
-        GF: FnMut(&PPU, &Frame, u32, &Rom) + 'a,
-        C1F: FnMut(&mut Controller, &mut Controller) + 'a,
-    {
+        graphics_callback: impl GraphicsCallback<'a>,
+        controller_callback: impl ControllerCallback<'a>,
+    ) -> Bus<'a> {
         let ppu = PPU::new(system_palette);
         let mut speed_multiplier = speed_multiplier;
         if speed_multiplier <= 0f64 {
@@ -80,6 +121,39 @@ impl<'a> Bus<'a> {
             desired_frame_duration: FRAME_DURATION.mul_f64(speed_multiplier.inv()),
             audio_ring_buffer: Arc::new(Mutex::new(RingBuffer::new())),
         }
+    }
+
+    pub fn from_state(
+        state: BusState,
+        rom: Rom,
+        speed_multiplier: f64,
+        graphics_callback: impl GraphicsCallback<'a>,
+        controller_callback: impl ControllerCallback<'a>,
+        audio_buffer: AudioBuffer,
+    ) -> Option<Self> {
+        Some(Bus {
+            cpu_vram: state.cpu_vram,
+            rom: Rom::from_state(rom, state.rom)?,
+            ppu: state.ppu,
+            apu: state.apu,
+            frame: Frame::default(),
+            scanline_buffers: [Scanline::new(), Scanline::new()],
+            current_scanline_buffer: 0,
+            last_scanline: state.last_scanline,
+            cycles: state.cycles,
+            open_bus: state.open_bus,
+            graphics_callback: Box::from(graphics_callback),
+            controller_callback: Box::from(controller_callback),
+            controller_1: state.controller_1,
+            controller_2: state.controller_2,
+            last_frame: Instant::now(),
+            rendering_overhead: RollingAvg::new(60),
+            last_60_frames: Instant::now(),
+            current_fps: 0,
+            frame_counter: 0,
+            desired_frame_duration: FRAME_DURATION.mul_f64(speed_multiplier.inv()),
+            audio_ring_buffer: audio_buffer,
+        })
     }
 
     pub fn set_speed_multiplayer(&mut self, speed_multiplier: f64) {

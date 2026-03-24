@@ -1,9 +1,10 @@
-use crate::mappers::Mapper;
-use crate::rom::Mirroring;
+use crate::mappers::{Mapper, MapperStateWrapper, MapperWrapper};
+use crate::rom::{Mirroring, Rom};
 use anyhow::Result;
 use memmap2::MmapMut;
+use serde::{Deserialize, Serialize};
 use std::fs::OpenOptions;
-use std::{ops, usize};
+use std::ops;
 
 // 4bit0
 // -----
@@ -16,7 +17,7 @@ use std::{ops, usize};
 // |                         2: fix first bank at $8000 and switch 16 KB bank at $C000;
 // |                         3: fix last bank at $C000 and switch 16 KB bank at $8000)
 // +----- CHR-ROM bank mode (0: switch 8 KB at a time; 1: switch two separate 4 KB banks)
-
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 struct ControlRegister {
     pub value: u8,
 }
@@ -65,6 +66,7 @@ impl ControlRegister {
     }
 }
 
+#[derive(Debug)]
 pub enum PrgRamWrapper {
     FileBacked(MmapMut),
     Volatile(Vec<u8>),
@@ -102,12 +104,30 @@ impl ops::IndexMut<usize> for PrgRamWrapper {
     }
 }
 
+#[derive(Debug)]
 pub struct MMC1Mapper {
     prg_rom: Vec<u8>,
     prg_rom_bank0_offset: usize,
     prg_rom_bank1_offset: usize,
+
     prg_ram: Option<PrgRamWrapper>,
-    chr_rom: Vec<u8>,
+    chr_ram: Vec<u8>,
+    chr_rom_bank0_offset: usize,
+    chr_rom_bank1_offset: usize,
+    shift_register: u8,
+    control_register: ControlRegister,
+    chr_bank0_register: u8,
+    chr_bank1_register: u8,
+    prg_bank_register: u8,
+    mirroring: Mirroring,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct MMC1MapperState {
+    prg_rom_bank0_offset: usize,
+    prg_rom_bank1_offset: usize,
+
+    chr_ram: Vec<u8>,
     chr_rom_bank0_offset: usize,
     chr_rom_bank1_offset: usize,
     shift_register: u8,
@@ -137,22 +157,20 @@ impl MMC1Mapper {
     const BANK_SIZE_32K: usize = 0x8000;
 
     pub fn new(prg_rom: Vec<u8>, chr_rom: Vec<u8>, battery_backed_ram_path: Option<&str>) -> Self {
-        let prg_ram = battery_backed_ram_path
-            .map(|path| match map_save_file(path, 32768) {
-                Ok(ram) => Some(PrgRamWrapper::FileBacked(ram)),
-                Err(e) => {
-                    eprintln!("Failed to load save {e}");
-                    Some(PrgRamWrapper::Volatile(vec![0u8; 32768]))
-                }
-            })
-            .flatten();
+        let prg_ram = battery_backed_ram_path.map(|path| match map_save_file(path, 32768) {
+            Ok(ram) => PrgRamWrapper::FileBacked(ram),
+            Err(e) => {
+                eprintln!("Failed to load save {e}");
+                PrgRamWrapper::Volatile(vec![0u8; 32768])
+            }
+        });
 
         let mut mapper = MMC1Mapper {
             prg_rom,
             prg_rom_bank0_offset: 0,
             prg_rom_bank1_offset: 0,
             prg_ram,
-            chr_rom,
+            chr_ram: chr_rom,
             chr_rom_bank0_offset: 0,
             chr_rom_bank1_offset: 0,
             shift_register: 0,
@@ -164,6 +182,25 @@ impl MMC1Mapper {
         };
         mapper.update_from_registers();
         mapper
+    }
+
+    pub fn from_state(state: MMC1MapperState, rom: Rom) -> Option<MMC1Mapper> {
+        if let MapperWrapper::MMC1Mapper(mut this) = rom.mapper {
+            this.prg_rom_bank0_offset = state.prg_rom_bank0_offset;
+            this.prg_rom_bank1_offset = state.prg_rom_bank1_offset;
+            this.chr_ram = state.chr_ram;
+            this.chr_rom_bank0_offset = state.chr_rom_bank0_offset;
+            this.chr_rom_bank1_offset = state.chr_rom_bank1_offset;
+            this.shift_register = state.shift_register;
+            this.control_register = state.control_register;
+            this.chr_bank0_register = state.chr_bank0_register;
+            this.chr_bank1_register = state.chr_bank1_register;
+            this.prg_bank_register = state.prg_bank_register;
+            this.mirroring = state.mirroring;
+            Some(this)
+        } else {
+            None
+        }
     }
 
     fn get_prg_bank_offsets(&self) -> (usize, usize) {
@@ -253,14 +290,14 @@ impl Mapper for MMC1Mapper {
 
     fn read_chr_rom(&self, address: u16) -> u8 {
         if address < Self::BANK_SIZE_4K as u16 {
-            self.chr_rom[address as usize + self.chr_rom_bank0_offset]
+            self.chr_ram[address as usize + self.chr_rom_bank0_offset]
         } else {
-            self.chr_rom[address as usize - Self::BANK_SIZE_4K + self.chr_rom_bank1_offset]
+            self.chr_ram[address as usize - Self::BANK_SIZE_4K + self.chr_rom_bank1_offset]
         }
     }
 
     fn read_chr_rom_bank(&self, bank: u16, address: u16) -> u8 {
-        self.chr_rom[(bank * Self::BANK_SIZE_8K as u16 + address) as usize]
+        self.chr_ram[(bank * Self::BANK_SIZE_8K as u16 + address) as usize]
     }
 
     fn read_tile_chr_rom(&self, address: u16) -> &[u8] {
@@ -269,15 +306,15 @@ impl Mapper for MMC1Mapper {
         } else {
             address as usize - Self::BANK_SIZE_4K + self.chr_rom_bank1_offset
         };
-        if addr > self.chr_rom.len() {
+        if addr > self.chr_ram.len() {
             return &[0; 16];
         }
-        &self.chr_rom[addr..(addr + 16)]
+        &self.chr_ram[addr..(addr + 16)]
     }
 
     fn read_tile_chr_rom_bank(&self, bank: u16, address: u16) -> &[u8] {
         let addr = bank as usize * Self::BANK_SIZE_8K + address as usize;
-        &self.chr_rom[addr..(addr + 16)]
+        &self.chr_ram[addr..(addr + 16)]
     }
 
     ///TODO:: Ignoring consecutive-cycle writes not implemented
@@ -332,13 +369,30 @@ impl Mapper for MMC1Mapper {
 
     fn write_chr_ram(&mut self, address: u16, value: u8) {
         if address < Self::BANK_SIZE_4K as u16 {
-            self.chr_rom[address as usize + self.chr_rom_bank0_offset] = value;
+            self.chr_ram[address as usize + self.chr_rom_bank0_offset] = value;
         } else {
-            self.chr_rom[address as usize - Self::BANK_SIZE_4K + self.chr_rom_bank1_offset] = value;
+            self.chr_ram[address as usize - Self::BANK_SIZE_4K + self.chr_rom_bank1_offset] = value;
         }
     }
 
     fn get_mirroring(&self) -> Mirroring {
         self.mirroring
+    }
+
+    fn get_state(&self) -> MapperStateWrapper {
+        MMC1MapperState {
+            prg_rom_bank0_offset: self.prg_rom_bank0_offset,
+            prg_rom_bank1_offset: self.prg_rom_bank1_offset,
+            chr_ram: self.chr_ram.clone(),
+            chr_rom_bank0_offset: self.chr_rom_bank0_offset,
+            chr_rom_bank1_offset: self.chr_rom_bank1_offset,
+            shift_register: self.shift_register,
+            control_register: self.control_register,
+            chr_bank0_register: self.chr_bank0_register,
+            chr_bank1_register: self.chr_bank1_register,
+            prg_bank_register: self.prg_bank_register,
+            mirroring: self.mirroring,
+        }
+        .into()
     }
 }

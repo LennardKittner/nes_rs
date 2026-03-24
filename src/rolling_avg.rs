@@ -1,6 +1,7 @@
 use num::{FromPrimitive, Num, ToPrimitive};
 use std::cmp::min;
 
+#[derive(Debug)]
 pub struct RollingAvg<T: Num + Clone + Copy + FromPrimitive> {
     buffer: Vec<T>,
     index: usize,

@@ -1,7 +1,10 @@
+use serde::{Deserialize, Serialize};
+
 use crate::apu::timer::Timer;
 use crate::bus::{Bus, Mem};
 use std::ops::Sub;
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
 struct MemoryReader {
     pub sample_start_address: u16,
     pub sample_address: u16,
@@ -46,6 +49,7 @@ impl MemoryReader {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
 struct OutputUnit {
     shift_register: u8,
     bit_remaining: u8,
@@ -89,6 +93,7 @@ impl OutputUnit {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct DataModulationChannel {
     timer: Timer,
     memory_reader: MemoryReader,

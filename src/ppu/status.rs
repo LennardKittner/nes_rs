@@ -1,4 +1,5 @@
 use bitflags::bitflags;
+use serde::{Deserialize, Serialize};
 
 bitflags! {
     // 7  bit  0
@@ -20,7 +21,7 @@ bitflags! {
     //            Set at dot 1 of line 241 (the line *after* the post-render
     //            line); cleared after reading $2002 and at dot 1 of the
     //            pre-render line.
-
+    #[derive(Serialize, Deserialize, Debug, Clone)]
     pub struct StatusRegister: u8 {
         const UNUSED_0        = 0b0000_0001;
         const UNUSED_1        = 0b0000_0010;

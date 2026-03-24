@@ -1,10 +1,8 @@
 use clap::Parser;
 use hound::{WavSpec, WavWriter};
 use itertools::Itertools;
-use nes_rs::bus::Bus;
-use nes_rs::bus::AUDIO_BUFFER_SIZE;
+use nes_rs::bus::{AudioBuffer, ControllerCallback, GraphicsCallback, AUDIO_BUFFER_SIZE};
 use nes_rs::controller::{Controller, ControllerButtons, ControllerInput};
-use nes_rs::cpu::CPU;
 use nes_rs::ppu::palette::SystemPalette;
 use nes_rs::ppu::PPU;
 use nes_rs::rendering::fps_frame::FPSFrame;
@@ -18,6 +16,7 @@ use nes_rs::rendering::render_oam_with_pos;
 use nes_rs::rendering::write_tile;
 use nes_rs::ring_buffer::RingBuffer;
 use nes_rs::rom::Rom;
+use nes_rs::{NESState, NES};
 use sdl2::audio::AudioDevice;
 use sdl2::audio::{AudioCallback, AudioSpecDesired};
 use sdl2::event::Event;
@@ -47,12 +46,6 @@ use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
-
-//TODO: split crate in core and front end and add old front end as minimal example
-//TODO: avoid unwrap
-
-//TODO: Debug features
-// - save state
 
 const PALETTE_VIEWER_DIMENSIONS: (u32, u32) = (4 * 8, 8 * 8);
 const SPRITE_TABLE_DIMENSIONS: (u32, u32) = (8 * 8, 8 * 8);
@@ -882,8 +875,6 @@ fn main() {
     let (front_end_state, texture_creators) =
         FrontEndState::new(rom_name, args.scaling, args.enable_integer_scaling);
     let front_end_state = Rc::new(RefCell::new(front_end_state));
-    let front_end_state_controller = front_end_state.clone();
-    let front_end_state_rendering = front_end_state.clone();
 
     let rom = Rom::load_from_disk(&rom_path).unwrap();
 
@@ -895,11 +886,177 @@ fn main() {
 
     let font_chr_rom = include_bytes!("../om_thick_plain_nes.chr");
 
-    let mut textures = Textures::new(
-        &mut front_end_state.borrow_mut(),
-        &texture_creators,
+    let (render_frame, handle_controller_input) = create_callbacks(
+        front_end_state.clone(),
         palette.clone(),
+        &texture_creators,
+        font_chr_rom,
     );
+
+    let (mut nes, audio_buffer) = NES::new(
+        rom,
+        palette.clone(),
+        1f64,
+        render_frame,
+        handle_controller_input,
+    );
+
+    let audio_device_wrapper = if args.export_wav {
+        AudioDeviceWrapper::new_recording(
+            &front_end_state.borrow(),
+            format!("{rom_name}.wav"),
+            audio_buffer.clone(),
+        )
+    } else {
+        AudioDeviceWrapper::new(&front_end_state.borrow(), audio_buffer.clone())
+    };
+
+    audio_device_wrapper.audio_device.resume();
+    let mut last_speed = 1f64;
+    let mut save = Vec::new();
+    while !front_end_state.borrow().actions.should_quit {
+        let pause = front_end_state.borrow().actions.pause;
+        handle_user_input(&mut front_end_state.borrow_mut());
+
+        front_end_state.borrow_mut().show_active_windows();
+
+        if last_speed != front_end_state.borrow().actions.speed_multiplier {
+            last_speed = front_end_state.borrow().actions.speed_multiplier;
+            nes.set_speed_multiplayer(last_speed);
+        }
+
+        if front_end_state.borrow().actions.save_state {
+            save = create_save_state_bin(&nes).unwrap_or_default();
+            front_end_state.borrow_mut().actions.save_state = false;
+        }
+
+        if front_end_state.borrow().actions.load_state {
+            if !save.is_empty() {
+                if let Some(old_state) = load_from_save_state_bin(
+                    &save,
+                    &rom_path,
+                    &texture_creators,
+                    &front_end_state,
+                    palette.clone(),
+                    font_chr_rom,
+                    audio_buffer.clone(),
+                ) {
+                    nes = old_state;
+                    nes.manual_re_render();
+                }
+            }
+            front_end_state.borrow_mut().actions.load_state = false;
+        }
+
+        if !pause {
+            for _ in 0..1000 {
+                nes.step();
+            }
+        } else {
+            thread::sleep(Duration::from_millis(16)); // Roughly 60FPS avoids wasting resources
+                                                      // when the emulation is paused
+            nes.manual_re_render(); // without this windows such as the tile map would only show
+                                    // once the emulation gets resumed
+        }
+    }
+    drop(audio_device_wrapper.audio_device);
+    let writer = {
+        if let Some(writer) = audio_device_wrapper.wav_writer {
+            let mut guard = writer.lock().unwrap();
+            guard.take()
+        } else {
+            None
+        }
+    };
+    if let Some(writer) = writer {
+        writer.finalize().unwrap();
+    }
+}
+
+//TODO: probably not reload rom from disk but keep binary data in mem
+//TODO: write save_state to disk
+//TODO: speed up not working when loading from save
+//TODO: system palette when loading save to PPU
+//TODO: add function to replace NES with NESState while keeping callbacks
+//TODO: implement rewind with preview image every ~10 frames
+
+//TODO: maybe use bitcode with encode decode bitcode + serde is slower
+fn create_save_state_bin(nes: &NES) -> Result<Vec<u8>, postcard::Error> {
+    postcard::to_stdvec(&nes)
+}
+
+fn create_save_state_json(nes: &NES) -> Result<String, serde_json::Error> {
+    serde_json::to_string_pretty(&nes)
+}
+
+fn load_from_save_state_bin<'a>(
+    data: &[u8],
+    rom_path: &str,
+    texture_creators: &'a TextureCreators,
+    front_end_state: &Rc<RefCell<FrontEndState>>,
+    palette: SystemPalette,
+    font_chr_rom: &'static [u8],
+    audio_buffer: AudioBuffer,
+) -> Option<NES<'a>> {
+    let deserialized: NESState = postcard::from_bytes(data).ok()?;
+
+    let rom = Rom::load_from_disk(&rom_path).unwrap();
+
+    let (render_frame, handle_controller_input) = create_callbacks(
+        front_end_state.clone(),
+        palette.clone(),
+        texture_creators,
+        font_chr_rom,
+    );
+
+    NES::from_state(
+        deserialized,
+        rom,
+        1f64,
+        render_frame,
+        handle_controller_input,
+        audio_buffer.clone(),
+    )
+}
+
+fn load_from_save_state_json<'a>(
+    json: &str,
+    rom_path: String,
+    texture_creators: &'a TextureCreators,
+    front_end_state: &Rc<RefCell<FrontEndState>>,
+    palette: SystemPalette,
+    font_chr_rom: &'static [u8],
+    audio_buffer: AudioBuffer,
+) -> Option<NES<'a>> {
+    let deserialized: NESState = serde_json::from_str(json).ok()?;
+
+    let rom = Rom::load_from_disk(&rom_path).unwrap();
+
+    let (render_frame, handle_controller_input) = create_callbacks(
+        front_end_state.clone(),
+        palette.clone(),
+        texture_creators,
+        font_chr_rom,
+    );
+
+    NES::from_state(
+        deserialized,
+        rom,
+        1f64,
+        render_frame,
+        handle_controller_input,
+        audio_buffer.clone(),
+    )
+}
+
+fn create_callbacks<'a>(
+    front_end_state: Rc<RefCell<FrontEndState>>,
+    palette: SystemPalette,
+    texture_creators: &'a TextureCreators,
+    font_chr_rom: &'static [u8],
+) -> (impl GraphicsCallback<'a>, impl ControllerCallback<'a>) {
+    let front_end_state_controller = front_end_state.clone();
+    let front_end_state_rendering = front_end_state.clone();
 
     let handle_controller_input =
         move |controller_1: &mut Controller, controller_2: &mut Controller| {
@@ -916,6 +1073,12 @@ fn main() {
             }
         };
 
+    let mut textures = Textures::new(
+        &mut front_end_state.borrow_mut(),
+        texture_creators,
+        palette.clone(),
+    );
+
     let render_frame = move |ppu: &PPU, frame: &Frame, fps: u32, rom: &Rom| {
         textures.update_textures(
             frame,
@@ -925,60 +1088,19 @@ fn main() {
             rom,
             font_chr_rom,
         );
+        // front_end_state_rendering.borrow_mut().actions.pause = true;
+
+        //TODO: add screenshot function and maybe video recoding
+        // image::save_buffer(
+        //     format!("./{rom_name}.png"),
+        //     &frame.data,
+        //     SCREEN_WIDTH as u32,
+        //     SCREEN_HEIGHT as u32,
+        //     image::ColorType::Rgb8,
+        // )
+        // .unwrap();
     };
-
-    let bus = Bus::new(rom, palette, 1f64, render_frame, handle_controller_input);
-
-    let audio_buffer = bus.audio_ring_buffer.clone();
-    let audio_device_wrapper = if args.export_wav {
-        AudioDeviceWrapper::new_recording(
-            &front_end_state.borrow(),
-            format!("{rom_name}.wav"),
-            audio_buffer,
-        )
-    } else {
-        AudioDeviceWrapper::new(&front_end_state.borrow(), audio_buffer)
-    };
-
-    let mut cpu = CPU::new_with_bus(bus);
-    audio_device_wrapper.audio_device.resume();
-    cpu.reset();
-    let mut last_speed = 1f64;
-    while !front_end_state.borrow().actions.should_quit {
-        let pause = front_end_state.borrow().actions.pause;
-        handle_user_input(&mut front_end_state.borrow_mut());
-
-        front_end_state.borrow_mut().show_active_windows();
-
-        //TODO: would be nicer to have a nes struct instead of doing this on the CPU
-        if last_speed != front_end_state.borrow().actions.speed_multiplier {
-            last_speed = front_end_state.borrow().actions.speed_multiplier;
-            cpu.set_speed_multiplayer(last_speed);
-        }
-
-        if !pause {
-            for _ in 0..1000 {
-                cpu.step();
-            }
-        } else {
-            thread::sleep(Duration::from_millis(16)); // Roughly 60FPS avoids wasting resources
-                                                      // when the emulation is paused
-            cpu.manuel_re_render(); // without this windows such as the tile map would only show
-                                    // once the emulation gets resumed
-        }
-    }
-    drop(audio_device_wrapper.audio_device);
-    let writer = {
-        if let Some(writer) = audio_device_wrapper.wav_writer {
-            let mut guard = writer.lock().unwrap();
-            guard.take()
-        } else {
-            None
-        }
-    };
-    if let Some(writer) = writer {
-        writer.finalize().unwrap();
-    }
+    (render_frame, handle_controller_input)
 }
 
 fn handle_user_input(front_end: &mut FrontEndState) {
@@ -1035,16 +1157,34 @@ fn handle_user_input(front_end: &mut FrontEndState) {
                 ..
             } => front_end.actions.pause ^= true,
             Event::KeyDown {
+                keycode: Some(Keycode::E),
+                ..
+            } => front_end.actions.save_state = true,
+            Event::KeyDown {
+                keycode: Some(Keycode::R),
+                ..
+            } => front_end.actions.load_state = true,
+            Event::KeyDown {
                 keycode: Some(Keycode::Plus),
                 ..
-            } => front_end.actions.speed_multiplier += 1f64,
+            } => {
+                if front_end.actions.speed_multiplier < 1f64 {
+                    front_end.actions.speed_multiplier *= 2f64;
+                } else {
+                    front_end.actions.speed_multiplier += 1f64;
+                }
+            }
             Event::KeyDown {
                 keycode: Some(Keycode::Minus),
                 ..
             } => {
-                front_end.actions.speed_multiplier -= 1f64;
+                if front_end.actions.speed_multiplier <= 1f64 {
+                    front_end.actions.speed_multiplier /= 2f64;
+                } else {
+                    front_end.actions.speed_multiplier -= 1f64;
+                }
                 front_end.actions.speed_multiplier =
-                    front_end.actions.speed_multiplier.clamp(1f64, 50f64);
+                    front_end.actions.speed_multiplier.clamp(0.01f64, 50f64);
             }
             Event::KeyDown {
                 keycode: Some(keycode),

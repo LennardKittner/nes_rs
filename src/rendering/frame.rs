@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use crate::ppu::palette::SystemPalette;
 use crate::rendering::write_tile;
 use crate::rom::Rom;
@@ -9,6 +11,7 @@ pub const TILE_HEIGHT: usize = 8;
 pub const SCREEN_WIDTH_IN_TILES: usize = SCREEN_WIDTH / TILE_WIDTH;
 pub const SCREEN_HEIGHT_IN_TILES: usize = SCREEN_HEIGHT / TILE_HEIGHT;
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Frame {
     pub data: Vec<u8>,
     pub width: usize,

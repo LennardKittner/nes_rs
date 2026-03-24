@@ -1,3 +1,4 @@
+#[derive(Debug)]
 pub struct RingBuffer<T: Default + Copy, const BUFFER_SIZE: usize> {
     buffer: [T; BUFFER_SIZE],
     writer_head: usize,

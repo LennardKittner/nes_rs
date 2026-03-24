@@ -1,3 +1,6 @@
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct FractionalResampler {
     accumulator: f32,
     sample_accumulator: f32,

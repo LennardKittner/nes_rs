@@ -1,5 +1,8 @@
+use serde::{Deserialize, Serialize};
+
 use crate::ppu::t_register::TRegister;
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct AddressRegister {
     pub v: u16,
 }

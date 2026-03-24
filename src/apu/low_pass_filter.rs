@@ -1,3 +1,6 @@
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct LowPassFilter {
     pub prev: f32,
     pub alpha: f32,

@@ -1,5 +1,8 @@
+use serde::{Deserialize, Serialize};
+
 use crate::apu::pulse_generator::PulseGeneratorID;
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SweepUnit {
     enabled: bool,
     divider_period: u8,

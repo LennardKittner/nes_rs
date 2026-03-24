@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use crate::bus::{Bus, Mem, PollIRQ, PollNMI};
 use crate::cpu::addressing_mode::{page_cross, AddressingMode, Load, Store};
 use crate::cpu::interrupts::{
@@ -40,6 +42,7 @@ pub enum Flags {
 }
 
 #[allow(non_snake_case)]
+#[derive(Debug)]
 pub struct CPU<'a> {
     pub register_a: u8,
     pub register_x: u8,
@@ -51,6 +54,47 @@ pub struct CPU<'a> {
     current_instruction: OpCode,
     // indicates how many additional cycles the previous instruction took
     additional_cycles: u8,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct CPUState {
+    pub register_a: u8,
+    pub register_x: u8,
+    pub register_y: u8,
+    pub register_s: u8,
+    pub status: u8,
+    pub program_counter: u16,
+    current_instruction: u8,
+}
+
+impl CPUState {
+    pub fn new(cpu: &CPU) -> Self {
+        CPUState {
+            register_a: cpu.register_a,
+            register_x: cpu.register_x,
+            register_y: cpu.register_y,
+            register_s: cpu.register_s,
+            status: cpu.status,
+            program_counter: cpu.program_counter,
+            current_instruction: cpu.current_instruction.code,
+        }
+    }
+}
+
+impl<'a> CPU<'a> {
+    pub fn from_state(state: CPUState, bus: Bus<'a>) -> CPU<'a> {
+        CPU {
+            register_a: state.register_a,
+            register_x: state.register_x,
+            register_y: state.register_y,
+            register_s: state.register_s,
+            status: state.status,
+            program_counter: state.program_counter,
+            bus,
+            current_instruction: CPU_INSTRUCTIONS[state.current_instruction as usize],
+            additional_cycles: 0,
+        }
+    }
 }
 
 impl Mem for CPU<'_> {
@@ -90,14 +134,6 @@ impl CPU<'_> {
             current_instruction: CPU_INSTRUCTIONS[0x00],
             additional_cycles: 0,
         }
-    }
-
-    pub fn set_speed_multiplayer(&mut self, speed_multiplier: f64) {
-        self.bus.set_speed_multiplayer(speed_multiplier);
-    }
-
-    pub fn manuel_re_render(&mut self) {
-        self.bus.manual_re_render();
     }
 
     pub fn load_and_run(&mut self, program: &[u8], at: u16) {

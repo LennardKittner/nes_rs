@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use crate::apu::data_modulation_channel::DataModulationChannel;
 use crate::apu::fractional_resampler::FractionalResampler;
 use crate::apu::low_pass_filter::LowPassFilter;
@@ -17,7 +19,7 @@ mod sweep_unit;
 mod timer;
 mod triangle_generator;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Serialize, Deserialize, Clone, Copy)]
 enum FrameCounterMode {
     MODE5STEP,
     MODE4STEP,
@@ -28,6 +30,7 @@ const OUTPUT_FREQUENCY: f32 = 44_100f32;
 const SPEED_UP_LIMIT: f32 = 10f32;
 
 #[allow(clippy::upper_case_acronyms)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct APU {
     pulse_generator1: PulseGenerator,
     pulse_generator2: PulseGenerator,

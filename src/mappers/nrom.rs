@@ -1,12 +1,25 @@
-use crate::mappers::Mapper;
-use crate::rom::Mirroring;
+use serde::{Deserialize, Serialize};
 
+use crate::mappers::Mapper;
+use crate::mappers::MapperStateWrapper;
+use crate::mappers::MapperWrapper;
+use crate::rom::Mirroring;
+use crate::rom::Rom;
+
+const RAM_SIZE: usize = 0x2000;
+
+#[derive(Debug)]
 pub struct NROMMapper {
     prg_rom: Vec<u8>,
     chr_space: Vec<u8>,
     has_chr_ram: bool,
-    cartridge_ram: [u8; 0x2000],
+    cartridge_ram: Vec<u8>,
     mirroring: Mirroring,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct NROMMapperState {
+    cartridge_ram: Vec<u8>,
 }
 
 impl NROMMapper {
@@ -20,8 +33,21 @@ impl NROMMapper {
             prg_rom,
             chr_space: chr_rom,
             has_chr_ram,
-            cartridge_ram: [0; 0x2000],
+            cartridge_ram: if has_chr_ram {
+                vec![0; RAM_SIZE]
+            } else {
+                Vec::new()
+            },
             mirroring,
+        }
+    }
+
+    pub fn from_state(state: NROMMapperState, rom: Rom) -> Option<NROMMapper> {
+        if let MapperWrapper::NROMMapper(mut this) = rom.mapper {
+            this.cartridge_ram = state.cartridge_ram;
+            Some(this)
+        } else {
+            None
         }
     }
 }
@@ -56,12 +82,19 @@ impl Mapper for NROMMapper {
     fn write_cartridge_ram(&mut self, address: u16, value: u8) {
         self.cartridge_ram[address as usize] = value;
     }
-    fn get_mirroring(&self) -> Mirroring {
-        self.mirroring
-    }
     fn write_chr_ram(&mut self, address: u16, value: u8) {
         if self.has_chr_ram {
             self.chr_space[address as usize] = value;
         }
+    }
+    fn get_mirroring(&self) -> Mirroring {
+        self.mirroring
+    }
+
+    fn get_state(&self) -> MapperStateWrapper {
+        NROMMapperState {
+            cartridge_ram: self.cartridge_ram.clone(),
+        }
+        .into()
     }
 }

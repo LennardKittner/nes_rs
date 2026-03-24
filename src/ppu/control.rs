@@ -1,4 +1,5 @@
 use bitflags::bitflags;
+use serde::{Deserialize, Serialize};
 
 bitflags! {
     // 7  bit  0
@@ -16,6 +17,7 @@ bitflags! {
     // |          (0: read backdrop from EXT pins; 1: output color on EXT pins)
     // +--------- Generate an NMI at the start of the
     //            vertical blanking interval (0: off; 1: on)
+    #[derive(Serialize, Deserialize, Debug, Clone)]
     pub struct ControlRegister: u8 {
         const VRAM_ADD_INCREMENT      = 0b00000100;
         const SPRITE_PATTERN_ADDR     = 0b00001000;

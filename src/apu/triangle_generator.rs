@@ -1,6 +1,9 @@
+use serde::{Deserialize, Serialize};
+
 use crate::apu::length_counter::LengthCounter;
 use crate::apu::timer::Timer;
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TriangleGenerator {
     timer: Timer,
     length_counter: LengthCounter,

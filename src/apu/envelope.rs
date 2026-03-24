@@ -1,5 +1,8 @@
+use serde::{Deserialize, Serialize};
+
 /// NES APU envelope generator
 /// Controls the volume
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct EnvelopeGenerator {
     /// start flag to reset envelope
     start: bool,

@@ -7,6 +7,10 @@ pub mod sprite;
 pub mod status;
 mod t_register;
 
+use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
+use serde_with::Bytes;
+
 use crate::bus::PollNMI;
 use crate::ppu::addr::AddressRegister;
 use crate::ppu::control::ControlRegister;
@@ -32,11 +36,18 @@ const POWER_ON_SCNALINE: i32 = 0;
 const POWER_ON_CYCLE: usize = 20;
 
 //TODO: 8x16 sprites
+//TODO: maybe take system_palette from bus so it can be loaded correctly when resuming from
+//save_state
+#[serde_as]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PPU {
     palette_table: [u8; 32],
+    #[serde(skip_deserializing, skip_serializing)]
     system_palette: SystemPalette,
+    #[serde_as(as = "Bytes")]
     pub vram: [u8; 2048],
     pub oam_addr: u8,
+    #[serde_as(as = "Bytes")]
     pub oam_data: [u8; 256],
     pub control_register: ControlRegister,
     mask_register: MaskRegister,
@@ -62,7 +73,7 @@ pub struct PPU {
     first_touch_scanline: bool,
     first_touch_frame: bool,
 
-    is_string_up: bool,
+    is_starting_up: bool,
 }
 
 impl PollNMI for PPU {
@@ -133,12 +144,12 @@ impl PPU {
         let addr = addr & 0b00100000_00000111;
         match addr {
             0x2000 => {
-                if !self.is_string_up {
+                if !self.is_starting_up {
                     self.write_to_ctrl(data)
                 }
             }
             0x2001 => {
-                if !self.is_string_up {
+                if !self.is_starting_up {
                     self.write_to_mask(data)
                 }
             }
@@ -146,12 +157,12 @@ impl PPU {
             0x2003 => self.write_to_oam_addr(data),
             0x2004 => self.write_to_oam_data(data),
             0x2005 => {
-                if !self.is_string_up {
+                if !self.is_starting_up {
                     self.write_to_scroll(data)
                 }
             }
             0x2006 => {
-                if !self.is_string_up {
+                if !self.is_starting_up {
                     self.write_to_addr(data)
                 }
             }
@@ -190,7 +201,7 @@ impl PPU {
             set_sprite_overflow_on_tick: DO_NOT_TRIGGER_OVERFLOW,
             first_touch_scanline: true,
             first_touch_frame: true,
-            is_string_up: true,
+            is_starting_up: true,
         }
     }
 
@@ -268,7 +279,7 @@ impl PPU {
             } else if self.scan_line == VBLANK_START {
                 self.status_register.set_vertical_blank(true);
             } else if self.scan_line == LAST_SCANLINE {
-                self.is_string_up = false;
+                self.is_starting_up = false;
                 self.scan_line = PRE_RENDER_SCNALINE;
                 self.first_touch_frame = true;
                 self.sprite_zero_was_hit_this_frame = false;

@@ -2,15 +2,18 @@
 
 ## TODO
 
-- save states
-- replay
+- rewind
 - no std
 - 8x16 sprites
 - more mappers
-- detect tiles for FPS automatically
-- frame skip on fast-forward
-- frame skip on slow hardware
 - documentation
+- indicator for pause fast forward and save load
+- split crate in core and front end and add old front end as minimal example
+- avoid unwrap
+- implement replay feature by recoding user input
+- screenshot
+- video recoding
+- cheats maybe even load from public database
 
 ### Tests
 

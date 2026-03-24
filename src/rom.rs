@@ -1,15 +1,17 @@
+use enum_dispatch::enum_dispatch;
+use serde::{Deserialize, Serialize};
+
 #[cfg(test)]
 use crate::cpu::interrupts::RESET_INTERRUPT;
 #[cfg(test)]
 use crate::mappers::nrom::NROMMapper;
-use crate::mappers::{create_mapper, Mapper};
+use crate::mappers::{create_mapper, from_state, Mapper, MapperStateWrapper, MapperWrapper};
 use std::cmp::min;
 use std::fs::File;
 use std::io::Read;
 use std::path::PathBuf;
-use std::usize;
 
-#[derive(Debug, PartialEq, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub enum Mirroring {
     Vertical,
     Horizontal,
@@ -18,6 +20,7 @@ pub enum Mirroring {
     OneScreenUpperBank,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 pub enum Region {
     NTSC,
     PAL,
@@ -25,9 +28,34 @@ pub enum Region {
     Dendy,
 }
 
+#[derive(Debug)]
 pub struct Rom {
-    pub header: RomHeader,
-    mapper: Box<dyn Mapper>,
+    pub header: RomHeaderWrapper,
+    pub mapper: MapperWrapper,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct RomState {
+    header: RomHeaderWrapper,
+    mapper: MapperStateWrapper,
+}
+
+impl RomState {
+    pub fn new(rom: &Rom) -> Self {
+        RomState {
+            header: rom.header.clone(),
+            mapper: rom.mapper.get_state(),
+        }
+    }
+}
+
+impl Rom {
+    pub fn from_state(rom: Rom, state: RomState) -> Option<Self> {
+        Some(Rom {
+            header: state.header,
+            mapper: from_state(state.mapper, rom)?,
+        })
+    }
 }
 
 const NES_TAG: &str = "NES\x1A";
@@ -37,57 +65,189 @@ pub const PRG_RAM_PAGE_SIZE: usize = 8192;
 pub const CHR_ROM_PAGE_SIZE: usize = 8192;
 pub const HEADER_SIZE: usize = 16;
 
-pub enum RomHeader {
-    INES(INESHeader),
-    NES2(NES2Header),
+#[enum_dispatch]
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum RomHeaderWrapper {
+    INESHeader,
+    NES2Header,
 }
 
-impl RomHeader {
-    pub fn get_mapper_number(&self) -> usize {
-        match self {
-            RomHeader::INES(header) => header.mapper_number,
-            RomHeader::NES2(header) => header.mapper_number,
-        }
+#[enum_dispatch(RomHeaderWrapper)]
+pub trait RomHeader {
+    // Shared — plain return types
+    fn get_prg_rom_size(&self) -> usize;
+    fn get_prg_rom_start(&self) -> usize;
+    fn get_prg_ram_size(&self) -> usize;
+    fn get_chr_rom_size(&self) -> usize;
+    fn get_chr_rom_start(&self) -> usize;
+    fn get_mapper_number(&self) -> usize;
+    fn get_mirroring(&self) -> Mirroring;
+    fn get_region(&self) -> Region;
+    fn get_has_trainer(&self) -> bool;
+    fn get_battery_backed_ram_path(&self) -> Option<&str>;
+    fn get_has_chr_ram(&self) -> bool;
+
+    // NES2-only — return None for iNES
+    fn get_prg_nvram_size(&self) -> Option<usize> {
+        None
+    }
+    fn get_chr_ram_size(&self) -> Option<usize> {
+        None
+    }
+    fn get_chr_nvram_size(&self) -> Option<usize> {
+        None
+    }
+    fn get_sub_mapper_number(&self) -> Option<usize> {
+        None
+    }
+    fn get_alternative_nametable(&self) -> Option<bool> {
+        None
+    }
+    fn get_num_miscellaneous_roms(&self) -> Option<usize> {
+        None
+    }
+
+    // iNES-only — return None for NES2
+    fn get_has_bus_conflicts(&self) -> Option<bool> {
+        None
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct INESHeader {
-    pub prg_rom_size: usize,
-    pub prg_ram_size: usize,
-    pub chr_rom_size: usize,
-    pub mirroring: Mirroring,
-    pub battery_backed_ram_path: Option<String>,
-    pub has_chr_ram: bool,
+    prg_rom_size: usize,
+    prg_ram_size: usize,
+    chr_rom_size: usize,
+    mirroring: Mirroring,
+    battery_backed_ram_path: Option<String>,
+    has_chr_ram: bool,
     /// Unused
-    pub has_bus_conflicts: bool,
+    has_bus_conflicts: bool,
     /// Unused
-    pub has_trainer: bool,
-    pub mapper_number: usize,
-    pub region: Region,
-    pub prg_rom_start: usize,
-    pub chr_rom_start: usize,
+    has_trainer: bool,
+    mapper_number: usize,
+    region: Region,
+    prg_rom_start: usize,
+    chr_rom_start: usize,
 }
 
+impl RomHeader for INESHeader {
+    fn get_prg_rom_size(&self) -> usize {
+        self.prg_rom_size
+    }
+    fn get_prg_rom_start(&self) -> usize {
+        self.prg_rom_start
+    }
+    fn get_prg_ram_size(&self) -> usize {
+        self.prg_ram_size
+    }
+    fn get_chr_rom_size(&self) -> usize {
+        self.chr_rom_size
+    }
+    fn get_chr_rom_start(&self) -> usize {
+        self.chr_rom_start
+    }
+    fn get_mapper_number(&self) -> usize {
+        self.mapper_number
+    }
+    fn get_mirroring(&self) -> Mirroring {
+        self.mirroring
+    }
+    fn get_region(&self) -> Region {
+        self.region
+    }
+    fn get_has_trainer(&self) -> bool {
+        self.has_trainer
+    }
+    fn get_battery_backed_ram_path(&self) -> Option<&str> {
+        self.battery_backed_ram_path.as_deref()
+    }
+
+    fn get_has_chr_ram(&self) -> bool {
+        self.has_chr_ram
+    }
+    fn get_has_bus_conflicts(&self) -> Option<bool> {
+        Some(self.has_bus_conflicts)
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct NES2Header {
-    pub prg_rom_size: usize,
-    pub prg_rom_start: usize,
-    pub prg_ram_size: usize,
-    pub prg_nvram_size: usize,
-    pub chr_rom_size: usize,
-    pub chr_rom_start: usize,
-    pub chr_ram_size: usize,
-    pub chr_nvram_size: usize,
-    pub mirroring: Mirroring,
-    pub battery_backed_ram_path: Option<String>,
-    pub has_trainer: bool,
-    pub mapper_number: usize,
-    pub sub_mapper_number: usize,
-    pub alternative_nametable: bool,
-    pub region: Region,
+    prg_rom_size: usize,
+    prg_rom_start: usize,
+    prg_ram_size: usize,
+    prg_nvram_size: usize,
+    chr_rom_size: usize,
+    chr_rom_start: usize,
+    chr_ram_size: usize,
+    chr_nvram_size: usize,
+    mirroring: Mirroring,
+    battery_backed_ram_path: Option<String>,
+    has_trainer: bool,
+    mapper_number: usize,
+    sub_mapper_number: usize,
+    alternative_nametable: bool,
+    region: Region,
     /// Unused
-    pub system_type: u8,
+    system_type: u8,
     /// Unused
-    pub num_miscellaneous_roms: usize,
+    num_miscellaneous_roms: usize,
+}
+
+impl RomHeader for NES2Header {
+    fn get_prg_rom_size(&self) -> usize {
+        self.prg_rom_size
+    }
+    fn get_prg_rom_start(&self) -> usize {
+        self.prg_rom_start
+    }
+    fn get_prg_ram_size(&self) -> usize {
+        self.prg_ram_size
+    }
+    fn get_chr_rom_size(&self) -> usize {
+        self.chr_rom_size
+    }
+    fn get_chr_rom_start(&self) -> usize {
+        self.chr_rom_start
+    }
+    fn get_mapper_number(&self) -> usize {
+        self.mapper_number
+    }
+    fn get_mirroring(&self) -> Mirroring {
+        self.mirroring
+    }
+    fn get_region(&self) -> Region {
+        self.region
+    }
+    fn get_has_trainer(&self) -> bool {
+        self.has_trainer
+    }
+    fn get_battery_backed_ram_path(&self) -> Option<&str> {
+        self.battery_backed_ram_path.as_deref()
+    }
+
+    fn get_prg_nvram_size(&self) -> Option<usize> {
+        Some(self.prg_nvram_size)
+    }
+    fn get_chr_ram_size(&self) -> Option<usize> {
+        Some(self.chr_ram_size)
+    }
+    fn get_chr_nvram_size(&self) -> Option<usize> {
+        Some(self.chr_nvram_size)
+    }
+    fn get_sub_mapper_number(&self) -> Option<usize> {
+        Some(self.sub_mapper_number)
+    }
+    fn get_alternative_nametable(&self) -> Option<bool> {
+        Some(self.alternative_nametable)
+    }
+    fn get_num_miscellaneous_roms(&self) -> Option<usize> {
+        Some(self.num_miscellaneous_roms)
+    }
+
+    fn get_has_chr_ram(&self) -> bool {
+        self.get_chr_ram_size().unwrap() > 0
+    }
 }
 
 impl INESHeader {
@@ -321,13 +481,9 @@ impl Rom {
             chr_rom_start: prg_rom.len(),
         };
         Rom {
-            header: RomHeader::INES(test_header),
-            mapper: Box::new(NROMMapper::new(
-                prg_rom,
-                vec![0; CHR_ROM_PAGE_SIZE * 4],
-                true,
-                mirroring,
-            )),
+            header: test_header.into(),
+            mapper: NROMMapper::new(prg_rom, vec![0; CHR_ROM_PAGE_SIZE * 4], true, mirroring)
+                .into(),
         }
     }
 
@@ -342,9 +498,9 @@ impl Rom {
         }
         let ines_ver = (raw[7] >> 2) & 0b11;
         let header = if ines_ver != 0 {
-            RomHeader::NES2(NES2Header::new(raw, battery_backed_ram_path)?)
+            NES2Header::new(raw, battery_backed_ram_path)?.into()
         } else {
-            RomHeader::INES(INESHeader::new(raw, battery_backed_ram_path)?)
+            INESHeader::new(raw, battery_backed_ram_path)?.into()
         };
         let mapper = create_mapper(&header, raw);
         Ok(Rom { header, mapper })
