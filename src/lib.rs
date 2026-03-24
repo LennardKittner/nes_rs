@@ -20,12 +20,10 @@ pub mod ring_buffer;
 mod rolling_avg;
 pub mod rom;
 
-//TODO: use this as the interface to the outside
-//TODO: implement RomState
-
 #[derive(Debug)]
 pub struct NES<'a> {
-    pub cpu: CPU<'a>,
+    speed_multiplier: f64,
+    cpu: CPU<'a>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -75,7 +73,13 @@ impl<'a> NES<'a> {
         let audio_buffer = bus.audio_ring_buffer.clone();
         let mut cpu = CPU::new_with_bus(bus);
         cpu.reset();
-        (NES { cpu }, audio_buffer)
+        (
+            NES {
+                speed_multiplier,
+                cpu,
+            },
+            audio_buffer,
+        )
     }
 
     pub fn from_state(
@@ -95,6 +99,33 @@ impl<'a> NES<'a> {
             audio_buffer,
         )?;
         Some(NES {
+            speed_multiplier,
+            cpu: CPU::from_state(state.cpu, bus_tmp),
+        })
+    }
+
+    pub fn replace_state(self, state: NESState) -> Option<Self> {
+        let speed_multiplier = self.speed_multiplier;
+        let rom = self.cpu.bus.rom;
+        let graphics_callback = self.cpu.bus.graphics_callback;
+        let controller_callback = self.cpu.bus.controller_callback;
+        let audio_buffer = self.cpu.bus.audio_ring_buffer;
+
+        let rom_hash = state.get_rom_hash();
+        if rom_hash != rom.rom_hash {
+            eprintln!("The hash of the current rom and the rom which was played during save state creation missmatch!\nHave fun :)")
+        }
+
+        let bus_tmp = Bus::from_state(
+            state.bus,
+            rom,
+            speed_multiplier,
+            graphics_callback,
+            controller_callback,
+            audio_buffer,
+        )?;
+        Some(NES {
+            speed_multiplier,
             cpu: CPU::from_state(state.cpu, bus_tmp),
         })
     }

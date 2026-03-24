@@ -28,7 +28,7 @@ impl<'a, F: FnMut(&PPU, &Frame, u32, &Rom) + 'a> GraphicsCallback<'a> for F {}
 #[derivative(Debug)]
 pub struct Bus<'a> {
     cpu_vram: [u8; 2048],
-    rom: Rom,
+    pub rom: Rom,
     pub ppu: PPU,
     apu: Option<APU>,
     frame: Frame,
@@ -38,9 +38,9 @@ pub struct Bus<'a> {
     cycles: usize,
     open_bus: u8,
     #[derivative(Debug = "ignore")]
-    graphics_callback: Box<dyn GraphicsCallback<'a>>,
+    pub graphics_callback: Box<dyn GraphicsCallback<'a>>,
     #[derivative(Debug = "ignore")]
-    controller_callback: Box<dyn ControllerCallback<'a>>,
+    pub controller_callback: Box<dyn ControllerCallback<'a>>,
     controller_1: Controller,
     controller_2: Controller,
     last_frame: Instant,

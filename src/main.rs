@@ -2,7 +2,7 @@ use clap::Parser;
 use hound::{WavSpec, WavWriter};
 use itertools::Itertools;
 use nes_rs::{
-    bus::{AudioBuffer, ControllerCallback, GraphicsCallback, AUDIO_BUFFER_SIZE},
+    bus::{ControllerCallback, GraphicsCallback, AUDIO_BUFFER_SIZE},
     controller::{Controller, ControllerButtons, ControllerInput},
     ppu::{palette::SystemPalette, PPU},
     rendering::{
@@ -12,7 +12,7 @@ use nes_rs::{
     },
     ring_buffer::RingBuffer,
     rom::Rom,
-    NESState, NES,
+    NES,
 };
 use sdl2::{
     audio::{AudioCallback, AudioDevice, AudioSpecDesired},
@@ -866,9 +866,7 @@ fn main() {
         FrontEndState::new(rom_name, args.scaling, args.enable_integer_scaling);
     let front_end_state = Rc::new(RefCell::new(front_end_state));
 
-    let rom_raw = fs::read(&rom_path).unwrap();
-    let battery_backed_ram_path = Path::new(&rom_path).with_extension("sav");
-    let rom = Rom::new(&rom_raw, battery_backed_ram_path.to_str()).unwrap();
+    let rom = Rom::load_from_disk(&rom_path).unwrap();
 
     let palette = if let Some(path) = palette_path {
         read_palette_table(&path).unwrap_or_default()
@@ -941,19 +939,11 @@ fn main() {
                 }
             };
             if !save.is_empty() {
-                if let Some(old_state) = load_from_save_state_bin(
-                    &save,
-                    Rom::new(&rom_raw, battery_backed_ram_path.to_str()).unwrap(),
-                    &texture_creators,
-                    &front_end_state,
-                    palette.clone(),
-                    font_chr_rom,
-                    audio_buffer.clone(),
-                ) {
+                if let Some(old_state) = resume_from_save_state_bin(nes, &save) {
                     nes = old_state;
                     nes.manual_re_render();
                 } else {
-                    eprintln!("Failed to resume from save state.")
+                    panic!("Failed to resume from save state.")
                 }
             }
             front_end_state.borrow_mut().actions.load_state = false;
@@ -984,10 +974,8 @@ fn main() {
     }
 }
 
-//TODO: probably not reload rom from disk but keep binary data in mem
 //TODO: speed up not working when loading from save
 //TODO: system palette when loading save to PPU
-//TODO: add function to replace NES with NESState while keeping callbacks
 //TODO: implement rewind with preview image every ~10 frames
 
 //TODO: maybe use bitcode with encode decode bitcode + serde is slower
@@ -995,70 +983,18 @@ fn create_save_state_bin(nes: &NES) -> Result<Vec<u8>, postcard::Error> {
     postcard::to_stdvec(&nes)
 }
 
+#[allow(dead_code)]
 fn create_save_state_json(nes: &NES) -> Result<String, serde_json::Error> {
     serde_json::to_string_pretty(&nes)
 }
 
-fn load_from_save_state_bin<'a>(
-    data: &[u8],
-    rom: Rom,
-    texture_creators: &'a TextureCreators,
-    front_end_state: &Rc<RefCell<FrontEndState>>,
-    palette: SystemPalette,
-    font_chr_rom: &'static [u8],
-    audio_buffer: AudioBuffer,
-) -> Option<NES<'a>> {
-    let deserialized: NESState = postcard::from_bytes(data).ok()?;
-    let rom_hash = deserialized.get_rom_hash();
-    if rom_hash != rom.rom_hash {
-        eprintln!("The hash of the current rom and the rom which was played during save state creation missmatch!\nHave fun :)")
-    }
-
-    let (render_frame, handle_controller_input) = create_callbacks(
-        front_end_state.clone(),
-        palette.clone(),
-        texture_creators,
-        font_chr_rom,
-    );
-
-    NES::from_state(
-        deserialized,
-        rom,
-        1f64,
-        render_frame,
-        handle_controller_input,
-        audio_buffer.clone(),
-    )
+fn resume_from_save_state_bin<'a>(nes: NES<'a>, data: &[u8]) -> Option<NES<'a>> {
+    nes.replace_state(postcard::from_bytes(data).ok()?)
 }
 
-fn load_from_save_state_json<'a>(
-    json: &str,
-    rom_path: String,
-    texture_creators: &'a TextureCreators,
-    front_end_state: &Rc<RefCell<FrontEndState>>,
-    palette: SystemPalette,
-    font_chr_rom: &'static [u8],
-    audio_buffer: AudioBuffer,
-) -> Option<NES<'a>> {
-    let deserialized: NESState = serde_json::from_str(json).ok()?;
-
-    let rom = Rom::load_from_disk(&rom_path).unwrap();
-
-    let (render_frame, handle_controller_input) = create_callbacks(
-        front_end_state.clone(),
-        palette.clone(),
-        texture_creators,
-        font_chr_rom,
-    );
-
-    NES::from_state(
-        deserialized,
-        rom,
-        1f64,
-        render_frame,
-        handle_controller_input,
-        audio_buffer.clone(),
-    )
+#[allow(dead_code)]
+fn resume_from_save_state_json<'a>(nes: NES<'a>, data: &str) -> Option<NES<'a>> {
+    nes.replace_state(serde_json::from_str(data).ok()?)
 }
 
 fn create_callbacks<'a>(
