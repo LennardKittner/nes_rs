@@ -50,6 +50,7 @@ pub struct Bus<'a> {
     frame_counter: u64,
     desired_frame_duration: Duration,
     pub audio_ring_buffer: AudioBuffer, // 1s of audio
+    pub system_palette: SystemPalette,
 }
 
 #[serde_as]
@@ -97,7 +98,7 @@ impl<'a> Bus<'a> {
         graphics_callback: impl GraphicsCallback<'a>,
         controller_callback: impl ControllerCallback<'a>,
     ) -> Bus<'a> {
-        let ppu = PPU::new(system_palette);
+        let ppu = PPU::new();
         let mut speed_multiplier = speed_multiplier;
         if speed_multiplier <= 0f64 {
             speed_multiplier = f64::INFINITY;
@@ -124,6 +125,7 @@ impl<'a> Bus<'a> {
             frame_counter: 0,
             desired_frame_duration: FRAME_DURATION.mul_f64(speed_multiplier.inv()),
             audio_ring_buffer: Arc::new(Mutex::new(RingBuffer::new())),
+            system_palette,
         }
     }
 
@@ -134,6 +136,7 @@ impl<'a> Bus<'a> {
         graphics_callback: impl GraphicsCallback<'a>,
         controller_callback: impl ControllerCallback<'a>,
         audio_buffer: AudioBuffer,
+        system_palette: SystemPalette,
     ) -> Option<Self> {
         Some(Bus {
             cpu_vram: state.cpu_vram,
@@ -157,6 +160,7 @@ impl<'a> Bus<'a> {
             frame_counter: 0,
             desired_frame_duration: FRAME_DURATION.mul_f64(speed_multiplier.inv()),
             audio_ring_buffer: audio_buffer,
+            system_palette,
         })
     }
 
@@ -220,6 +224,7 @@ impl<'a> Bus<'a> {
 
         let vblank_before = self.ppu.is_in_vertical_blank();
         let next_scanline = self.ppu.tick(
+            &self.system_palette,
             cycles * 3,
             &self.rom,
             &mut self.scanline_buffers,

@@ -427,6 +427,7 @@ impl<'a> Textures<'a> {
         ppu: &PPU,
         rom: &Rom,
         font_chr_rom: &[u8],
+        system_palette: &SystemPalette,
     ) {
         self.main_texture
             .update(None, &emulation_frame.data, emulation_frame.width * 3)
@@ -547,9 +548,10 @@ impl<'a> Textures<'a> {
             if let Some(color) = BACKGROUND_COLOR {
                 self.frame_buffer.fill(color);
             } else {
-                self.frame_buffer.fill(ppu.get_universal_background_color());
+                self.frame_buffer
+                    .fill(ppu.get_universal_background_color(system_palette));
             }
-            render_oam_table(ppu, rom, &mut self.frame_buffer);
+            render_oam_table(ppu, system_palette, rom, &mut self.frame_buffer);
             self.sprite_texture
                 .update(
                     Some(sdl2::rect::Rect::new(
@@ -565,9 +567,10 @@ impl<'a> Textures<'a> {
             if let Some(color) = BACKGROUND_COLOR {
                 self.frame_buffer.fill(color);
             } else {
-                self.frame_buffer.fill(ppu.get_universal_background_color());
+                self.frame_buffer
+                    .fill(ppu.get_universal_background_color(system_palette));
             }
-            render_oam_with_pos(ppu, rom, &mut self.frame_buffer);
+            render_oam_with_pos(ppu, system_palette, rom, &mut self.frame_buffer);
             self.sprite_texture
                 .update(
                     Some(sdl2::rect::Rect::new(
@@ -975,7 +978,6 @@ fn main() {
 }
 
 //TODO: speed up not working when loading from save
-//TODO: system palette when loading save to PPU
 //TODO: implement rewind with preview image every ~10 frames
 
 //TODO: maybe use bitcode with encode decode bitcode + serde is slower
@@ -1035,6 +1037,7 @@ fn create_callbacks<'a>(
             ppu,
             rom,
             font_chr_rom,
+            &palette,
         );
         // front_end_state_rendering.borrow_mut().actions.pause = true;
 

@@ -36,14 +36,10 @@ const POWER_ON_SCNALINE: i32 = 0;
 const POWER_ON_CYCLE: usize = 20;
 
 //TODO: 8x16 sprites
-//TODO: maybe take system_palette from bus so it can be loaded correctly when resuming from
-//save_state
 #[serde_as]
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PPU {
     palette_table: [u8; 32],
-    #[serde(skip_deserializing, skip_serializing)]
-    system_palette: SystemPalette,
     #[serde_as(as = "Bytes")]
     pub vram: [u8; 2048],
     pub oam_addr: u8,
@@ -173,10 +169,9 @@ impl PPU {
 }
 
 impl PPU {
-    pub fn new(system_palette: SystemPalette) -> Self {
+    pub fn new() -> Self {
         PPU {
             palette_table: [0; 32],
-            system_palette,
             vram: [0; 2048],
             oam_addr: 0,
             oam_data: [0; 256],
@@ -207,6 +202,7 @@ impl PPU {
 
     pub fn tick(
         &mut self,
+        system_palette: &SystemPalette,
         cycles: u8,
         rom: &Rom,
         scanline_buffers: &mut [Scanline; 2],
@@ -242,6 +238,7 @@ impl PPU {
             scanline_buffers[current_buffer ^ 1].clear();
             if (self.show_sprites() || self.show_background()) && self.scan_line < VBLANK_START {
                 self.sprite_evaluation(
+                    system_palette,
                     rom,
                     &mut scanline_buffers[current_buffer ^ 1],
                     self.scan_line + 1,
@@ -264,14 +261,19 @@ impl PPU {
 
             if self.scan_line > PRE_RENDER_SCNALINE && self.scan_line < VBLANK_START {
                 if self.show_background() {
-                    render_bg(self, rom, &mut scanline_buffers[current_buffer]);
+                    render_bg(
+                        self,
+                        system_palette,
+                        rom,
+                        &mut scanline_buffers[current_buffer],
+                    );
                 } else {
                     scanline_buffers[current_buffer]
                         .data
                         .iter_mut()
                         .for_each(|pixel| {
                             pixel.background_color = BackgroundColor {
-                                color: self.get_universal_background_color(),
+                                color: self.get_universal_background_color(system_palette),
                                 transparent: true,
                             }
                         })
@@ -336,7 +338,13 @@ impl PPU {
         }
     }
 
-    fn sprite_evaluation(&mut self, rom: &Rom, sprite_pixel_buffer: &mut Scanline, scan_line: i32) {
+    fn sprite_evaluation(
+        &mut self,
+        system_palette: &SystemPalette,
+        rom: &Rom,
+        sprite_pixel_buffer: &mut Scanline,
+        scan_line: i32,
+    ) {
         let scan_line = scan_line as u16;
         let mut current_sprite_slot = 0;
         let mut buggy_sprite_scanning = false;
@@ -403,8 +411,10 @@ impl PPU {
                     x + sprite.get_x()
                 };
 
-                let rgb = self
-                    .get_color_from_current_system_palette(palette[color_idx as usize] as usize);
+                let rgb = self.get_color_from_current_system_palette(
+                    system_palette,
+                    palette[color_idx as usize] as usize,
+                );
 
                 if x_pos < SCREEN_WIDTH {
                     sprite_pixel_buffer.data[x_pos].sprite_color = SpriteColor {
@@ -611,9 +621,10 @@ impl PPU {
         self.read_palette_table(0)
     }
 
-    pub fn get_universal_background_color(&self) -> (u8, u8, u8) {
+    pub fn get_universal_background_color(&self, system_palette: &SystemPalette) -> (u8, u8, u8) {
         self.get_color_from_current_system_palette(
-            self.get_universal_background_color_idx() as usize
+            system_palette,
+            self.get_universal_background_color_idx() as usize,
         )
     }
 
@@ -637,9 +648,13 @@ impl PPU {
         self.status_register.vertical_blank()
     }
 
-    pub fn get_color_from_current_system_palette(&self, idx: usize) -> (u8, u8, u8) {
-        self.system_palette
-            .get_palette(self.mask_register.get_emphasis_index() as usize)[idx % PALETTE_SIZE_E]
+    pub fn get_color_from_current_system_palette(
+        &self,
+        system_palette: &SystemPalette,
+        idx: usize,
+    ) -> (u8, u8, u8) {
+        system_palette.get_palette(self.mask_register.get_emphasis_index() as usize)
+            [idx % PALETTE_SIZE_E]
     }
 
     pub fn set_sprite_zero_hit(&mut self) {
@@ -657,7 +672,7 @@ pub mod test {
     use super::*;
 
     pub fn new_ppu() -> PPU {
-        PPU::new(SystemPalette::new())
+        PPU::new()
     }
 
     #[test]
@@ -756,7 +771,7 @@ pub mod test {
     #[test]
     fn test_vram_vertical_mirror() {
         let mut rom = Rom::new_blank_test_rom_with_mirroring(0, Mirroring::Vertical);
-        let mut ppu = PPU::new(SystemPalette::new());
+        let mut ppu = PPU::new();
 
         ppu.write_to_addr(0x20);
         ppu.write_to_addr(0x05);

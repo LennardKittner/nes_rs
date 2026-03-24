@@ -56,7 +56,12 @@ pub fn write_tile(
 
 //TODO: maybe extract rendering loop
 //TODO: maybe move into ppu
-pub fn render_bg(ppu: &mut PPU, rom: &Rom, scanline: &mut Scanline) {
+pub fn render_bg(
+    ppu: &mut PPU,
+    system_palette: &SystemPalette,
+    rom: &Rom,
+    scanline: &mut Scanline,
+) {
     let (main_name_table, second_name_table) = match (
         rom.get_mirroring_mode(),
         ppu.address_register.get_name_table(),
@@ -96,7 +101,7 @@ pub fn render_bg(ppu: &mut PPU, rom: &Rom, scanline: &mut Scanline) {
         let tile = rom.read_tile_chr_rom(bank + tile_idx * 16);
         if !ppu.show_background_left() && tile_x == 0 || !ppu.show_background() {
             for x in (0..8).rev() {
-                let rgb = ppu.get_universal_background_color();
+                let rgb = ppu.get_universal_background_color(system_palette);
                 let pixel_x = tile_x * 8 + x;
                 if pixel_x >= shift_x {
                     scanline.data[pixel_x - shift_x].background_color = BackgroundColor {
@@ -119,8 +124,10 @@ pub fn render_bg(ppu: &mut PPU, rom: &Rom, scanline: &mut Scanline) {
             let pixel_x = tile_x * 8 + x;
 
             if pixel_x >= shift_x {
-                let rgb =
-                    ppu.get_color_from_current_system_palette(palette[color_idx as usize] as usize);
+                let rgb = ppu.get_color_from_current_system_palette(
+                    system_palette,
+                    palette[color_idx as usize] as usize,
+                );
                 scanline.data[pixel_x - shift_x].background_color = BackgroundColor {
                     color: rgb,
                     transparent: color_idx == 0,
@@ -137,7 +144,7 @@ pub fn render_bg(ppu: &mut PPU, rom: &Rom, scanline: &mut Scanline) {
         let palette = get_bg_palette(ppu, attribute_table, tile_x, tile_y);
         if !ppu.show_background_left() && tile_x == 0 || !ppu.show_background() {
             for x in (0..8).rev() {
-                let rgb = ppu.get_universal_background_color();
+                let rgb = ppu.get_universal_background_color(system_palette);
                 let pixel_x = tile_x * 8 + x;
                 if pixel_x < shift_x && pixel_x + (256 - shift_x) < 256 {
                     scanline.data[pixel_x + (256 - shift_x)].background_color = BackgroundColor {
@@ -160,8 +167,10 @@ pub fn render_bg(ppu: &mut PPU, rom: &Rom, scanline: &mut Scanline) {
             let pixel_x = tile_x * 8 + x;
 
             if pixel_x < shift_x && pixel_x + (256 - shift_x) < 256 {
-                let rgb =
-                    ppu.get_color_from_current_system_palette(palette[color_idx as usize] as usize);
+                let rgb = ppu.get_color_from_current_system_palette(
+                    system_palette,
+                    palette[color_idx as usize] as usize,
+                );
                 scanline.data[pixel_x + (256 - shift_x)].background_color = BackgroundColor {
                     color: rgb,
                     transparent: color_idx == 0,
@@ -226,7 +235,7 @@ pub fn render_nametable(
     }
 }
 
-pub fn render_oam_table(ppu: &PPU, rom: &Rom, frame: &mut Frame) {
+pub fn render_oam_table(ppu: &PPU, system_palette: &SystemPalette, rom: &Rom, frame: &mut Frame) {
     let sprites = (0..ppu.oam_data.len()).step_by(4).map(|sprite_idx| {
         Sprite::new(&ppu.oam_data[sprite_idx..sprite_idx + 4], sprite_idx == 0).unwrap_or_default()
     });
@@ -256,8 +265,10 @@ pub fn render_oam_table(ppu: &PPU, rom: &Rom, frame: &mut Frame) {
                     x
                 };
 
-                let rgb =
-                    ppu.get_color_from_current_system_palette(palette[color_idx as usize] as usize);
+                let rgb = ppu.get_color_from_current_system_palette(
+                    system_palette,
+                    palette[color_idx as usize] as usize,
+                );
 
                 if x_pos < SCREEN_WIDTH {
                     frame.set_pixel((sprite_idx % 8) * 8 + x_pos, (sprite_idx / 8) * 8 + y, rgb);
@@ -267,7 +278,12 @@ pub fn render_oam_table(ppu: &PPU, rom: &Rom, frame: &mut Frame) {
     }
 }
 
-pub fn render_oam_with_pos(ppu: &PPU, rom: &Rom, frame: &mut Frame) {
+pub fn render_oam_with_pos(
+    ppu: &PPU,
+    system_palette: &SystemPalette,
+    rom: &Rom,
+    frame: &mut Frame,
+) {
     let sprites = (0..ppu.oam_data.len()).step_by(4).map(|sprite_idx| {
         Sprite::new(&ppu.oam_data[sprite_idx..sprite_idx + 4], sprite_idx == 0).unwrap_or_default()
     });
@@ -297,8 +313,10 @@ pub fn render_oam_with_pos(ppu: &PPU, rom: &Rom, frame: &mut Frame) {
                     x + sprite.get_x()
                 };
 
-                let rgb =
-                    ppu.get_color_from_current_system_palette(palette[color_idx as usize] as usize);
+                let rgb = ppu.get_color_from_current_system_palette(
+                    system_palette,
+                    palette[color_idx as usize] as usize,
+                );
 
                 if x_pos < SCREEN_WIDTH {
                     frame.set_pixel(x_pos, sprite.get_y() + y, rgb);

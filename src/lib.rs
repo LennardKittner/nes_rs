@@ -89,6 +89,7 @@ impl<'a> NES<'a> {
         graphics_callback: impl GraphicsCallback<'a>,
         controller_callback: impl ControllerCallback<'a>,
         audio_buffer: AudioBuffer,
+        system_palette: SystemPalette,
     ) -> Option<Self> {
         let bus_tmp = Bus::from_state(
             state.bus,
@@ -97,6 +98,7 @@ impl<'a> NES<'a> {
             graphics_callback,
             controller_callback,
             audio_buffer,
+            system_palette,
         )?;
         Some(NES {
             speed_multiplier,
@@ -110,6 +112,7 @@ impl<'a> NES<'a> {
         let graphics_callback = self.cpu.bus.graphics_callback;
         let controller_callback = self.cpu.bus.controller_callback;
         let audio_buffer = self.cpu.bus.audio_ring_buffer;
+        let system_palette = self.cpu.bus.system_palette;
 
         let rom_hash = state.get_rom_hash();
         if rom_hash != rom.rom_hash {
@@ -123,6 +126,7 @@ impl<'a> NES<'a> {
             graphics_callback,
             controller_callback,
             audio_buffer,
+            system_palette,
         )?;
         Some(NES {
             speed_multiplier,
