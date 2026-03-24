@@ -115,8 +115,8 @@ impl APU {
 }
 
 impl APU {
-    pub fn new() -> APU {
-        Self {
+    pub fn new(speed_multiplier: f64) -> APU {
+        let mut this = Self {
             pulse_generator1: PulseGenerator::new(PulseGeneratorID::One),
             pulse_generator2: PulseGenerator::new(PulseGeneratorID::Two),
             noise_generator: NoiseGenerator::new(),
@@ -130,7 +130,9 @@ impl APU {
             frame_counter_write_delay: 0,
             pending_frame_counter_value: None,
             low_pass_filter: LowPassFilter::from_cutoff(44100.0, 1200.0),
-        }
+        };
+        this.set_speed_multiplayer(speed_multiplier);
+        this
     }
 
     pub fn set_speed_multiplayer(&mut self, speed_multiplier: f64) {

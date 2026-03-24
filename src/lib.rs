@@ -135,6 +135,7 @@ impl<'a> NES<'a> {
     }
 
     pub fn set_speed_multiplayer(&mut self, speed_multiplier: f64) {
+        self.speed_multiplier = speed_multiplier;
         self.cpu.bus.set_speed_multiplayer(speed_multiplier);
     }
 

@@ -109,7 +109,7 @@ impl<'a> Bus<'a> {
             cycles: 0,
             open_bus: 0,
             ppu,
-            apu: Some(APU::new()),
+            apu: Some(APU::new(speed_multiplier)),
             frame: Frame::default(),
             scanline_buffers: [Scanline::new(), Scanline::new()],
             current_scanline_buffer: 0,
