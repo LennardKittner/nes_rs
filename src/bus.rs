@@ -83,6 +83,10 @@ impl BusState {
             frame_counter: bus.frame_counter,
         }
     }
+
+    pub fn get_rom_hash(&self) -> u64 {
+        self.rom.get_rom_hash()
+    }
 }
 
 impl<'a> Bus<'a> {

@@ -8,6 +8,7 @@ use crate::mappers::nrom::NROMMapper;
 use crate::mappers::{create_mapper, from_state, Mapper, MapperStateWrapper, MapperWrapper};
 use std::cmp::min;
 use std::fs::File;
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::io::Read;
 use std::path::PathBuf;
 
@@ -30,12 +31,14 @@ pub enum Region {
 
 #[derive(Debug)]
 pub struct Rom {
+    pub rom_hash: u64,
     pub header: RomHeaderWrapper,
     pub mapper: MapperWrapper,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct RomState {
+    rom_hash: u64,
     header: RomHeaderWrapper,
     mapper: MapperStateWrapper,
 }
@@ -43,15 +46,21 @@ pub struct RomState {
 impl RomState {
     pub fn new(rom: &Rom) -> Self {
         RomState {
+            rom_hash: rom.rom_hash,
             header: rom.header.clone(),
             mapper: rom.mapper.get_state(),
         }
+    }
+
+    pub fn get_rom_hash(&self) -> u64 {
+        self.rom_hash
     }
 }
 
 impl Rom {
     pub fn from_state(rom: Rom, state: RomState) -> Option<Self> {
         Some(Rom {
+            rom_hash: state.rom_hash,
             header: state.header,
             mapper: from_state(state.mapper, rom)?,
         })
@@ -481,6 +490,7 @@ impl Rom {
             chr_rom_start: prg_rom.len(),
         };
         Rom {
+            rom_hash: 0,
             header: test_header.into(),
             mapper: NROMMapper::new(prg_rom, vec![0; CHR_ROM_PAGE_SIZE * 4], true, mirroring)
                 .into(),
@@ -503,7 +513,15 @@ impl Rom {
             INESHeader::new(raw, battery_backed_ram_path)?.into()
         };
         let mapper = create_mapper(&header, raw);
-        Ok(Rom { header, mapper })
+        let mut hasher = DefaultHasher::new();
+        raw.hash(&mut hasher);
+        let rom_hash = hasher.finish();
+
+        Ok(Rom {
+            rom_hash,
+            header,
+            mapper,
+        })
     }
 
     pub fn prg_rom_len(&self) -> usize {

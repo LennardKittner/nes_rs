@@ -34,6 +34,12 @@ pub struct NESState {
     bus: BusState,
 }
 
+impl NESState {
+    pub fn get_rom_hash(&self) -> u64 {
+        self.bus.get_rom_hash()
+    }
+}
+
 impl<'a> Serialize for NES<'a> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where

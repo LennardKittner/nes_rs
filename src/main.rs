@@ -1,51 +1,40 @@
 use clap::Parser;
 use hound::{WavSpec, WavWriter};
 use itertools::Itertools;
-use nes_rs::bus::{AudioBuffer, ControllerCallback, GraphicsCallback, AUDIO_BUFFER_SIZE};
-use nes_rs::controller::{Controller, ControllerButtons, ControllerInput};
-use nes_rs::ppu::palette::SystemPalette;
-use nes_rs::ppu::PPU;
-use nes_rs::rendering::fps_frame::FPSFrame;
-use nes_rs::rendering::frame::Frame;
-use nes_rs::rendering::frame::SCREEN_HEIGHT;
-use nes_rs::rendering::frame::SCREEN_WIDTH;
-use nes_rs::rendering::frame::TILE_WIDTH;
-use nes_rs::rendering::render_nametable;
-use nes_rs::rendering::render_oam_table;
-use nes_rs::rendering::render_oam_with_pos;
-use nes_rs::rendering::write_tile;
-use nes_rs::ring_buffer::RingBuffer;
-use nes_rs::rom::Rom;
-use nes_rs::{NESState, NES};
-use sdl2::audio::AudioDevice;
-use sdl2::audio::{AudioCallback, AudioSpecDesired};
-use sdl2::event::Event;
-use sdl2::event::WindowEvent;
-use sdl2::keyboard::Keycode;
-use sdl2::pixels::Color;
-use sdl2::pixels::PixelFormatEnum;
-use sdl2::rect::Point;
-use sdl2::render::BlendMode;
-use sdl2::render::Canvas;
-use sdl2::render::ScaleMode;
-use sdl2::render::Texture;
-use sdl2::render::{TextureCreator, WindowCanvas};
-use sdl2::video::Window;
-use sdl2::video::WindowBuildError;
-use sdl2::video::WindowContext;
-use sdl2::VideoSubsystem;
-use sdl2::{AudioSubsystem, EventPump, Sdl};
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::fs::File;
-use std::io;
-use std::io::BufWriter;
-use std::io::Read;
-use std::path::Path;
-use std::rc::Rc;
-use std::sync::{Arc, Mutex};
-use std::thread;
-use std::time::Duration;
+use nes_rs::{
+    bus::{AudioBuffer, ControllerCallback, GraphicsCallback, AUDIO_BUFFER_SIZE},
+    controller::{Controller, ControllerButtons, ControllerInput},
+    ppu::{palette::SystemPalette, PPU},
+    rendering::{
+        fps_frame::FPSFrame,
+        frame::{Frame, SCREEN_HEIGHT, SCREEN_WIDTH, TILE_WIDTH},
+        render_nametable, render_oam_table, render_oam_with_pos, write_tile,
+    },
+    ring_buffer::RingBuffer,
+    rom::Rom,
+    NESState, NES,
+};
+use sdl2::{
+    audio::{AudioCallback, AudioDevice, AudioSpecDesired},
+    event::{Event, WindowEvent},
+    keyboard::Keycode,
+    pixels::{Color, PixelFormatEnum},
+    rect::Point,
+    render::{BlendMode, Canvas, ScaleMode, Texture, TextureCreator, WindowCanvas},
+    video::{Window, WindowBuildError, WindowContext},
+    AudioSubsystem, EventPump, Sdl, VideoSubsystem,
+};
+use std::{
+    cell::RefCell,
+    collections::HashMap,
+    fs::{self, File},
+    io::{self, BufWriter, Read},
+    path::Path,
+    rc::Rc,
+    sync::{Arc, Mutex},
+    thread,
+    time::Duration,
+};
 
 const PALETTE_VIEWER_DIMENSIONS: (u32, u32) = (4 * 8, 8 * 8);
 const SPRITE_TABLE_DIMENSIONS: (u32, u32) = (8 * 8, 8 * 8);
@@ -870,13 +859,16 @@ fn main() {
         })
         .next_back()
         .unwrap_or("rom");
+    let save_state_path = Path::new(&rom_path).with_extension("save_state");
     let palette_path = args.palette_path;
 
     let (front_end_state, texture_creators) =
         FrontEndState::new(rom_name, args.scaling, args.enable_integer_scaling);
     let front_end_state = Rc::new(RefCell::new(front_end_state));
 
-    let rom = Rom::load_from_disk(&rom_path).unwrap();
+    let rom_raw = fs::read(&rom_path).unwrap();
+    let battery_backed_ram_path = Path::new(&rom_path).with_extension("sav");
+    let rom = Rom::new(&rom_raw, battery_backed_ram_path.to_str()).unwrap();
 
     let palette = if let Some(path) = palette_path {
         read_palette_table(&path).unwrap_or_default()
@@ -913,7 +905,6 @@ fn main() {
 
     audio_device_wrapper.audio_device.resume();
     let mut last_speed = 1f64;
-    let mut save = Vec::new();
     while !front_end_state.borrow().actions.should_quit {
         let pause = front_end_state.borrow().actions.pause;
         handle_user_input(&mut front_end_state.borrow_mut());
@@ -926,15 +917,33 @@ fn main() {
         }
 
         if front_end_state.borrow().actions.save_state {
-            save = create_save_state_bin(&nes).unwrap_or_default();
+            let save = match create_save_state_bin(&nes) {
+                Ok(save) => save,
+                Err(err) => {
+                    eprintln!("Failed to create save state: {err}");
+                    Vec::new()
+                }
+            };
+            if !save.is_empty() {
+                if let Err(err) = fs::write(&save_state_path, save) {
+                    eprintln!("Failed to write save state: {err}");
+                }
+            }
             front_end_state.borrow_mut().actions.save_state = false;
         }
 
         if front_end_state.borrow().actions.load_state {
+            let save = match fs::read(&save_state_path) {
+                Ok(save) => save,
+                Err(err) => {
+                    eprintln!("Failed to load save state: {err}");
+                    Vec::new()
+                }
+            };
             if !save.is_empty() {
                 if let Some(old_state) = load_from_save_state_bin(
                     &save,
-                    &rom_path,
+                    Rom::new(&rom_raw, battery_backed_ram_path.to_str()).unwrap(),
                     &texture_creators,
                     &front_end_state,
                     palette.clone(),
@@ -943,6 +952,8 @@ fn main() {
                 ) {
                     nes = old_state;
                     nes.manual_re_render();
+                } else {
+                    eprintln!("Failed to resume from save state.")
                 }
             }
             front_end_state.borrow_mut().actions.load_state = false;
@@ -974,7 +985,6 @@ fn main() {
 }
 
 //TODO: probably not reload rom from disk but keep binary data in mem
-//TODO: write save_state to disk
 //TODO: speed up not working when loading from save
 //TODO: system palette when loading save to PPU
 //TODO: add function to replace NES with NESState while keeping callbacks
@@ -991,7 +1001,7 @@ fn create_save_state_json(nes: &NES) -> Result<String, serde_json::Error> {
 
 fn load_from_save_state_bin<'a>(
     data: &[u8],
-    rom_path: &str,
+    rom: Rom,
     texture_creators: &'a TextureCreators,
     front_end_state: &Rc<RefCell<FrontEndState>>,
     palette: SystemPalette,
@@ -999,8 +1009,10 @@ fn load_from_save_state_bin<'a>(
     audio_buffer: AudioBuffer,
 ) -> Option<NES<'a>> {
     let deserialized: NESState = postcard::from_bytes(data).ok()?;
-
-    let rom = Rom::load_from_disk(&rom_path).unwrap();
+    let rom_hash = deserialized.get_rom_hash();
+    if rom_hash != rom.rom_hash {
+        eprintln!("The hash of the current rom and the rom which was played during save state creation missmatch!\nHave fun :)")
+    }
 
     let (render_frame, handle_controller_input) = create_callbacks(
         front_end_state.clone(),
