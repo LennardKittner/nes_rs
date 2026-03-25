@@ -19,7 +19,7 @@ use sdl2::{
     event::{Event, WindowEvent},
     keyboard::Keycode,
     pixels::{Color, PixelFormatEnum},
-    rect::Point,
+    rect::{Point, Rect},
     render::{BlendMode, Canvas, ScaleMode, Texture, TextureCreator, WindowCanvas},
     video::{Window, WindowBuildError, WindowContext},
     AudioSubsystem, EventPump, Sdl, VideoSubsystem,
@@ -29,11 +29,13 @@ use std::{
     collections::HashMap,
     fs::{self, File},
     io::{self, BufWriter, Read},
+    ops::Neg,
     path::Path,
     rc::Rc,
     sync::{Arc, Mutex},
     thread,
     time::Duration,
+    usize,
 };
 
 const PALETTE_VIEWER_DIMENSIONS: (u32, u32) = (4 * 8, 8 * 8);
@@ -43,6 +45,13 @@ const GRID_PIXEL_IN_NES_PIXEL: u32 = 2;
 const FONT_NUMBERS_OFFSET: usize = 16;
 const FONT_LETTERS_OFFSET: usize = 33;
 const BACKGROUND_COLOR: Option<(u8, u8, u8)> = Some((0x66, 0x66, 0x66));
+
+const HISTORY_SIZE: usize = 1800;
+type RewindBuffer = RingBuffer<(Frame, Vec<u8>), HISTORY_SIZE>;
+
+//TODO:
+//reset rewind slot on esc or z exit
+//xbox controller?
 
 /// A NES emulator
 #[derive(Parser, Debug)]
@@ -210,6 +219,7 @@ struct FrontEndState {
     key_map_1: HashMap<Keycode, ControllerButtons>,
     key_map_2: HashMap<Keycode, ControllerButtons>,
     nes_controller_input: Vec<ControllerInput>,
+    rewind_slot: usize,
 }
 
 struct TextureCreators {
@@ -222,6 +232,7 @@ struct TextureCreators {
 
 struct Textures<'a> {
     main_texture: Texture<'a>,
+    rewind_texture: Texture<'a>,
     fps_texture: Texture<'a>,
     tile_texture: Texture<'a>,
     palette_texture: Texture<'a>,
@@ -305,6 +316,11 @@ impl<'a> Textures<'a> {
         system_palette: SystemPalette,
     ) -> Textures<'a> {
         let main_texture = texture_creators
+            .main_creator
+            .create_texture_target(PixelFormatEnum::RGB24, 256, 240)
+            .unwrap();
+
+        let rewind_texture = texture_creators
             .main_creator
             .create_texture_target(PixelFormatEnum::RGB24, 256, 240)
             .unwrap();
@@ -398,6 +414,7 @@ impl<'a> Textures<'a> {
 
         Textures {
             main_texture,
+            rewind_texture,
             fps_texture,
             tile_texture,
             palette_texture,
@@ -428,6 +445,7 @@ impl<'a> Textures<'a> {
         rom: &Rom,
         font_chr_rom: &[u8],
         system_palette: &SystemPalette,
+        rewind_buffer: &RewindBuffer,
     ) {
         self.main_texture
             .update(None, &emulation_frame.data, emulation_frame.width * 3)
@@ -436,6 +454,98 @@ impl<'a> Textures<'a> {
             .main_canvas
             .copy(&self.main_texture, None, None)
             .unwrap();
+        if front_end_state.actions.rewind_mode {
+            if front_end_state.actions.rewind_move_left {
+                front_end_state.actions.rewind_move_left = false;
+                front_end_state.rewind_slot =
+                    (front_end_state.rewind_slot + 1).clamp(0, rewind_buffer.writer_head - 1);
+            }
+            if front_end_state.actions.rewind_move_right {
+                front_end_state.actions.rewind_move_right = false;
+                front_end_state.rewind_slot = front_end_state.rewind_slot.saturating_sub(1);
+            }
+            front_end_state
+                .main_canvas
+                .set_draw_color(Color::RGBA(0, 0, 0, 160));
+            let _ = front_end_state.main_canvas.fill_rect(Rect::new(
+                0,
+                0,
+                SCREEN_WIDTH as u32,
+                SCREEN_HEIGHT as u32,
+            ));
+            let main_slot = rewind_buffer.writer_head - (front_end_state.rewind_slot + 1);
+            let rewind_frames: HashMap<i64, &Frame> = (-2i64..=2i64)
+                .filter_map(|pos| {
+                    let slot = main_slot as i64 + pos;
+                    if !(0i64..(rewind_buffer.writer_head as i64)).contains(&slot) {
+                        None
+                    } else {
+                        rewind_buffer.peak(slot as usize).map(|e| (pos, &e.0))
+                    }
+                })
+                .collect();
+            let rewind_frame_rects = vec![
+                Rect::new(
+                    SCREEN_WIDTH as i32 / 4
+                        - SCREEN_WIDTH as i32 / 8
+                        - SCREEN_WIDTH as i32 / 16
+                        - 16,
+                    SCREEN_HEIGHT as i32 / 2
+                        + SCREEN_HEIGHT as i32 / 4
+                        + SCREEN_HEIGHT as i32 / 16
+                        + 8,
+                    SCREEN_WIDTH as u32 / 16,
+                    SCREEN_HEIGHT as u32 / 16,
+                ),
+                Rect::new(
+                    SCREEN_WIDTH as i32 / 4 - SCREEN_WIDTH as i32 / 8 - 8,
+                    SCREEN_HEIGHT as i32 / 2 + SCREEN_HEIGHT as i32 / 4,
+                    SCREEN_WIDTH as u32 / 8,
+                    SCREEN_HEIGHT as u32 / 8,
+                ),
+                Rect::new(
+                    SCREEN_WIDTH as i32 / 4,
+                    SCREEN_HEIGHT as i32 / 2 - 36,
+                    SCREEN_WIDTH as u32 / 2,
+                    SCREEN_HEIGHT as u32 / 2,
+                ),
+                Rect::new(
+                    SCREEN_WIDTH as i32 / 4 + SCREEN_WIDTH as i32 / 2 + 8,
+                    SCREEN_HEIGHT as i32 / 2 + SCREEN_HEIGHT as i32 / 4,
+                    SCREEN_WIDTH as u32 / 8,
+                    SCREEN_HEIGHT as u32 / 8,
+                ),
+                Rect::new(
+                    SCREEN_WIDTH as i32 / 4
+                        + SCREEN_WIDTH as i32 / 2
+                        + SCREEN_WIDTH as i32 / 8
+                        + 16,
+                    SCREEN_HEIGHT as i32 / 2
+                        + SCREEN_HEIGHT as i32 / 4
+                        + SCREEN_HEIGHT as i32 / 16
+                        + 8,
+                    SCREEN_WIDTH as u32 / 16,
+                    SCREEN_HEIGHT as u32 / 16,
+                ),
+            ];
+
+            for (key, frame) in rewind_frames {
+                self.rewind_texture
+                    .update(None, &frame.data, frame.width * 3)
+                    .unwrap();
+                front_end_state
+                    .main_canvas
+                    .copy(
+                        &self.rewind_texture,
+                        None,
+                        Some(
+                            rewind_frame_rects
+                                [(key + rewind_frame_rects.len() as i64 / 2) as usize],
+                        ),
+                    )
+                    .unwrap();
+            }
+        }
 
         if front_end_state.actions.show_grid {
             front_end_state
@@ -723,12 +833,13 @@ impl FrontEndState {
             integer_scaling,
         );
 
-        let (main_canvas, main_creator) = creates_canvas_and_texture_creator(
+        let (mut main_canvas, main_creator) = creates_canvas_and_texture_creator(
             window,
             SCREEN_WIDTH as u32,
             SCREEN_HEIGHT as u32,
             integer_scaling,
         );
+        main_canvas.set_blend_mode(BlendMode::Blend);
 
         let (palette_canvas, palette_creator) = creates_canvas_and_texture_creator(
             window_palette,
@@ -780,6 +891,7 @@ impl FrontEndState {
                 key_map_1,
                 key_map_2,
                 nes_controller_input: Vec::new(),
+                rewind_slot: 0,
             },
             TextureCreators {
                 main_creator,
@@ -830,6 +942,10 @@ struct Actions {
     save_state: bool,
     load_state: bool,
     speed_multiplier: f64,
+    rewind_mode: bool,
+    rewind_move_left: bool,
+    rewind_move_right: bool,
+    rewind_load_slot: Option<usize>,
 }
 
 impl Actions {
@@ -846,6 +962,10 @@ impl Actions {
             save_state: false,
             load_state: false,
             speed_multiplier: 1f64,
+            rewind_mode: false,
+            rewind_move_left: false,
+            rewind_move_right: false,
+            rewind_load_slot: None,
         }
     }
 }
@@ -869,6 +989,8 @@ fn main() {
         FrontEndState::new(rom_name, args.scaling, args.enable_integer_scaling);
     let front_end_state = Rc::new(RefCell::new(front_end_state));
 
+    let mut rewind_buffer = Rc::new(RefCell::new(RewindBuffer::new()));
+
     let rom = Rom::load_from_disk(&rom_path).unwrap();
 
     let palette = if let Some(path) = palette_path {
@@ -884,6 +1006,7 @@ fn main() {
         palette.clone(),
         &texture_creators,
         font_chr_rom,
+        rewind_buffer.clone(),
     );
 
     let (mut nes, audio_buffer) = NES::new(
@@ -906,6 +1029,7 @@ fn main() {
 
     audio_device_wrapper.audio_device.resume();
     let mut last_speed = 1f64;
+    let mut next_save_on_frame = 0;
     while !front_end_state.borrow().actions.should_quit {
         let pause = front_end_state.borrow().actions.pause;
         handle_user_input(&mut front_end_state.borrow_mut());
@@ -950,6 +1074,32 @@ fn main() {
                 }
             }
             front_end_state.borrow_mut().actions.load_state = false;
+            next_save_on_frame = nes.get_frame_counter() + 10;
+        }
+
+        if next_save_on_frame == nes.get_frame_counter() {
+            next_save_on_frame += 10;
+            rewind_buffer.borrow_mut().push((
+                nes.get_current_frame(),
+                create_save_state_bin(&nes).unwrap(),
+            ));
+        }
+
+        {
+            let mut front_end_state_bo = front_end_state.borrow_mut();
+            if let Some(rewind_slot) = front_end_state_bo.actions.rewind_load_slot {
+                let rewind_slot = rewind_buffer
+                    .borrow()
+                    .writer_head
+                    .saturating_sub(rewind_slot + 1);
+                let (_, state) = rewind_buffer.borrow_mut().get(rewind_slot).unwrap();
+                nes = resume_from_save_state_bin(nes, &state).unwrap();
+                front_end_state_bo.rewind_slot = 0;
+                front_end_state_bo.actions.rewind_load_slot = None;
+                front_end_state_bo.actions.rewind_mode = false;
+                front_end_state_bo.actions.pause = false;
+                next_save_on_frame = nes.get_frame_counter() + 10;
+            }
         }
 
         if !pause {
@@ -977,7 +1127,6 @@ fn main() {
     }
 }
 
-//TODO: speed up not working when loading from save
 //TODO: implement rewind with preview image every ~10 frames
 
 //TODO: maybe use bitcode with encode decode bitcode + serde is slower
@@ -1004,6 +1153,7 @@ fn create_callbacks<'a>(
     palette: SystemPalette,
     texture_creators: &'a TextureCreators,
     font_chr_rom: &'static [u8],
+    rewind_buffer: Rc<RefCell<RewindBuffer>>,
 ) -> (impl GraphicsCallback<'a>, impl ControllerCallback<'a>) {
     let front_end_state_controller = front_end_state.clone();
     let front_end_state_rendering = front_end_state.clone();
@@ -1038,6 +1188,7 @@ fn create_callbacks<'a>(
             rom,
             font_chr_rom,
             &palette,
+            &rewind_buffer.borrow(),
         );
         // front_end_state_rendering.borrow_mut().actions.pause = true;
 
@@ -1106,7 +1257,12 @@ fn handle_user_input(front_end: &mut FrontEndState) {
             Event::KeyDown {
                 keycode: Some(Keycode::Escape),
                 ..
-            } => front_end.actions.pause ^= true,
+            } => {
+                front_end.actions.pause ^= true;
+                if front_end.actions.rewind_mode && !front_end.actions.pause {
+                    front_end.actions.rewind_mode = false;
+                }
+            }
             Event::KeyDown {
                 keycode: Some(Keycode::E),
                 ..
@@ -1115,6 +1271,13 @@ fn handle_user_input(front_end: &mut FrontEndState) {
                 keycode: Some(Keycode::R),
                 ..
             } => front_end.actions.load_state = true,
+            Event::KeyDown {
+                keycode: Some(Keycode::Z),
+                ..
+            } => {
+                front_end.actions.rewind_mode ^= true;
+                front_end.actions.pause = front_end.actions.rewind_mode;
+            }
             Event::KeyDown {
                 keycode: Some(Keycode::Plus),
                 ..
@@ -1141,6 +1304,14 @@ fn handle_user_input(front_end: &mut FrontEndState) {
                 keycode: Some(keycode),
                 ..
             } => {
+                if front_end.actions.rewind_mode && keycode == Keycode::Left {
+                    front_end.actions.rewind_move_left = true;
+                } else if front_end.actions.rewind_mode && keycode == Keycode::Right {
+                    front_end.actions.rewind_move_right = true;
+                } else if front_end.actions.rewind_mode && keycode == Keycode::Space {
+                    front_end.actions.rewind_load_slot = Some(front_end.rewind_slot)
+                }
+
                 if let Some(&key) = front_end.key_map_1.get(&keycode) {
                     front_end
                         .nes_controller_input
@@ -1155,6 +1326,10 @@ fn handle_user_input(front_end: &mut FrontEndState) {
                 keycode: Some(keycode),
                 ..
             } => {
+                if front_end.actions.rewind_mode && keycode == Keycode::Left {
+                } else if front_end.actions.rewind_mode && keycode == Keycode::Right {
+                } else if front_end.actions.rewind_mode && keycode == Keycode::Space {
+                }
                 if let Some(&key) = front_end.key_map_1.get(&keycode) {
                     front_end
                         .nes_controller_input

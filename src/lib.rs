@@ -4,7 +4,7 @@ use crate::{
     bus::{AudioBuffer, Bus, BusState, ControllerCallback, GraphicsCallback},
     controller::Controller,
     cpu::{CPUState, CPU},
-    ppu::{palette::SystemPalette, PPU},
+    ppu::palette::SystemPalette,
     rendering::frame::Frame,
     rom::Rom,
 };
@@ -52,17 +52,13 @@ impl<'a> Serialize for NES<'a> {
 }
 
 impl<'a> NES<'a> {
-    pub fn new<GF, C1F>(
+    pub fn new(
         rom: Rom,
         system_palette: SystemPalette,
         speed_multiplier: f64,
-        graphics_callback: GF,
-        controller_callback: C1F,
-    ) -> (NES<'a>, AudioBuffer)
-    where
-        GF: FnMut(&PPU, &Frame, u32, &Rom) + 'a,
-        C1F: FnMut(&mut Controller, &mut Controller) + 'a,
-    {
+        graphics_callback: impl GraphicsCallback<'a>,
+        controller_callback: impl ControllerCallback<'a>,
+    ) -> (NES<'a>, AudioBuffer) {
         let bus = Bus::new(
             rom,
             system_palette,
@@ -88,6 +84,8 @@ impl<'a> NES<'a> {
         speed_multiplier: f64,
         graphics_callback: impl GraphicsCallback<'a>,
         controller_callback: impl ControllerCallback<'a>,
+        controller_1: Controller,
+        contorller_2: Controller,
         audio_buffer: AudioBuffer,
         system_palette: SystemPalette,
     ) -> Option<Self> {
@@ -97,6 +95,8 @@ impl<'a> NES<'a> {
             speed_multiplier,
             graphics_callback,
             controller_callback,
+            controller_1,
+            contorller_2,
             audio_buffer,
             system_palette,
         )?;
@@ -113,6 +113,8 @@ impl<'a> NES<'a> {
         let controller_callback = self.cpu.bus.controller_callback;
         let audio_buffer = self.cpu.bus.audio_ring_buffer;
         let system_palette = self.cpu.bus.system_palette;
+        let controller_1 = self.cpu.bus.controller_1;
+        let controller_2 = self.cpu.bus.controller_2;
 
         let rom_hash = state.get_rom_hash();
         if rom_hash != rom.rom_hash {
@@ -125,6 +127,8 @@ impl<'a> NES<'a> {
             speed_multiplier,
             graphics_callback,
             controller_callback,
+            controller_1,
+            controller_2,
             audio_buffer,
             system_palette,
         )?;
@@ -145,5 +149,17 @@ impl<'a> NES<'a> {
 
     pub fn manual_re_render(&mut self) {
         self.cpu.bus.manual_re_render();
+    }
+
+    pub fn in_vblank(&self) -> bool {
+        self.cpu.bus.in_vblank()
+    }
+
+    pub fn get_frame_counter(&self) -> u64 {
+        self.cpu.bus.frame_counter
+    }
+
+    pub fn get_current_frame(&self) -> Frame {
+        self.cpu.bus.frame.clone()
     }
 }

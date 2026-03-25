@@ -31,7 +31,7 @@ pub struct Bus<'a> {
     pub rom: Rom,
     pub ppu: PPU,
     apu: Option<APU>,
-    frame: Frame,
+    pub frame: Frame,
     scanline_buffers: [Scanline; 2],
     current_scanline_buffer: usize,
     last_scanline: i32,
@@ -41,13 +41,13 @@ pub struct Bus<'a> {
     pub graphics_callback: Box<dyn GraphicsCallback<'a>>,
     #[derivative(Debug = "ignore")]
     pub controller_callback: Box<dyn ControllerCallback<'a>>,
-    controller_1: Controller,
-    controller_2: Controller,
+    pub controller_1: Controller,
+    pub controller_2: Controller,
     last_frame: Instant,
     rendering_overhead: RollingAvg<u64>,
     last_60_frames: Instant,
     current_fps: u32,
-    frame_counter: u64,
+    pub frame_counter: u64,
     desired_frame_duration: Duration,
     pub audio_ring_buffer: AudioBuffer, // 1s of audio
     pub system_palette: SystemPalette,
@@ -64,8 +64,6 @@ pub struct BusState {
     last_scanline: i32,
     cycles: usize,
     open_bus: u8,
-    controller_1: Controller,
-    controller_2: Controller,
     frame_counter: u64,
 }
 
@@ -79,8 +77,6 @@ impl BusState {
             last_scanline: bus.last_scanline,
             cycles: bus.cycles,
             open_bus: bus.open_bus,
-            controller_1: bus.controller_1.clone(),
-            controller_2: bus.controller_2.clone(),
             frame_counter: bus.frame_counter,
         }
     }
@@ -135,6 +131,8 @@ impl<'a> Bus<'a> {
         speed_multiplier: f64,
         graphics_callback: impl GraphicsCallback<'a>,
         controller_callback: impl ControllerCallback<'a>,
+        controller_1: Controller,
+        controller_2: Controller,
         audio_buffer: AudioBuffer,
         system_palette: SystemPalette,
     ) -> Option<Self> {
@@ -151,8 +149,8 @@ impl<'a> Bus<'a> {
             open_bus: state.open_bus,
             graphics_callback: Box::from(graphics_callback),
             controller_callback: Box::from(controller_callback),
-            controller_1: state.controller_1,
-            controller_2: state.controller_2,
+            controller_1,
+            controller_2,
             last_frame: Instant::now(),
             rendering_overhead: RollingAvg::new(60),
             last_60_frames: Instant::now(),
@@ -174,6 +172,10 @@ impl<'a> Bus<'a> {
             .unwrap()
             .set_speed_multiplayer(speed_multiplier);
         self.desired_frame_duration = FRAME_DURATION.mul_f64(speed_multiplier.inv());
+    }
+
+    pub fn in_vblank(&self) -> bool {
+        self.ppu.is_in_vertical_blank()
     }
 
     pub fn get_cycle_count_cpu(&self) -> usize {
