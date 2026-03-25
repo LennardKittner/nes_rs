@@ -2,7 +2,6 @@
 
 ## TODO
 
-- rewind
 - no std
 - 8x16 sprites
 - more mappers

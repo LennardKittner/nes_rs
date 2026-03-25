@@ -29,7 +29,6 @@ use std::{
     collections::HashMap,
     fs::{self, File},
     io::{self, BufWriter, Read},
-    ops::Neg,
     path::Path,
     rc::Rc,
     sync::{Arc, Mutex},
@@ -50,8 +49,9 @@ const HISTORY_SIZE: usize = 1800;
 type RewindBuffer = RingBuffer<(Frame, Vec<u8>), HISTORY_SIZE>;
 
 //TODO:
-//reset rewind slot on esc or z exit
 //xbox controller?
+//Code cleanup especially rewind and main.rs in general
+//Fix tests
 
 /// A NES emulator
 #[derive(Parser, Debug)]
@@ -1127,8 +1127,6 @@ fn main() {
     }
 }
 
-//TODO: implement rewind with preview image every ~10 frames
-
 //TODO: maybe use bitcode with encode decode bitcode + serde is slower
 fn create_save_state_bin(nes: &NES) -> Result<Vec<u8>, postcard::Error> {
     postcard::to_stdvec(&nes)
@@ -1261,6 +1259,7 @@ fn handle_user_input(front_end: &mut FrontEndState) {
                 front_end.actions.pause ^= true;
                 if front_end.actions.rewind_mode && !front_end.actions.pause {
                     front_end.actions.rewind_mode = false;
+                    front_end.rewind_slot = 0;
                 }
             }
             Event::KeyDown {
@@ -1277,6 +1276,7 @@ fn handle_user_input(front_end: &mut FrontEndState) {
             } => {
                 front_end.actions.rewind_mode ^= true;
                 front_end.actions.pause = front_end.actions.rewind_mode;
+                front_end.rewind_slot = 0;
             }
             Event::KeyDown {
                 keycode: Some(Keycode::Plus),
