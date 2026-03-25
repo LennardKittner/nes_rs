@@ -19,3 +19,12 @@ roms/*.nes
 log.txt
 *.pal
 .idea/
+
+*.log
+*.palette
+*.png
+*.save_state
+*.sav
+*.nes
+*.asm
+*.test
