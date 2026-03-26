@@ -83,6 +83,12 @@ impl PollNMI for PPU {
     }
 }
 
+impl Default for PPU {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 const PPU_REGISTERS_MIRRORS_END: u16 = 0x3FFF;
 
 impl PPU {
@@ -248,11 +254,11 @@ impl PPU {
         }
 
         if self.cycles >= CYCLES_PER_SCANLINE {
-            if (PRE_RENDER_SCNALINE..VBLANK_START).contains(&self.scan_line) {
-                if self.show_background() || self.show_sprites() {
-                    self.address_register
-                        .load_x_from(&self.temporary_address_register);
-                }
+            if (PRE_RENDER_SCNALINE..VBLANK_START).contains(&self.scan_line)
+                && (self.show_background() || self.show_sprites())
+            {
+                self.address_register
+                    .load_x_from(&self.temporary_address_register);
             }
 
             self.cycles -= CYCLES_PER_SCANLINE;

@@ -125,6 +125,7 @@ impl<'a> Bus<'a> {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn from_state(
         state: BusState,
         rom: Rom,

@@ -78,6 +78,7 @@ impl<'a> NES<'a> {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn from_state(
         state: NESState,
         rom: Rom,
