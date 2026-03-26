@@ -1,3 +1,4 @@
+pub mod custom_tile_frame;
 pub mod fps_frame;
 pub mod frame;
 pub mod scanline;
