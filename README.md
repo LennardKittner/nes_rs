@@ -13,6 +13,8 @@
 - screenshot
 - video recoding
 - cheats maybe even load from public database
+- multiple save states
+- save state selection screen long press e?
 
 ### Tests
 
