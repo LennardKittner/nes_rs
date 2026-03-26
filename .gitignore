@@ -28,3 +28,6 @@ log.txt
 *.nes
 *.asm
 *.test
+
+# only for personal use
+src/rendering/icon_frame.rs
