@@ -21,9 +21,7 @@ const FONT_NUMBERS_OFFSET: usize = 16;
 const FONT_LETTERS_OFFSET: usize = 33;
 const FONT_CHR_ROM: &[u8; 1536] = include_bytes!("../om_thick_plain_nes.chr");
 
-//TODO:
-//xbox controller?
-//Fix tests
+//TODO: Fix tests
 
 /// A NES emulator
 #[derive(Parser, Debug)]

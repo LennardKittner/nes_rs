@@ -7,7 +7,9 @@ use sdl2::{
 use crate::front_end::FrontEndState;
 
 //TODO: use keymap for other controls too
-//TODO: allow setting of keymap
+// allow setting of keymap
+// support multiple physical controller
+// use controller for rewind
 
 pub fn handle_user_input(front_end: &mut FrontEndState) {
     while let Some(event) = front_end.event_pump.poll_event() {
@@ -106,6 +108,20 @@ pub fn handle_user_input(front_end: &mut FrontEndState) {
                 front_end.actions.speed_multiplier =
                     front_end.actions.speed_multiplier.clamp(0.01f64, 50f64);
             }
+            Event::ControllerButtonDown { button, .. } => {
+                if let Some(&key) = front_end.controller_map_1.get(&button) {
+                    front_end
+                        .nes_controller_input
+                        .push(ControllerInput::Controller1(true, key));
+                }
+            }
+            Event::ControllerButtonUp { button, .. } => {
+                if let Some(&key) = front_end.controller_map_1.get(&button) {
+                    front_end
+                        .nes_controller_input
+                        .push(ControllerInput::Controller1(false, key));
+                }
+            }
             Event::KeyDown {
                 keycode: Some(keycode),
                 ..
@@ -120,7 +136,7 @@ pub fn handle_user_input(front_end: &mut FrontEndState) {
                     front_end.actions.rewind_load_slot = Some(front_end.rewind_slot);
                     continue;
                 }
-
+                println!("{}", keycode);
                 if let Some(&key) = front_end.key_map_1.get(&keycode) {
                     front_end
                         .nes_controller_input

@@ -1,3 +1,4 @@
+use itertools::Itertools;
 use nes_rs::{
     bus::{ControllerCallback, GraphicsCallback},
     controller::{Controller, ControllerButtons, ControllerInput},
@@ -8,9 +9,10 @@ use nes_rs::{
     NES,
 };
 use sdl2::{
+    controller::{Button, GameController},
     keyboard::Keycode,
     render::{BlendMode, WindowCanvas},
-    AudioSubsystem, EventPump, Sdl,
+    AudioSubsystem, EventPump, GameControllerSubsystem, Sdl,
 };
 use std::{
     cell::RefCell,
@@ -42,6 +44,8 @@ pub type RewindBuffer = RingBuffer<(Frame, Vec<u8>), HISTORY_SIZE>;
 pub struct FrontEndState {
     pub sdl_context: Sdl,
     pub actions: Actions,
+    pub controller_subsystem: GameControllerSubsystem,
+    pub controllers: Vec<GameController>,
     pub audio_subsystem: AudioSubsystem,
     pub tile_map_canvas: WindowCanvas,
     pub main_canvas: WindowCanvas,
@@ -51,6 +55,7 @@ pub struct FrontEndState {
     pub event_pump: EventPump,
     pub key_map_1: HashMap<Keycode, ControllerButtons>,
     pub key_map_2: HashMap<Keycode, ControllerButtons>,
+    pub controller_map_1: HashMap<Button, ControllerButtons>,
     pub nes_controller_input: Vec<ControllerInput>,
     pub rewind_slot: usize,
 }
@@ -60,6 +65,18 @@ impl FrontEndState {
         let sdl_context = sdl2::init().unwrap();
         let audio_subsystem = sdl_context.audio().unwrap();
         let video_subsystem = sdl_context.video().unwrap();
+        let controller_subsystem = sdl_context.game_controller().unwrap();
+        let num_controller = controller_subsystem.num_joysticks().unwrap();
+        let controllers = (0..num_controller)
+            .filter_map(|id| {
+                if controller_subsystem.is_game_controller(id) {
+                    controller_subsystem.open(id).ok()
+                } else {
+                    None
+                }
+            })
+            .collect_vec();
+
         let window = create_window(
             &video_subsystem,
             &format!("NESrs -- {rom_name}"),
@@ -158,11 +175,23 @@ impl FrontEndState {
         key_map_2.insert(Keycode::O, ControllerButtons::SELECT);
         key_map_2.insert(Keycode::P, ControllerButtons::START);
 
+        let mut controller_map_1 = HashMap::new();
+        controller_map_1.insert(Button::DPadDown, ControllerButtons::DOWN);
+        controller_map_1.insert(Button::DPadUp, ControllerButtons::UP);
+        controller_map_1.insert(Button::DPadRight, ControllerButtons::RIGHT);
+        controller_map_1.insert(Button::DPadLeft, ControllerButtons::LEFT);
+        controller_map_1.insert(Button::B, ControllerButtons::A);
+        controller_map_1.insert(Button::A, ControllerButtons::B);
+        controller_map_1.insert(Button::Start, ControllerButtons::SELECT);
+        controller_map_1.insert(Button::Back, ControllerButtons::START);
+
         (
             Self {
                 sdl_context,
                 actions: Actions::new(),
                 audio_subsystem,
+                controller_subsystem,
+                controllers,
                 tile_map_canvas,
                 main_canvas,
                 tile_canvas,
@@ -171,6 +200,7 @@ impl FrontEndState {
                 event_pump,
                 key_map_1,
                 key_map_2,
+                controller_map_1,
                 nes_controller_input: Vec::new(),
                 rewind_slot: 0,
             },
