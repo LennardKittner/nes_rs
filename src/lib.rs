@@ -1,3 +1,5 @@
+// TODO:
+// #![warn(missing_docs)]
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -162,5 +164,10 @@ impl<'a> NES<'a> {
 
     pub fn get_current_frame(&self) -> Frame {
         self.cpu.bus.frame.clone()
+    }
+
+    /// get the current CPU cycle
+    pub fn get_cylce(&self) -> u64 {
+        self.cpu.bus.get_cycle_count_cpu() as u64
     }
 }

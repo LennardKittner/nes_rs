@@ -5,7 +5,6 @@ use nes_rs::{
         frame::{Frame, SCREEN_HEIGHT, SCREEN_WIDTH, TILE_WIDTH},
         render_nametable, render_oam_table, render_oam_with_pos, write_tile,
     },
-    ring_buffer::RingBuffer,
     rom::Rom,
 };
 use sdl2::{
@@ -19,8 +18,8 @@ use std::collections::HashMap;
 
 use crate::{
     front_end::{
-        FrontEndState, RewindBuffer, BACKGROUND_COLOR, GRID_PIXEL_IN_NES_PIXEL, HISTORY_SIZE,
-        PALETTE_VIEWER_DIMENSIONS, SPRITE_TABLE_DIMENSIONS, SPRITE_VIEW_DIMENSIONS,
+        FrontEndState, BACKGROUND_COLOR, GRID_PIXEL_IN_NES_PIXEL, PALETTE_VIEWER_DIMENSIONS,
+        SPRITE_TABLE_DIMENSIONS, SPRITE_VIEW_DIMENSIONS,
     },
     FONT_LETTERS_OFFSET, FONT_NUMBERS_OFFSET,
 };
@@ -269,6 +268,7 @@ impl<'a> Textures<'a> {
     }
 
     #[allow(clippy::too_many_arguments)]
+    /// Update textures with the latest information
     pub fn update_textures(
         &mut self,
         emulation_frame: &Frame,
@@ -278,7 +278,6 @@ impl<'a> Textures<'a> {
         rom: &Rom,
         font_chr_rom: &[u8],
         system_palette: &SystemPalette,
-        rewind_buffer: &RewindBuffer,
     ) {
         self.main_texture
             .update(None, &emulation_frame.data, emulation_frame.width * 3)
@@ -312,7 +311,7 @@ impl<'a> Textures<'a> {
         }
 
         if front_end_state.actions.rewind_mode {
-            self.update_rewind_ui(front_end_state, rewind_buffer);
+            self.update_rewind_ui(front_end_state);
         }
 
         if front_end_state.actions.show_grid {
@@ -519,20 +518,7 @@ impl<'a> Textures<'a> {
     }
 
     /// update textures related to the rewind UI
-    fn update_rewind_ui(
-        &mut self,
-        front_end_state: &mut FrontEndState,
-        rewind_buffer: &RingBuffer<(Frame, Vec<u8>), HISTORY_SIZE>,
-    ) {
-        if front_end_state.actions.rewind_move_left {
-            front_end_state.actions.rewind_move_left = false;
-            front_end_state.rewind_slot =
-                (front_end_state.rewind_slot + 1).clamp(0, rewind_buffer.writer_head - 1);
-        }
-        if front_end_state.actions.rewind_move_right {
-            front_end_state.actions.rewind_move_right = false;
-            front_end_state.rewind_slot = front_end_state.rewind_slot.saturating_sub(1);
-        }
+    fn update_rewind_ui(&mut self, front_end_state: &mut FrontEndState) {
         front_end_state
             .main_canvas
             .set_draw_color(Color::RGBA(0, 0, 0, 160));
@@ -542,14 +528,18 @@ impl<'a> Textures<'a> {
             SCREEN_WIDTH as u32,
             SCREEN_HEIGHT as u32,
         ));
-        let main_slot = rewind_buffer.writer_head - (front_end_state.rewind_slot + 1);
+        let main_slot =
+            front_end_state.rewind_buffer.writer_head - (front_end_state.rewind_slot + 1);
         let rewind_frames: HashMap<i64, &Frame> = (-2i64..=2i64)
             .filter_map(|pos| {
                 let slot = main_slot as i64 + pos;
-                if !(0i64..(rewind_buffer.writer_head as i64)).contains(&slot) {
+                if !(0i64..(front_end_state.rewind_buffer.writer_head as i64)).contains(&slot) {
                     None
                 } else {
-                    rewind_buffer.peak(slot as usize).map(|e| (pos, &e.0))
+                    front_end_state
+                        .rewind_buffer
+                        .peak(slot as usize)
+                        .map(|e| (pos, &e.0))
                 }
             })
             .collect();

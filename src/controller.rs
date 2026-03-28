@@ -2,7 +2,7 @@ use bitflags::bitflags;
 use serde::{Deserialize, Serialize};
 
 bitflags! {
-    #[derive(Clone, Copy, Serialize, Deserialize, Debug)]
+    #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
     pub struct ControllerButtons: u8 {
         const RIGHT  = 0b1000_0000;
         const LEFT   = 0b0100_0000;
@@ -14,7 +14,7 @@ bitflags! {
         const A      = 0b0000_0001;
     }
 }
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub enum ControllerInput {
     Controller1(bool, ControllerButtons),
     Controller2(bool, ControllerButtons),
