@@ -2,7 +2,7 @@ use itertools::Itertools;
 use nes_rs::{
     NES,
     bus::{ControllerCallback, GraphicsCallback},
-    controller::{Controller, ControllerInput},
+    controller::{Controller, ControllerButtons, ControllerInput},
     ppu::{PPU, palette::SystemPalette},
     rendering::frame::{Frame, SCREEN_HEIGHT, SCREEN_WIDTH},
     ring_buffer::RingBuffer,
@@ -13,6 +13,7 @@ use sdl2::{
     controller::{Button, GameController},
     keyboard::Keycode,
     render::{BlendMode, WindowCanvas},
+    sys::ButtonPress,
 };
 use std::{
     cell::RefCell,
@@ -23,6 +24,7 @@ use std::{
 };
 
 use crate::front_end::{
+    self,
     default_key_maps::{
         DEFAULT_CONTROLLER_MAP_1, DEFAULT_CONTROLLER_MAP_2, DEFAULT_KEY_MAP_1, DEFAULT_KEY_MAP_2,
         DEFAULT_SYSTEM_CONTROLLER_MAP, DEFAULT_SYSTEM_KEY_MAP,
@@ -321,11 +323,11 @@ pub fn create_callbacks<'a>(
             let mut front_end = front_end_state_controller.borrow_mut();
             let inputs = std::mem::take(&mut front_end.nes_controller_input);
             let replay = front_end.actions.replay_input;
-            let cycle_offset = front_end.input_replay_buffer.cycle_offset;
+            let cycle_offset_replay = front_end.input_replay_buffer.cycle_offset;
             if let Some(input) = front_end
                 .input_replay_buffer
                 .input
-                .pop_if(|input| replay && input.cycle + cycle_offset <= cycle)
+                .pop_if(|input| replay && input.cycle + cycle_offset_replay <= cycle)
             {
                 register_input(input.button);
                 if front_end.input_replay_buffer.input.is_empty() {
@@ -336,8 +338,9 @@ pub fn create_callbacks<'a>(
             if !replay {
                 for button in inputs {
                     if front_end.actions.record_input {
+                        let cycle_offset_recording = front_end.input_recording_buffer.cycle_offset;
                         front_end.input_recording_buffer.input.push(ButtonPress {
-                            cycle: cycle - cycle_offset,
+                            cycle: cycle - cycle_offset_recording,
                             button,
                         });
                     }
@@ -436,6 +439,8 @@ pub fn handle_user_input<'a>(
         }
         UserInput::SaveState => save_state_to_disk(&mut nes, &front_end.save_state_path),
         UserInput::LoadSaveState => {
+            front_end.actions.record_input = false;
+            front_end.actions.replay_input = false;
             nes = load_save_state_from_disk(nes, &front_end.save_state_path)
         }
         UserInput::RewindView => {
@@ -479,6 +484,8 @@ pub fn handle_user_input<'a>(
         }
         UserInput::RewindLoad => {
             if front_end.actions.rewind_mode {
+                front_end.actions.record_input = false;
+                front_end.actions.replay_input = false;
                 nes = continue_from_rewind_slot(nes, front_end);
             }
         }
