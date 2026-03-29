@@ -2,7 +2,7 @@ use itertools::Itertools;
 use nes_rs::{
     NES,
     bus::{ControllerCallback, GraphicsCallback},
-    controller::{Controller, ControllerButtons, ControllerInput},
+    controller::{Controller, ControllerInput},
     ppu::{PPU, palette::SystemPalette},
     rendering::frame::{Frame, SCREEN_HEIGHT, SCREEN_WIDTH},
     ring_buffer::RingBuffer,
@@ -13,7 +13,6 @@ use sdl2::{
     controller::{Button, GameController},
     keyboard::Keycode,
     render::{BlendMode, WindowCanvas},
-    sys::ButtonPress,
 };
 use std::{
     cell::RefCell,
@@ -24,7 +23,6 @@ use std::{
 };
 
 use crate::front_end::{
-    self,
     default_key_maps::{
         DEFAULT_CONTROLLER_MAP_1, DEFAULT_CONTROLLER_MAP_2, DEFAULT_KEY_MAP_1, DEFAULT_KEY_MAP_2,
         DEFAULT_SYSTEM_CONTROLLER_MAP, DEFAULT_SYSTEM_KEY_MAP,
@@ -49,7 +47,7 @@ const BACKGROUND_COLOR: Option<(u8, u8, u8)> = Some((0x66, 0x66, 0x66));
 pub const HISTORY_SIZE: usize = 1800;
 pub type RewindBuffer = RingBuffer<(Frame, Vec<u8>), HISTORY_SIZE>;
 
-/// TODO: replay / record form the beginning with flag
+// TODO: replay / record form the beginning with flag
 
 /// Contains state related to the front end e.g. SDL2 sound, video, and input subsystems
 #[allow(dead_code)]

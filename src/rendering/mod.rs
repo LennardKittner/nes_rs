@@ -3,9 +3,9 @@ pub mod fps_frame;
 pub mod frame;
 pub mod scanline;
 
+use crate::ppu::PPU;
 use crate::ppu::palette::SystemPalette;
 use crate::ppu::sprite::Sprite;
-use crate::ppu::PPU;
 use crate::rendering::frame::{Frame, SCREEN_HEIGHT_IN_TILES, SCREEN_WIDTH, SCREEN_WIDTH_IN_TILES};
 use crate::rendering::scanline::{BackgroundColor, Scanline};
 use crate::rom::{Mirroring, Rom};
@@ -100,31 +100,21 @@ pub fn render_bg(
 
         let palette = get_bg_palette(ppu, attribute_table, tile_x, tile_y);
         let tile = rom.read_tile_chr_rom(bank + tile_idx * 16);
-        if !ppu.show_background_left() && tile_x == 0 || !ppu.show_background() {
-            for x in (0..8).rev() {
-                let rgb = ppu.get_universal_background_color(system_palette);
-                let pixel_x = tile_x * 8 + x;
-                if pixel_x >= shift_x {
-                    scanline.data[pixel_x - shift_x].background_color = BackgroundColor {
-                        color: rgb,
-                        transparent: true,
-                    };
-                }
-            }
-            continue;
-        }
 
         let mut upper = tile[line];
         let mut lower = tile[line + 8];
 
         for x in (0..8).rev() {
-            let color_idx = (1 & lower) << 1 | (1 & upper);
+            let mut color_idx = (1 & lower) << 1 | (1 & upper);
             upper >>= 1;
             lower >>= 1;
 
             let pixel_x = tile_x * 8 + x;
 
             if pixel_x >= shift_x {
+                if !ppu.show_background_left() && pixel_x - shift_x <= 8 || !ppu.show_background() {
+                    color_idx = 0;
+                }
                 let rgb = ppu.get_color_from_current_system_palette(
                     system_palette,
                     palette[color_idx as usize] as usize,
@@ -143,31 +133,23 @@ pub fn render_bg(
 
         let tile = &rom.read_tile_chr_rom(bank + tile_idx * 16);
         let palette = get_bg_palette(ppu, attribute_table, tile_x, tile_y);
-        if !ppu.show_background_left() && tile_x == 0 || !ppu.show_background() {
-            for x in (0..8).rev() {
-                let rgb = ppu.get_universal_background_color(system_palette);
-                let pixel_x = tile_x * 8 + x;
-                if pixel_x < shift_x && pixel_x + (256 - shift_x) < 256 {
-                    scanline.data[pixel_x + (256 - shift_x)].background_color = BackgroundColor {
-                        color: rgb,
-                        transparent: true,
-                    };
-                }
-            }
-            continue;
-        }
 
         let mut upper = tile[line];
         let mut lower = tile[line + 8];
 
         for x in (0..8).rev() {
-            let color_idx = (1 & lower) << 1 | (1 & upper);
+            let mut color_idx = (1 & lower) << 1 | (1 & upper);
             upper >>= 1;
             lower >>= 1;
 
             let pixel_x = tile_x * 8 + x;
 
             if pixel_x < shift_x && pixel_x + (256 - shift_x) < 256 {
+                if !ppu.show_background_left() && pixel_x + (256 - shift_x) <= 8
+                    || !ppu.show_background()
+                {
+                    color_idx = 0;
+                }
                 let rgb = ppu.get_color_from_current_system_palette(
                     system_palette,
                     palette[color_idx as usize] as usize,
