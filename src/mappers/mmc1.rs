@@ -72,6 +72,16 @@ pub enum PrgRamWrapper {
     Volatile(Vec<u8>),
 }
 
+impl PrgRamWrapper {
+    /// get the prg ram data
+    fn get_data(&self) -> Vec<u8> {
+        match self {
+            PrgRamWrapper::FileBacked(mmap_mut) => mmap_mut.to_vec(),
+            PrgRamWrapper::Volatile(items) => items.clone(),
+        }
+    }
+}
+
 pub fn map_save_file(path: &str, size: u64) -> Result<MmapMut> {
     let file = OpenOptions::new()
         .read(true)
@@ -127,6 +137,7 @@ pub struct MMC1MapperState {
     prg_rom_bank0_offset: usize,
     prg_rom_bank1_offset: usize,
 
+    prg_ram: Option<Vec<u8>>,
     chr_ram: Vec<u8>,
     chr_rom_bank0_offset: usize,
     chr_rom_bank1_offset: usize,
@@ -184,6 +195,7 @@ impl MMC1Mapper {
         mapper
     }
 
+    /// Restore the mapper from mapper state
     pub fn from_state(state: MMC1MapperState, rom: Rom) -> Option<MMC1Mapper> {
         if let MapperWrapper::MMC1Mapper(mut this) = rom.mapper {
             this.prg_rom_bank0_offset = state.prg_rom_bank0_offset;
@@ -197,6 +209,14 @@ impl MMC1Mapper {
             this.chr_bank1_register = state.chr_bank1_register;
             this.prg_bank_register = state.prg_bank_register;
             this.mirroring = state.mirroring;
+            if let (Some(saved), Some(curent)) = (state.prg_ram, this.prg_ram.as_mut()) {
+                match curent {
+                    PrgRamWrapper::FileBacked(mmap_mut) => {
+                        mmap_mut[..saved.len()].copy_from_slice(&saved);
+                    }
+                    PrgRamWrapper::Volatile(vec) => *vec = saved,
+                }
+            }
             Some(this)
         } else {
             None
@@ -379,10 +399,12 @@ impl Mapper for MMC1Mapper {
         self.mirroring
     }
 
+    /// get current state of the mapper excluding prg rom
     fn get_state(&self) -> MapperStateWrapper {
         MMC1MapperState {
             prg_rom_bank0_offset: self.prg_rom_bank0_offset,
             prg_rom_bank1_offset: self.prg_rom_bank1_offset,
+            prg_ram: self.prg_ram.as_ref().map(|prg_ram| prg_ram.get_data()),
             chr_ram: self.chr_ram.clone(),
             chr_rom_bank0_offset: self.chr_rom_bank0_offset,
             chr_rom_bank1_offset: self.chr_rom_bank1_offset,
