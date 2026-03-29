@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     bus::{AudioBuffer, Bus, BusState, ControllerCallback, GraphicsCallback},
     controller::Controller,
-    cpu::{CPUState, CPU},
+    cpu::{CPU, CPUState},
     ppu::palette::SystemPalette,
     rendering::frame::Frame,
     rom::Rom,
@@ -121,7 +121,9 @@ impl<'a> NES<'a> {
 
         let rom_hash = state.get_rom_hash();
         if rom_hash != rom.rom_hash {
-            eprintln!("The hash of the current rom and the rom which was played during save state creation missmatch!\nHave fun :)")
+            eprintln!(
+                "The hash of the current rom and the rom which was played during save state creation missmatch!\nHave fun :)"
+            )
         }
 
         let bus_tmp = Bus::from_state(
@@ -168,6 +170,6 @@ impl<'a> NES<'a> {
 
     /// get the current CPU cycle
     pub fn get_cylce(&self) -> u64 {
-        self.cpu.bus.get_cycle_count_cpu() as u64
+        self.cpu.bus.get_cycle_count_cpu()
     }
 }

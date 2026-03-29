@@ -9,8 +9,8 @@ use crate::rom::{Rom, RomState};
 use derivative::Derivative;
 use num::traits::Inv;
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 use serde_with::Bytes;
+use serde_with::serde_as;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -18,8 +18,8 @@ const FRAME_DURATION: Duration = Duration::from_nanos(16666667);
 
 pub const AUDIO_BUFFER_SIZE: usize = 44100;
 pub type AudioBuffer = Arc<Mutex<RingBuffer<f32, AUDIO_BUFFER_SIZE>>>;
-pub trait ControllerCallback<'a>: FnMut(&mut Controller, &mut Controller) + 'a {}
-impl<'a, F: FnMut(&mut Controller, &mut Controller) + 'a> ControllerCallback<'a> for F {}
+pub trait ControllerCallback<'a>: FnMut(&mut Controller, &mut Controller, u64) + 'a {}
+impl<'a, F: FnMut(&mut Controller, &mut Controller, u64) + 'a> ControllerCallback<'a> for F {}
 
 pub trait GraphicsCallback<'a>: FnMut(&PPU, &Frame, u32, &Rom) + 'a {}
 impl<'a, F: FnMut(&PPU, &Frame, u32, &Rom) + 'a> GraphicsCallback<'a> for F {}
@@ -35,7 +35,7 @@ pub struct Bus<'a> {
     scanline_buffers: [Scanline; 2],
     current_scanline_buffer: usize,
     last_scanline: i32,
-    cycles: usize,
+    cycles: u64,
     open_bus: u8,
     #[derivative(Debug = "ignore")]
     pub graphics_callback: Box<dyn GraphicsCallback<'a>>,
@@ -62,7 +62,7 @@ pub struct BusState {
     ppu: PPU,
     apu: Option<APU>,
     last_scanline: i32,
-    cycles: usize,
+    cycles: u64,
     open_bus: u8,
     frame_counter: u64,
 }
@@ -179,7 +179,7 @@ impl<'a> Bus<'a> {
         self.ppu.is_in_vertical_blank()
     }
 
-    pub fn get_cycle_count_cpu(&self) -> usize {
+    pub fn get_cycle_count_cpu(&self) -> u64 {
         self.cycles
     }
 
@@ -220,7 +220,7 @@ impl<'a> Bus<'a> {
     }
 
     pub fn tick(&mut self, cycles: u8) {
-        self.cycles += cycles as usize;
+        self.cycles += cycles as u64;
         let mut apu = self.apu.take().unwrap();
         apu.tick(cycles, self);
         self.apu = Some(apu);
@@ -267,7 +267,7 @@ impl<'a> Bus<'a> {
 
             let rendering_start = Instant::now();
             (self.graphics_callback)(&self.ppu, &self.frame, self.current_fps, &self.rom);
-            (self.controller_callback)(&mut self.controller_1, &mut self.controller_2);
+            (self.controller_callback)(&mut self.controller_1, &mut self.controller_2, self.cycles);
             let overhead = rendering_start.elapsed().as_nanos() as u64;
             self.rendering_overhead.push(overhead);
             self.last_frame = Instant::now();
@@ -332,11 +332,19 @@ impl Mem for Bus<'_> {
                     self.cpu_vram[mirror_down_addr as usize]
                 }
                 0x4016 => {
-                    (self.controller_callback)(&mut self.controller_1, &mut self.controller_2);
+                    (self.controller_callback)(
+                        &mut self.controller_1,
+                        &mut self.controller_2,
+                        self.cycles,
+                    );
                     (self.open_bus & 0b1110_0000) | (self.controller_1.read() & 0b0001_1111)
                 }
                 0x4017 => {
-                    (self.controller_callback)(&mut self.controller_1, &mut self.controller_2);
+                    (self.controller_callback)(
+                        &mut self.controller_1,
+                        &mut self.controller_2,
+                        self.cycles,
+                    );
                     (self.open_bus & 0b1110_0000) | (self.controller_2.read() & 0b0001_1111)
                 }
                 _ => self.open_bus,

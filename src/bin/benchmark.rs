@@ -25,7 +25,7 @@ fn main() {
 
     let palette = SystemPalette::new();
 
-    let bus = Bus::new(rom, palette, 0f64, move |_, _, _, _| {}, |_, _| {});
+    let bus = Bus::new(rom, palette, 0f64, move |_, _, _, _| {}, |_, _, _| {});
 
     let mut cpu = CPU::new_with_bus(bus);
     cpu.reset();

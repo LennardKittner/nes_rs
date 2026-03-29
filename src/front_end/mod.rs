@@ -1,18 +1,18 @@
 use itertools::Itertools;
 use nes_rs::{
+    NES,
     bus::{ControllerCallback, GraphicsCallback},
     controller::{Controller, ControllerInput},
-    ppu::{palette::SystemPalette, PPU},
+    ppu::{PPU, palette::SystemPalette},
     rendering::frame::{Frame, SCREEN_HEIGHT, SCREEN_WIDTH},
     ring_buffer::RingBuffer,
     rom::Rom,
-    NES,
 };
 use sdl2::{
+    AudioSubsystem, EventPump, GameControllerSubsystem, Sdl,
     controller::{Button, GameController},
     keyboard::Keycode,
     render::{BlendMode, WindowCanvas},
-    AudioSubsystem, EventPump, GameControllerSubsystem, Sdl,
 };
 use std::{
     cell::RefCell,
@@ -28,7 +28,7 @@ use crate::front_end::{
         DEFAULT_SYSTEM_CONTROLLER_MAP, DEFAULT_SYSTEM_KEY_MAP,
     },
     input::{ButtonPress, UserInput},
-    video::{create_window, creates_canvas_and_texture_creator, TextureCreators, Textures},
+    video::{TextureCreators, Textures, create_window, creates_canvas_and_texture_creator},
 };
 
 pub mod audio;
@@ -69,7 +69,8 @@ pub struct FrontEndState {
     pub system_controller_map: HashMap<Button, UserInput>,
     pub nes_controller_input: Vec<ControllerInput>,
     pub rewind_slot: usize,
-    pub past_button_presses: Vec<ButtonPress>,
+    pub input_replay_buffer: Vec<ButtonPress>,
+    pub input_recording_buffer: Vec<ButtonPress>,
     pub rewind_buffer: RewindBuffer,
     pub save_state_path: String,
     pub input_recording_path: String,
@@ -198,7 +199,8 @@ impl FrontEndState {
                 system_key_map: DEFAULT_SYSTEM_KEY_MAP.clone(),
                 nes_controller_input: Vec::new(),
                 rewind_slot: 0,
-                past_button_presses: Vec::new(),
+                input_replay_buffer: Vec::new(),
+                input_recording_buffer: Vec::new(),
                 rewind_buffer: RewindBuffer::new(),
                 save_state_path: save_state_path.to_string(),
                 input_recording_path: input_recording_path.to_string(),
@@ -304,19 +306,37 @@ pub fn create_callbacks<'a>(
     let front_end_state_controller = front_end_state.clone();
     let front_end_state_rendering = front_end_state.clone();
 
-    //TODO: record input here with cycle
-    //TODO: probably also replay input here
     let handle_controller_input =
-        move |controller_1: &mut Controller, controller_2: &mut Controller| {
+        move |controller_1: &mut Controller, controller_2: &mut Controller, cycle: u64| {
+            let mut register_input = |button| match button {
+                ControllerInput::Controller1(pressed, key) => {
+                    controller_1.set_button_state(pressed, key)
+                }
+                ControllerInput::Controller2(pressed, key) => {
+                    controller_2.set_button_state(pressed, key)
+                }
+            };
             let mut front_end = front_end_state_controller.borrow_mut();
-            for button in front_end.nes_controller_input.drain(0..) {
-                match button {
-                    ControllerInput::Controller1(pressed, key) => {
-                        controller_1.set_button_state(pressed, key)
+            let inputs = std::mem::take(&mut front_end.nes_controller_input);
+            let replay = front_end.actions.replay_input;
+            if let Some(input) = front_end
+                .input_replay_buffer
+                .pop_if(|input| replay && input.cycle <= cycle)
+            {
+                register_input(input.button);
+                if front_end.input_replay_buffer.is_empty() {
+                    front_end.actions.replay_input = false;
+                }
+            }
+
+            if !replay {
+                for button in inputs {
+                    if front_end.actions.record_input {
+                        front_end
+                            .input_recording_buffer
+                            .push(ButtonPress { button, cycle });
                     }
-                    ControllerInput::Controller2(pressed, key) => {
-                        controller_2.set_button_state(pressed, key)
-                    }
+                    register_input(button);
                 }
             }
         };
@@ -375,21 +395,28 @@ pub fn handle_user_input<'a>(
         UserInput::Fps => front_end.actions.show_fps ^= true,
         UserInput::ShowGrid => front_end.actions.show_grid ^= true,
         UserInput::RecordInput => {
-            if front_end.actions.record_input {
-                let json =
-                    serde_json::ser::to_string_pretty(&front_end.past_button_presses).unwrap();
-                if let Err(e) = fs::write(&front_end.input_recording_path, json) {
-                    eprint!("Failed to save input: {e}");
+            if !front_end.actions.replay_input {
+                if front_end.actions.record_input {
+                    let json = serde_json::ser::to_string_pretty(&std::mem::take(
+                        &mut front_end.input_recording_buffer,
+                    ))
+                    .unwrap();
+                    if let Err(e) = fs::write(&front_end.input_recording_path, json) {
+                        eprint!("Failed to save input: {e}");
+                    }
                 }
+                front_end.actions.record_input ^= true
             }
-            front_end.actions.record_input ^= true
         }
         UserInput::ReplayInput => {
-            if !front_end.actions.replay_input {
-                let json = fs::read_to_string(&front_end.input_recording_path).unwrap();
-                front_end.past_button_presses = serde_json::de::from_str(&json).unwrap();
+            if !front_end.actions.record_input {
+                if !front_end.actions.replay_input {
+                    let json = fs::read_to_string(&front_end.input_recording_path).unwrap();
+                    front_end.input_replay_buffer = serde_json::de::from_str(&json).unwrap();
+                    front_end.input_replay_buffer.reverse();
+                }
+                front_end.actions.replay_input ^= true;
             }
-            front_end.actions.replay_input ^= true;
         }
         UserInput::Pause => {
             front_end.actions.pause ^= true;
@@ -484,10 +511,10 @@ fn save_state_to_disk(nes: &mut NES, path: &str) {
             Vec::new()
         }
     };
-    if !save.is_empty() {
-        if let Err(err) = fs::write(path, save) {
-            eprintln!("Failed to write save state: {err}");
-        }
+    if !save.is_empty()
+        && let Err(err) = fs::write(path, save)
+    {
+        eprintln!("Failed to write save state: {err}");
     }
 }
 

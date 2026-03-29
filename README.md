@@ -9,7 +9,6 @@
 - indicator for pause fast forward and save load
 - split crate in core and front end and add old front end as minimal example
 - avoid unwrap
-- implement replay feature by recoding user input
 - screenshot
 - video recoding
 - cheats maybe even load from public database
