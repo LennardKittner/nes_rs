@@ -27,7 +27,7 @@ use crate::front_end::{
         DEFAULT_CONTROLLER_MAP_1, DEFAULT_CONTROLLER_MAP_2, DEFAULT_KEY_MAP_1, DEFAULT_KEY_MAP_2,
         DEFAULT_SYSTEM_CONTROLLER_MAP, DEFAULT_SYSTEM_KEY_MAP,
     },
-    input::{ButtonPress, UserInput},
+    input::{ButtonPress, InputBuffer, UserInput},
     video::{TextureCreators, Textures, create_window, creates_canvas_and_texture_creator},
 };
 
@@ -46,6 +46,8 @@ const BACKGROUND_COLOR: Option<(u8, u8, u8)> = Some((0x66, 0x66, 0x66));
 //TODO: make history size configurable
 pub const HISTORY_SIZE: usize = 1800;
 pub type RewindBuffer = RingBuffer<(Frame, Vec<u8>), HISTORY_SIZE>;
+
+/// TODO: replay / record form the beginning with flag
 
 /// Contains state related to the front end e.g. SDL2 sound, video, and input subsystems
 #[allow(dead_code)]
@@ -69,8 +71,8 @@ pub struct FrontEndState {
     pub system_controller_map: HashMap<Button, UserInput>,
     pub nes_controller_input: Vec<ControllerInput>,
     pub rewind_slot: usize,
-    pub input_replay_buffer: Vec<ButtonPress>,
-    pub input_recording_buffer: Vec<ButtonPress>,
+    pub input_replay_buffer: InputBuffer,
+    pub input_recording_buffer: InputBuffer,
     pub rewind_buffer: RewindBuffer,
     pub save_state_path: String,
     pub input_recording_path: String,
@@ -199,8 +201,8 @@ impl FrontEndState {
                 system_key_map: DEFAULT_SYSTEM_KEY_MAP.clone(),
                 nes_controller_input: Vec::new(),
                 rewind_slot: 0,
-                input_replay_buffer: Vec::new(),
-                input_recording_buffer: Vec::new(),
+                input_replay_buffer: InputBuffer::new(),
+                input_recording_buffer: InputBuffer::new(),
                 rewind_buffer: RewindBuffer::new(),
                 save_state_path: save_state_path.to_string(),
                 input_recording_path: input_recording_path.to_string(),
@@ -319,12 +321,14 @@ pub fn create_callbacks<'a>(
             let mut front_end = front_end_state_controller.borrow_mut();
             let inputs = std::mem::take(&mut front_end.nes_controller_input);
             let replay = front_end.actions.replay_input;
+            let cycle_offset = front_end.input_replay_buffer.cycle_offset;
             if let Some(input) = front_end
                 .input_replay_buffer
-                .pop_if(|input| replay && input.cycle <= cycle)
+                .input
+                .pop_if(|input| replay && input.cycle + cycle_offset <= cycle)
             {
                 register_input(input.button);
-                if front_end.input_replay_buffer.is_empty() {
+                if front_end.input_replay_buffer.input.is_empty() {
                     front_end.actions.replay_input = false;
                 }
             }
@@ -332,9 +336,10 @@ pub fn create_callbacks<'a>(
             if !replay {
                 for button in inputs {
                     if front_end.actions.record_input {
-                        front_end
-                            .input_recording_buffer
-                            .push(ButtonPress { button, cycle });
+                        front_end.input_recording_buffer.input.push(ButtonPress {
+                            cycle: cycle - cycle_offset,
+                            button,
+                        });
                     }
                     register_input(button);
                 }
@@ -398,12 +403,15 @@ pub fn handle_user_input<'a>(
             if !front_end.actions.replay_input {
                 if front_end.actions.record_input {
                     let json = serde_json::ser::to_string_pretty(&std::mem::take(
-                        &mut front_end.input_recording_buffer,
+                        &mut front_end.input_recording_buffer.input,
                     ))
                     .unwrap();
                     if let Err(e) = fs::write(&front_end.input_recording_path, json) {
                         eprint!("Failed to save input: {e}");
                     }
+                } else {
+                    front_end.input_recording_buffer.input = Vec::new();
+                    front_end.input_recording_buffer.cycle_offset = nes.get_cycle();
                 }
                 front_end.actions.record_input ^= true
             }
@@ -412,8 +420,9 @@ pub fn handle_user_input<'a>(
             if !front_end.actions.record_input {
                 if !front_end.actions.replay_input {
                     let json = fs::read_to_string(&front_end.input_recording_path).unwrap();
-                    front_end.input_replay_buffer = serde_json::de::from_str(&json).unwrap();
-                    front_end.input_replay_buffer.reverse();
+                    front_end.input_replay_buffer.input = serde_json::de::from_str(&json).unwrap();
+                    front_end.input_replay_buffer.input.reverse();
+                    front_end.input_replay_buffer.cycle_offset = nes.get_cycle()
                 }
                 front_end.actions.replay_input ^= true;
             }

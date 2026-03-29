@@ -17,6 +17,25 @@ pub struct ButtonPress {
     pub cycle: u64,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+/// Represents a sequence of inputs with the cycles offsets at which the recording / replay started
+pub struct InputBuffer {
+    /// when the recording / replay started
+    pub cycle_offset: u64,
+    /// input sequence
+    pub input: Vec<ButtonPress>,
+}
+
+impl InputBuffer {
+    /// create an empty buffer
+    pub fn new() -> Self {
+        InputBuffer {
+            cycle_offset: 0,
+            input: Vec::new(),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 /// Meta representation of user Input
 pub enum UserInput {

@@ -169,7 +169,7 @@ impl<'a> NES<'a> {
     }
 
     /// get the current CPU cycle
-    pub fn get_cylce(&self) -> u64 {
+    pub fn get_cycle(&self) -> u64 {
         self.cpu.bus.get_cycle_count_cpu()
     }
 }
