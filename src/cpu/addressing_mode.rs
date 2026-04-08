@@ -1,7 +1,6 @@
 use crate::bus::Mem;
 use crate::cpu::CPU;
 
-//TODO: maybe inheritance instead of enums
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 #[allow(non_camel_case_types)]
 pub enum AddressingMode {

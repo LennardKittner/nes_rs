@@ -7,7 +7,6 @@ pub mod sprite;
 pub mod status;
 mod t_register;
 
-use serde::{Deserialize, Serialize};
 use crate::bus::PollNMI;
 use crate::ppu::addr::AddressRegister;
 use crate::ppu::control::ControlRegister;
@@ -21,6 +20,7 @@ use crate::rendering::frame::SCREEN_WIDTH;
 use crate::rendering::render_bg;
 use crate::rendering::scanline::{BackgroundColor, Scanline, SpriteColor};
 use crate::rom::{Mirroring, Rom};
+use serde::{Deserialize, Serialize};
 use std::cmp::{max, min};
 use std::ops::Range;
 

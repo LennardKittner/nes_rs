@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::cpu::interrupts::RESET_INTERRUPT;
 #[cfg(test)]
 use crate::mappers::nrom::NROMMapper;
-use crate::mappers::{create_mapper, from_state, Mapper, MapperStateWrapper, MapperWrapper};
+use crate::mappers::{Mapper, MapperStateWrapper, MapperWrapper, create_mapper, from_state};
 use std::cmp::min;
 use std::fs::File;
 use std::hash::{DefaultHasher, Hash, Hasher};
@@ -561,5 +561,3 @@ impl Rom {
         self.mapper.write_chr_ram(address, value);
     }
 }
-
-//TODO: tests

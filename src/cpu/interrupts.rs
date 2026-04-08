@@ -31,5 +31,3 @@ pub struct Interrupt {
     pub b_flag: bool,
     pub cycles: u8,
 }
-
-//TODO: Testing

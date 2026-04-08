@@ -1,7 +1,7 @@
 use itertools::Itertools;
 use nes_rs::bus::{Bus, Mem};
 use nes_rs::cpu::trace::trace;
-use nes_rs::cpu::{Flags, CPU};
+use nes_rs::cpu::{CPU, Flags};
 use nes_rs::ppu::palette::SystemPalette;
 use nes_rs::rom::Rom;
 use std::fs;
@@ -10,7 +10,6 @@ fn load_nestest_rom() -> Rom {
     Rom::load_from_disk("./tests/roms/nestest.nes").unwrap()
 }
 
-//TODO: test APU
 #[test]
 fn test_against_nes_test() {
     let bus = Bus::new(

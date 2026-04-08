@@ -1,11 +1,11 @@
 use clap::Parser;
 use itertools::Itertools;
-use nes_rs::{ppu::palette::SystemPalette, rom::Rom, NES};
+use nes_rs::{NES, ppu::palette::SystemPalette, rom::Rom};
 use std::{cell::RefCell, path::Path, rc::Rc, thread, time::Duration};
 
 use crate::front_end::{
-    audio::AudioDeviceWrapper, create_callbacks, create_save_state_bin, handle_user_input,
-    input::parse_user_input, read_palette_table, FrontEndState,
+    FrontEndState, audio::AudioDeviceWrapper, create_callbacks, create_save_state_bin,
+    handle_user_input, input::parse_user_input, read_palette_table,
 };
 
 mod front_end;
@@ -18,9 +18,8 @@ const FONT_CHR_ROM: &[u8; 1536] = include_bytes!("../om_thick_plain_nes.chr");
 //TODO: when loading save state load preview image to avoid black frame
 //TODO: make most stuff pub(crate) instead of pub
 
-//TODO: new input abstraction and recodring also add recoding as input flag
+//TODO: new input abstraction and recording also add recoding as input flag
 // maybe only store with offset from recording start
-
 /// A NES emulator
 #[derive(Parser, Debug)]
 struct Args {
@@ -140,13 +139,13 @@ fn main() {
         if !front_end_state.borrow().actions.pause {
             for _ in 0..1000 {
                 nes.step(); // step may call callbacks accessing front_end_state so we have to stop
-                            // borrowing here
+                // borrowing here
             }
         } else {
             thread::sleep(Duration::from_millis(16)); // Roughly 60FPS avoids wasting resources
-                                                      // when the emulation is paused
+            // when the emulation is paused
             nes.manual_re_render(); // without this windows such as the tile map would only show
-                                    // once the emulation gets resumed
+            // once the emulation gets resumed
         }
     }
 }
