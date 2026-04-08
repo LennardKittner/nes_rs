@@ -21,6 +21,8 @@ use crate::rendering::render_bg;
 use crate::rendering::scanline::{BackgroundColor, Scanline, SpriteColor};
 use crate::rom::{Mirroring, Rom};
 use serde::{Deserialize, Serialize};
+use serde_with::Bytes;
+use serde_with::serde_as;
 use std::cmp::{max, min};
 use std::ops::Range;
 
