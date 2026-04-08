@@ -7,10 +7,14 @@ pub struct Sprite {
     attributes: u8,
     x_pos: u8,
     sprite_zero: bool,
+    /// whether this sprite is the upper half in 8x16 mode
+    upper_half: bool,
 }
 
 impl Sprite {
-    pub fn new(raw: &[u8], sprite_zero: bool) -> Option<Self> {
+    /// create a new sprite with the raw data whether the sprite is sprite zero and whether it is
+    /// the upper half in 8x16 mode
+    pub fn new(raw: &[u8], sprite_zero: bool, upper_half: bool) -> Option<Self> {
         if raw.len() < 4 {
             None
         } else {
@@ -20,6 +24,7 @@ impl Sprite {
                 attributes: raw[2],
                 x_pos: raw[3],
                 sprite_zero,
+                upper_half,
             })
         }
     }
@@ -54,5 +59,17 @@ impl Sprite {
 
     pub fn is_sprite_zero(&self) -> bool {
         self.sprite_zero
+    }
+
+    pub fn is_upper_half(&self) -> bool {
+        self.upper_half
+    }
+
+    pub fn get_raw_data(&self) -> [u8; 4] {
+        [self.y_pos, self.pattern_index, self.attributes, self.x_pos]
+    }
+
+    pub fn set_y(&mut self, y_pos: u8) {
+        self.y_pos = y_pos;
     }
 }

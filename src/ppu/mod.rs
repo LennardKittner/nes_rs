@@ -8,14 +8,11 @@ pub mod status;
 mod t_register;
 
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
-use serde_with::Bytes;
-
 use crate::bus::PollNMI;
 use crate::ppu::addr::AddressRegister;
 use crate::ppu::control::ControlRegister;
 use crate::ppu::mask::MaskRegister;
-use crate::ppu::palette::{SystemPalette, PALETTE_SIZE_E};
+use crate::ppu::palette::{PALETTE_SIZE_E, SystemPalette};
 use crate::ppu::scroll::ScrollRegister;
 use crate::ppu::sprite::Sprite;
 use crate::ppu::status::StatusRegister;
@@ -35,7 +32,6 @@ const DO_NOT_TRIGGER_OVERFLOW: usize = 999;
 const POWER_ON_SCNALINE: i32 = 0;
 const POWER_ON_CYCLE: usize = 20;
 
-//TODO: 8x16 sprites
 #[serde_as]
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PPU {
@@ -303,11 +299,9 @@ impl PPU {
 
         // Check for Sprite Zero hit during visible scanlines (0–239)
         if !self.sprite_zero_was_hit_this_frame && self.scan_line >= 0 && self.scan_line < 240 {
+            //TODO: using current_buffer ^ 1 fixes missing sprite zero hit in some games but
+            //also causes sprite zero hit one scnaline to early in others
             self.check_sprite_zero_hit(pixel_range, &scanline_buffers[current_buffer]);
-        }
-
-        if self.control_register.get_sprite_size() == 16 {
-            println!("Sprite size: 16");
         }
 
         if (0..VBLANK_START).contains(&self.scan_line)
@@ -320,14 +314,12 @@ impl PPU {
         self.scan_line
     }
 
-    //TODO: probably one scanline to early now
     fn check_sprite_zero_hit(&mut self, range_to_check: Range<usize>, scanline: &Scanline) {
         if self.show_sprites()
             && self.scan_line < VBLANK_START
             && range_to_check.start < self.sprite_zero_pos.end
             && self.sprite_zero_pos.start < range_to_check.end
             && self.show_background()
-            && self.show_sprites()
             && (range_to_check.end > 8 || self.show_sprites_left() && self.show_background_left())
         {
             for pos in max(range_to_check.start, self.sprite_zero_pos.start)
@@ -344,6 +336,8 @@ impl PPU {
         }
     }
 
+    /// Renders sprite on the current scanline also logs if sprite zero is rendered during this
+    /// scanline to accurately trigger the sprite zero hit
     fn sprite_evaluation(
         &mut self,
         system_palette: &SystemPalette,
@@ -357,14 +351,16 @@ impl PPU {
         // should be always zero, but due to the NES hardware bug is incremented after eight sprites
         let mut y_cor_offset = 0;
         self.sprite_zero_pos = 0..0;
-        for sprite_idx in (0..self.oam_data.len()).step_by(4) {
-            let raw = &self.oam_data[sprite_idx..sprite_idx + 4];
+
+        // a helper to fill the sprite_buffer
+        // returns true if sprite evaluation should continue
+        let mut load_sprite_helper = |raw: &[u8], sprite_idx: usize, upper_half: bool| {
             if raw[y_cor_offset] < (VBLANK_START - 1) as u8
                 && scan_line >= raw[y_cor_offset] as u16
                 && scan_line < (raw[y_cor_offset] + 8) as u16
             {
                 self.sprite_buffer[current_sprite_slot] =
-                    Sprite::new(raw, sprite_idx == 0).unwrap();
+                    Sprite::new(raw, sprite_idx == 0, upper_half).unwrap();
                 if sprite_idx == 0 {
                     let x_start = self.sprite_buffer[current_sprite_slot].get_x();
                     self.sprite_zero_pos = x_start..(x_start + 8);
@@ -381,18 +377,62 @@ impl PPU {
                         + sprites_checked * IGNORED_SPRITE_DELAY
                         + sprites_in_range * (IN_RANGE_SPRITE_DELAY - IGNORED_SPRITE_DELAY);
                     current_sprite_slot -= 1; // the next loop should not render the ninth sprite
-                    break;
+                    return false;
                 }
             } else if buggy_sprite_scanning {
                 y_cor_offset = (y_cor_offset + 1) % 4;
             };
+            true
+        };
+
+        for sprite_idx in (0..self.oam_data.len()).step_by(4) {
+            if self.control_register.get_sprite_size() == 8 {
+                let raw = &self.oam_data[sprite_idx..sprite_idx + 4];
+                if !load_sprite_helper(raw, sprite_idx, true) {
+                    break;
+                }
+            } else {
+                let upper = &self.oam_data[sprite_idx..sprite_idx + 4];
+                let mut upper_sprite = Sprite::new(upper, sprite_idx == 0, true).unwrap();
+                let mut lower_sprite = upper_sprite;
+                if upper_sprite.is_vertical_flip() {
+                    upper_sprite.set_y((upper_sprite.get_y() as u8).wrapping_add(8));
+                } else {
+                    lower_sprite.set_y((lower_sprite.get_y() as u8).wrapping_add(8));
+                }
+
+                if !load_sprite_helper(&upper_sprite.get_raw_data(), sprite_idx, true) {
+                    break;
+                }
+                if !load_sprite_helper(&lower_sprite.get_raw_data(), sprite_idx, false) {
+                    break;
+                }
+            }
         }
 
         for sprite_idx in (0..current_sprite_slot).rev() {
             let sprite = &self.sprite_buffer[sprite_idx];
             let palette = self.get_sprite_palette(sprite.get_palette_index());
-            let bank = self.control_register.get_sprite_pattern_table_address() as usize;
-            let tile = rom.read_tile_chr_rom((bank + sprite.get_pattern_index() * 16) as u16);
+            let (pattern_index, bank) = if self.control_register.get_sprite_size() == 8 {
+                (
+                    sprite.get_pattern_index(),
+                    self.control_register.get_sprite_pattern_table_address() as usize,
+                )
+            } else {
+                (
+                    if sprite.is_upper_half() {
+                        sprite.get_pattern_index() & 0xFE
+                    } else {
+                        (sprite.get_pattern_index() & 0xFE) + 1
+                    },
+                    if sprite.get_pattern_index().is_multiple_of(2) {
+                        0
+                    } else {
+                        0x1000
+                    },
+                )
+            };
+            let tile = rom.read_tile_chr_rom((bank + pattern_index * 16) as u16);
             let sprite_line = if sprite.is_vertical_flip() {
                 7 - (scan_line as usize - sprite.get_y())
             } else {
@@ -400,12 +440,12 @@ impl PPU {
             };
 
             let mut upper = tile[sprite_line];
-            let mut lowwer = tile[sprite_line + 8];
+            let mut lower = tile[sprite_line + 8];
 
             for x in (0..8).rev() {
-                let color_idx = (1 & lowwer) << 1 | (1 & upper);
+                let color_idx = (1 & lower) << 1 | (1 & upper);
                 upper >>= 1;
-                lowwer >>= 1;
+                lower >>= 1;
 
                 if color_idx == 0 {
                     continue;
@@ -428,7 +468,7 @@ impl PPU {
                         behind_background: !sprite.draw_over_background(),
                         transparent: false,
                     };
-                    sprite_pixel_buffer.data[x_pos].sprite_zero_opaque |= sprite.is_sprite_zero();
+                    sprite_pixel_buffer.data[x_pos].sprite_zero_opaque = sprite.is_sprite_zero();
                 }
             }
         }

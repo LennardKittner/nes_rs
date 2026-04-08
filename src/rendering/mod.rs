@@ -220,7 +220,12 @@ pub fn render_nametable(
 
 pub fn render_oam_table(ppu: &PPU, system_palette: &SystemPalette, rom: &Rom, frame: &mut Frame) {
     let sprites = (0..ppu.oam_data.len()).step_by(4).map(|sprite_idx| {
-        Sprite::new(&ppu.oam_data[sprite_idx..sprite_idx + 4], sprite_idx == 0).unwrap_or_default()
+        Sprite::new(
+            &ppu.oam_data[sprite_idx..sprite_idx + 4],
+            sprite_idx == 0,
+            true,
+        )
+        .unwrap_or_default()
     });
 
     for (sprite_idx, sprite) in sprites.enumerate() {
@@ -268,7 +273,12 @@ pub fn render_oam_with_pos(
     frame: &mut Frame,
 ) {
     let sprites = (0..ppu.oam_data.len()).step_by(4).map(|sprite_idx| {
-        Sprite::new(&ppu.oam_data[sprite_idx..sprite_idx + 4], sprite_idx == 0).unwrap_or_default()
+        Sprite::new(
+            &ppu.oam_data[sprite_idx..sprite_idx + 4],
+            sprite_idx == 0,
+            true,
+        )
+        .unwrap_or_default()
     });
 
     for sprite in sprites.rev() {
