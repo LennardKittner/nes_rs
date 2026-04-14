@@ -1,6 +1,6 @@
 use crate::cpu::addressing_mode::AddressingMode;
 use crate::cpu::opcodes::CPU_INSTRUCTIONS;
-use crate::cpu::{Flags, CPU};
+use crate::cpu::{CPU, Flags};
 use itertools::Itertools;
 
 //c[CycleCount][Align,13]A:[A,2h] X:[X,2h] Y:[Y,2h] S:[SP,2h] P:[P,8]   $[PC]: [ByteCode][Align,62][Disassembly][EffectiveAddress] [MemoryValue,h]

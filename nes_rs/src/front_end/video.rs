@@ -1,5 +1,5 @@
 use nes_rs_core::{
-    ppu::{palette::SystemPalette, PPU},
+    ppu::{PPU, palette::SystemPalette},
     rendering::{
         fps_frame::FPSFrame,
         frame::{Frame, SCREEN_HEIGHT, SCREEN_WIDTH, TILE_WIDTH},
@@ -8,20 +8,20 @@ use nes_rs_core::{
     rom::Rom,
 };
 use sdl2::{
+    VideoSubsystem,
     pixels::{Color, PixelFormatEnum},
     rect::{Point, Rect},
     render::{BlendMode, Canvas, ScaleMode, Texture, TextureCreator},
     video::{Window, WindowBuildError, WindowContext},
-    VideoSubsystem,
 };
 use std::collections::HashMap;
 
 use crate::{
+    FONT_LETTERS_OFFSET, FONT_NUMBERS_OFFSET,
     front_end::{
-        FrontEndState, BACKGROUND_COLOR, GRID_PIXEL_IN_NES_PIXEL, PALETTE_VIEWER_DIMENSIONS,
+        BACKGROUND_COLOR, FrontEndState, GRID_PIXEL_IN_NES_PIXEL, PALETTE_VIEWER_DIMENSIONS,
         SPRITE_TABLE_DIMENSIONS, SPRITE_VIEW_DIMENSIONS,
     },
-    FONT_LETTERS_OFFSET, FONT_NUMBERS_OFFSET,
 };
 
 pub fn create_window(
