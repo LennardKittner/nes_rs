@@ -26,18 +26,20 @@ impl NROMMapper {
     pub fn new(
         prg_rom: Vec<u8>,
         chr_rom: Vec<u8>,
+        prg_ram_size: usize,
         has_chr_ram: bool,
         mirroring: Mirroring,
     ) -> Self {
+        let prg_ram_size = if prg_ram_size == 0 {
+            RAM_SIZE
+        } else {
+            prg_ram_size
+        };
         Self {
             prg_rom,
             chr_space: chr_rom,
             has_chr_ram,
-            cartridge_ram: if has_chr_ram {
-                vec![0; RAM_SIZE]
-            } else {
-                Vec::new()
-            },
+            cartridge_ram: vec![0; prg_ram_size],
             mirroring,
         }
     }

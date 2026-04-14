@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use crate::mappers::cnrom::{CNROMMapper, CNROMMapperState};
 use crate::mappers::mmc1::{MMC1Mapper, MMC1MapperState};
 use crate::mappers::nrom::{NROMMapper, NROMMapperState};
-use crate::rom::{Mirroring, Rom, RomHeader, RomHeaderWrapper, CHR_ROM_PAGE_SIZE};
+use crate::rom::{CHR_ROM_PAGE_SIZE, Mirroring, Rom, RomHeader, RomHeaderWrapper};
 
 pub mod cnrom;
 mod mmc1;
@@ -95,12 +95,14 @@ pub fn from_state(mapper_state: MapperStateWrapper, rom: Rom) -> Option<MapperWr
 pub fn create_mapper(header: &RomHeaderWrapper, raw: &[u8]) -> MapperWrapper {
     let prg_rom_start = header.get_prg_rom_start();
     let prg_rom_size = header.get_prg_rom_size();
+    let prg_ram_size = header.get_prg_ram_size();
     let prg_rom = raw[prg_rom_start..(prg_rom_start + prg_rom_size)].to_vec();
 
     match header.get_mapper_number() {
         0 => NROMMapper::new(
             prg_rom,
             get_chr_space(header, raw),
+            prg_ram_size,
             header.get_has_chr_ram(),
             header.get_mirroring(),
         )
