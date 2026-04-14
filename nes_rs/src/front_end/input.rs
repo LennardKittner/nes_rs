@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use nes_rs::controller::{ControllerButtons, ControllerInput};
+use nes_rs_core::controller::{ControllerButtons, ControllerInput};
 use sdl2::{
     controller::Button,
     event::{Event, WindowEvent},

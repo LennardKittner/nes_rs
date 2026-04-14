@@ -1,6 +1,6 @@
 use itertools::Itertools;
-use nes_rs::rendering::frame::Frame;
-use nes_rs::rom::Rom;
+use nes_rs_core::rendering::frame::Frame;
+use nes_rs_core::rom::Rom;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::PixelFormatEnum;

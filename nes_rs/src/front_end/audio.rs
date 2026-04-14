@@ -1,5 +1,5 @@
 use hound::{WavSpec, WavWriter};
-use nes_rs::{bus::AUDIO_BUFFER_SIZE, ring_buffer::RingBuffer};
+use nes_rs_core::{bus::AUDIO_BUFFER_SIZE, ring_buffer::RingBuffer};
 use sdl2::audio::{AudioCallback, AudioDevice, AudioSpecDesired};
 use std::{
     fs::File,

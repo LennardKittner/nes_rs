@@ -1,6 +1,6 @@
 use clap::Parser;
 use itertools::Itertools;
-use nes_rs::{NES, ppu::palette::SystemPalette, rom::Rom};
+use nes_rs_core::{NES, ppu::palette::SystemPalette, rom::Rom};
 use std::{cell::RefCell, path::Path, rc::Rc, thread, time::Duration};
 
 use crate::front_end::{

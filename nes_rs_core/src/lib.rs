@@ -1,5 +1,6 @@
 // TODO:
 // #![warn(missing_docs)]
+//TODO: make most stuff pub(crate) instead of pub
 use serde::{Deserialize, Serialize};
 
 use crate::{

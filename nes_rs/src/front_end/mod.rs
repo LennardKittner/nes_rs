@@ -1,6 +1,6 @@
 use image::{ImageBuffer, Rgb};
 use itertools::Itertools;
-use nes_rs::{
+use nes_rs_core::{
     NES,
     bus::{ControllerCallback, GraphicsCallback},
     controller::{Controller, ControllerInput},

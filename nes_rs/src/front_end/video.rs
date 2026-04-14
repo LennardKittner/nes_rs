@@ -1,4 +1,4 @@
-use nes_rs::{
+use nes_rs_core::{
     ppu::{palette::SystemPalette, PPU},
     rendering::{
         fps_frame::FPSFrame,

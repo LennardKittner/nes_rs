@@ -1,9 +1,9 @@
 use itertools::Itertools;
-use nes_rs::bus::{Bus, Mem};
-use nes_rs::cpu::trace::trace;
-use nes_rs::cpu::{CPU, Flags};
-use nes_rs::ppu::palette::SystemPalette;
-use nes_rs::rom::Rom;
+use nes_rs_core::bus::{Bus, Mem};
+use nes_rs_core::cpu::trace::trace;
+use nes_rs_core::cpu::{CPU, Flags};
+use nes_rs_core::ppu::palette::SystemPalette;
+use nes_rs_core::rom::Rom;
 use std::fs;
 
 fn load_nestest_rom() -> Rom {

@@ -1,7 +1,7 @@
-use nes_rs::bus::Bus;
-use nes_rs::cpu::CPU;
-use nes_rs::ppu::palette::SystemPalette;
-use nes_rs::rom::{Mirroring, Rom};
+use nes_rs_core::bus::Bus;
+use nes_rs_core::cpu::CPU;
+use nes_rs_core::ppu::palette::SystemPalette;
+use nes_rs_core::rom::{Mirroring, Rom};
 use std::sync::{Arc, Mutex};
 
 fn test_rom(path: &str) {

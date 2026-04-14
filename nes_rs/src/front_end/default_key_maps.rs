@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::LazyLock};
 
-use nes_rs::controller::ControllerButtons;
+use nes_rs_core::controller::ControllerButtons;
 use sdl2::{controller::Button, keyboard::Keycode};
 
 use crate::front_end::input::UserInput;

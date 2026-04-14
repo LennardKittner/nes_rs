@@ -1,7 +1,7 @@
-use nes_rs::bus::{Bus, Mem};
-use nes_rs::cpu::CPU;
-use nes_rs::ppu::palette::SystemPalette;
-use nes_rs::rom::Rom;
+use nes_rs_core::bus::{Bus, Mem};
+use nes_rs_core::cpu::CPU;
+use nes_rs_core::ppu::palette::SystemPalette;
+use nes_rs_core::rom::Rom;
 
 fn test_rom(path: &str) {
     let rom = Rom::load_from_disk(path).unwrap();
