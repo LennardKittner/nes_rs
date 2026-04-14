@@ -492,7 +492,7 @@ impl Rom {
         Rom {
             rom_hash: 0,
             header: test_header.into(),
-            mapper: NROMMapper::new(prg_rom, vec![0; CHR_ROM_PAGE_SIZE * 4], true, mirroring)
+            mapper: NROMMapper::new(prg_rom, vec![0; CHR_ROM_PAGE_SIZE * 4], 0, true, mirroring)
                 .into(),
         }
     }

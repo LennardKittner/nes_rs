@@ -6,7 +6,13 @@ use nes_rs::rom::Rom;
 fn test_rom(path: &str) {
     let rom = Rom::load_from_disk(path).unwrap();
 
-    let bus = Bus::new(rom, SystemPalette::new(), 0f64, |_, _, _| {}, |_, _| {});
+    let bus = Bus::new(
+        rom,
+        SystemPalette::new(),
+        0f64,
+        |_, _, _, _| {},
+        |_, _, _| {},
+    );
     let mut cpu = CPU::new_with_bus(bus);
     cpu.reset();
 

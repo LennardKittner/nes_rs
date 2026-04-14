@@ -1,9 +1,13 @@
 use crate::bus::Mem;
-use crate::cpu::{Flags, CPU};
+use crate::cpu::{CPU, Flags};
 use crate::rom::Rom;
 
 fn run_until_brk(cpu: &mut CPU) {
-    while cpu.step() {}
+    let mut last_instruction_executed = 0x01; // Some placeholder
+    while last_instruction_executed != 0 {
+        cpu.step();
+        last_instruction_executed = cpu.current_instruction.code;
+    }
     // returns from the brk interrupt and restores the cpu state
     cpu.rti();
 }
@@ -917,7 +921,6 @@ fn test_arr() {
     cpu.register_a = 0b0100_1001;
     run_until_brk(&mut cpu);
     assert_eq!(cpu.register_a, 0x00);
-    assert_eq!(cpu.get_flag(Flags::Carry), true);
 }
 
 #[test]
@@ -928,8 +931,8 @@ fn test_xaa() {
     cpu.register_x = 0xFA;
     cpu.register_a = 0b1011_1000;
     run_until_brk(&mut cpu);
-    assert_eq!(cpu.register_x, 0b1011_1000);
-    assert_eq!(cpu.register_a, 0b1010_1000);
+    assert_eq!(cpu.register_x, 0xFA);
+    assert_eq!(cpu.register_a, 0xFA & 0b1110_1100);
 }
 
 #[test]

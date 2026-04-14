@@ -1,11 +1,11 @@
 use serde::{Deserialize, Serialize};
 
 use crate::bus::{Bus, Mem, PollIRQ, PollNMI};
-use crate::cpu::addressing_mode::{page_cross, AddressingMode, Load, Store};
+use crate::cpu::addressing_mode::{AddressingMode, Load, Store, page_cross};
 use crate::cpu::interrupts::{
-    Interrupt, BRK_INTERRUPT, IRQ_INTERRUPT, NMI_INTERRUPT, RESET_INTERRUPT,
+    BRK_INTERRUPT, IRQ_INTERRUPT, Interrupt, NMI_INTERRUPT, RESET_INTERRUPT,
 };
-use crate::cpu::opcodes::{OpCode, BRANCH_OP_CODES, CPU_INSTRUCTIONS};
+use crate::cpu::opcodes::{BRANCH_OP_CODES, CPU_INSTRUCTIONS, OpCode};
 use crate::ppu::palette::SystemPalette;
 use crate::rom::Rom;
 

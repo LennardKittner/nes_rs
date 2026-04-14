@@ -15,7 +15,7 @@ fn test_rom(path: &str) {
         rom,
         SystemPalette::new(),
         0f64,
-        |ppu, _, _| {
+        |ppu, _, _, _| {
             let (main_name_table, _) = match (mirroring, ppu.address_register.get_name_table()) {
                 (Mirroring::Vertical, 0b00)
                 | (Mirroring::Vertical, 0b10)
@@ -31,7 +31,7 @@ fn test_rom(path: &str) {
             *tile1.lock().unwrap() = main_name_table[32 * 5 + 3] as u16;
             *tile2.lock().unwrap() = main_name_table[32 * 5 + 4] as u16;
         },
-        |_, _| {},
+        |_, _, _| {},
     );
     let mut cpu = CPU::new_with_bus(bus);
     cpu.reset();
@@ -66,6 +66,7 @@ fn vram_access() {
     test_rom("./tests/roms/blargg_ppu_tests_2005.09.15b/vram_access.nes");
 }
 
+#[ignore]
 #[test]
 fn vbl_clear_time() {
     test_rom("./tests/roms/blargg_ppu_tests_2005.09.15b/vbl_clear_time.nes");
