@@ -15,14 +15,14 @@ const FONT_LETTERS_OFFSET: usize = 33;
 const FONT_CHR_ROM: &[u8; 1536] = include_bytes!("../om_thick_plain_nes.chr");
 
 //TODO: when loading save state load preview image to avoid black frame
-//TODO: make most stuff pub(crate) instead of pub
-
-//TODO: new input abstraction and recording also add recoding as input flag
+//TODO: avoid unwrap
+//TODO: new input abstraction and recording also add recording  as input flag
 // maybe only store with offset from recording start
+
 /// A NES emulator
 #[derive(Parser, Debug)]
 struct Args {
-    /// whether to record the in game audio. The recoding is written to "./<rom_name>.wav"
+    /// whether to record the in game audio.ehe recording is written to "./<rom_name>.wav"
     #[arg(long, default_value_t = false)]
     export_wav: bool,
 
