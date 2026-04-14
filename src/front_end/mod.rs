@@ -1,3 +1,4 @@
+use image::{ImageBuffer, Rgb};
 use itertools::Itertools;
 use nes_rs::{
     NES,
@@ -76,6 +77,8 @@ pub struct FrontEndState {
     pub rewind_buffer: RewindBuffer,
     pub save_state_path: String,
     pub input_recording_path: String,
+    pub screenshot_path: String,
+    pub scaling: u32,
 }
 
 impl FrontEndState {
@@ -86,6 +89,7 @@ impl FrontEndState {
         integer_scaling: bool,
         save_state_path: &str,
         input_recording_path: &str,
+        screen_shot_path: &str,
     ) -> (Self, TextureCreators) {
         let sdl_context = sdl2::init().unwrap();
         let audio_subsystem = sdl_context.audio().unwrap();
@@ -206,6 +210,8 @@ impl FrontEndState {
                 rewind_buffer: RewindBuffer::new(),
                 save_state_path: save_state_path.to_string(),
                 input_recording_path: input_recording_path.to_string(),
+                screenshot_path: screen_shot_path.to_string(),
+                scaling,
             },
             TextureCreators {
                 main_creator,
@@ -258,6 +264,7 @@ pub struct Actions {
     pub rewind_mode: bool,
     pub record_input: bool,
     pub replay_input: bool,
+    pub take_screen_shot: bool,
 }
 
 impl Actions {
@@ -275,6 +282,7 @@ impl Actions {
             rewind_mode: false,
             record_input: false,
             replay_input: false,
+            take_screen_shot: false,
         }
     }
 }
@@ -364,15 +372,30 @@ pub fn create_callbacks<'a>(
             &palette,
         );
 
-        //TODO: add screenshot function and maybe video recoding
-        // image::save_buffer(
-        //     format!("./{rom_name}.png"),
-        //     &frame.data,
-        //     SCREEN_WIDTH as u32,
-        //     SCREEN_HEIGHT as u32,
-        //     image::ColorType::Rgb8,
-        // )
-        // .unwrap();
+        if front_end_state.borrow().actions.take_screen_shot {
+            {
+                let scaling = front_end_state.borrow().scaling;
+                let path = &front_end_state.borrow().screenshot_path;
+                if let Some(Err(e)) = ImageBuffer::<Rgb<u8>, _>::from_raw(
+                    SCREEN_WIDTH as u32,
+                    SCREEN_HEIGHT as u32,
+                    &frame.data[..],
+                )
+                .map(|image| {
+                    image::imageops::resize(
+                        &image,
+                        SCREEN_WIDTH as u32 * scaling,
+                        SCREEN_HEIGHT as u32 * scaling,
+                        image::imageops::FilterType::Nearest,
+                    )
+                })
+                .map(|image| image.save(path))
+                {
+                    eprintln!("{e}");
+                }
+            }
+            front_end_state.borrow_mut().actions.take_screen_shot = false;
+        }
     };
     (render_frame, handle_controller_input)
 }
@@ -486,6 +509,9 @@ pub fn handle_user_input<'a>(
                 front_end.actions.replay_input = false;
                 nes = continue_from_rewind_slot(nes, front_end);
             }
+        }
+        UserInput::TakeScreenShot => {
+            front_end.actions.take_screen_shot = true;
         }
         UserInput::NesFull(controller_input) => {
             front_end.nes_controller_input.push(*controller_input)

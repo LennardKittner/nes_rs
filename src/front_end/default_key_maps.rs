@@ -26,6 +26,7 @@ pub static DEFAULT_SYSTEM_KEY_MAP: LazyLock<HashMap<Keycode, UserInput>> = LazyL
         (Keycode::Space, UserInput::RewindLoad),
         (Keycode::Y, UserInput::RecordInput),
         (Keycode::X, UserInput::ReplayInput),
+        (Keycode::W, UserInput::TakeScreenShot),
     ])
 });
 

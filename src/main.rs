@@ -14,7 +14,6 @@ const FONT_NUMBERS_OFFSET: usize = 16;
 const FONT_LETTERS_OFFSET: usize = 33;
 const FONT_CHR_ROM: &[u8; 1536] = include_bytes!("../om_thick_plain_nes.chr");
 
-//TODO: Fix tests
 //TODO: when loading save state load preview image to avoid black frame
 //TODO: make most stuff pub(crate) instead of pub
 
@@ -58,6 +57,7 @@ fn main() {
     let recording_path = Path::new(&rom_path).with_extension("wav");
     let save_state_path = Path::new(&rom_path).with_extension("save_state");
     let input_recording_path = Path::new(&rom_path).with_extension("key.json");
+    let screenshot_path = Path::new(&rom_path).with_extension("png");
     let palette_path = args.palette_path;
 
     let (front_end_state, texture_creators) = FrontEndState::new(
@@ -66,6 +66,7 @@ fn main() {
         args.enable_integer_scaling,
         save_state_path.to_str().unwrap_or("unnamed.save_state"),
         input_recording_path.to_str().unwrap_or("unnamed.key.json"),
+        screenshot_path.to_str().unwrap_or("unnamed.png"),
     );
     let front_end_state = Rc::new(RefCell::new(front_end_state));
 

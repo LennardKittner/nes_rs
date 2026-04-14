@@ -57,6 +57,7 @@ pub enum UserInput {
     RewindLeft,
     RewindRight,
     RewindLoad,
+    TakeScreenShot,
     Nes(ControllerButtons),
     NesFull(ControllerInput),
 }
