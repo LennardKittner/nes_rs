@@ -29,7 +29,7 @@ The emulator can be built and run on Linux, macOS, and Windows.
 
 ## Quick Start
 ```bash
-cargo run --bin nes_rs -- ./path/to/rom.nes
+cargo run --release --bin nes_rs -- ./path/to/rom.nes
 ```
 You can download and play free ROMs such as [from-below](https://mhughson.itch.io/from-below).
 
@@ -78,7 +78,7 @@ Options:
 
 ### Example
 ```bash
-cargo run --bin nes_rs -- ./from_below.nes --palette-path ./contrast.palette --enable-integer-scaling --scaling 2
+nes_rs ./from_below.nes --palette-path ./contrast.palette --enable-integer-scaling --scaling 2
 ```
 
 You can generate a custom palette using https://bisqwit.iki.fi/utils/nespalette.php
