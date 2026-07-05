@@ -112,7 +112,7 @@ pub fn render_bg(
             let pixel_x = tile_x * 8 + x;
 
             if pixel_x >= shift_x {
-                if !ppu.show_background_left() && pixel_x - shift_x <= 8 || !ppu.show_background() {
+                if !ppu.show_background_left() && pixel_x - shift_x < 8 || !ppu.show_background() {
                     color_idx = 0;
                 }
                 let rgb = ppu.get_color_from_current_system_palette(
@@ -145,7 +145,7 @@ pub fn render_bg(
             let pixel_x = tile_x * 8 + x;
 
             if pixel_x < shift_x && pixel_x + (256 - shift_x) < 256 {
-                if !ppu.show_background_left() && pixel_x + (256 - shift_x) <= 8
+                if !ppu.show_background_left() && pixel_x + (256 - shift_x) < 8
                     || !ppu.show_background()
                 {
                     color_idx = 0;

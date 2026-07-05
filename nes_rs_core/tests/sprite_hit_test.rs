@@ -61,61 +61,55 @@ fn basics() {
     test_rom("tests/roms/sprite_hit_tests_2005.10.05/01.basics.nes");
 }
 
-#[ignore]
 #[test]
 fn alignment() {
     test_rom("tests/roms/sprite_hit_tests_2005.10.05/02.alignment.nes");
 }
 
-#[ignore]
 #[test]
 fn corners() {
     test_rom("tests/roms/sprite_hit_tests_2005.10.05/03.corners.nes");
 }
 
-#[ignore]
 #[test]
 fn flip() {
     test_rom("tests/roms/sprite_hit_tests_2005.10.05/04.flip.nes");
 }
 
-#[ignore]
 #[test]
 fn left_clip() {
     test_rom("tests/roms/sprite_hit_tests_2005.10.05/05.left_clip.nes");
 }
 
-#[ignore]
 #[test]
 fn right_edge() {
     test_rom("tests/roms/sprite_hit_tests_2005.10.05/06.right_edge.nes");
 }
 
-#[ignore]
 #[test]
 fn screen_bottom() {
     test_rom("tests/roms/sprite_hit_tests_2005.10.05/07.screen_bottom.nes");
 }
 
-#[ignore] // 8x16 sprites not implemented
 #[test]
 fn double_height() {
     test_rom("tests/roms/sprite_hit_tests_2005.10.05/08.double_height.nes");
 }
 
+// Still failing: needs cycle-accurate (per-dot) sprite-0-hit timing; PPU renders whole scanlines.
 #[ignore]
 #[test]
 fn timing_basics() {
     test_rom("tests/roms/sprite_hit_tests_2005.10.05/09.timing_basics.nes");
 }
 
+// Still failing: needs cycle-accurate (per-dot) sprite-0-hit timing; PPU renders whole scanlines.
 #[ignore]
 #[test]
 fn timing_order() {
     test_rom("tests/roms/sprite_hit_tests_2005.10.05/10.timing_order.nes");
 }
 
-#[ignore]
 #[test]
 fn edge_timing() {
     test_rom("tests/roms/sprite_hit_tests_2005.10.05/11.edge_timing.nes");

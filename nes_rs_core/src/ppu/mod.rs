@@ -23,8 +23,6 @@ use crate::rom::{Mirroring, Rom};
 use serde::{Deserialize, Serialize};
 use serde_with::Bytes;
 use serde_with::serde_as;
-use std::cmp::{max, min};
-use std::ops::Range;
 
 pub const VBLANK_START: i32 = 240;
 pub const LAST_SCANLINE: i32 = 261;
@@ -53,8 +51,11 @@ pub struct PPU {
     open_bus: u8,
     write_toggle: bool,
     sprite_buffer: [Sprite; 9], // we only use the first 8 slots the ninth is only for the overflow flag
-    pub sprite_zero_pos: Range<usize>,
     sprite_zero_was_hit_this_frame: bool,
+    /// Screen x (dot) at which sprite 0 hit should fire on the current scanline, once the dot sweep
+    /// reaches it. Computed when the line is composited; `None` if no hit on this line.
+    #[serde(default)]
+    pending_s0_hit_dot: Option<usize>,
 
     pub scan_line: i32,
     pub cycles: usize,
@@ -189,8 +190,8 @@ impl PPU {
             open_bus: 0,
             write_toggle: false,
             sprite_buffer: [Sprite::default(); 9],
-            sprite_zero_pos: 0..0,
             sprite_zero_was_hit_this_frame: false,
+            pending_s0_hit_dot: None,
             scan_line: POWER_ON_SCNALINE,
             cycles: POWER_ON_CYCLE,
             frame_counter: 0,
@@ -212,7 +213,6 @@ impl PPU {
         scanline_buffers: &mut [Scanline; 2],
         current_buffer: usize,
     ) -> i32 {
-        let pixel_range = self.cycles..(self.cycles + cycles as usize).min(256);
         self.cycles += cycles as usize;
         self.global_cycle += cycles as usize;
 
@@ -240,6 +240,11 @@ impl PPU {
 
         if self.first_touch_scanline {
             scanline_buffers[current_buffer ^ 1].clear();
+            // The Bus only flips buffers on visible scanlines, so during vblank one buffer is never
+            // cleared.
+            if self.scan_line == PRE_RENDER_SCNALINE {
+                scanline_buffers[current_buffer].clear();
+            }
             if (self.show_sprites() || self.show_background()) && self.scan_line < VBLANK_START {
                 self.sprite_evaluation(
                     system_palette,
@@ -262,6 +267,7 @@ impl PPU {
             self.cycles -= CYCLES_PER_SCANLINE;
             self.scan_line += 1;
             self.first_touch_scanline = true;
+            self.pending_s0_hit_dot = None;
 
             if self.scan_line > PRE_RENDER_SCNALINE && self.scan_line < VBLANK_START {
                 if self.show_background() {
@@ -282,6 +288,10 @@ impl PPU {
                             }
                         })
                 }
+                if !self.sprite_zero_was_hit_this_frame {
+                    self.pending_s0_hit_dot =
+                        self.find_sprite_zero_hit_x(&scanline_buffers[current_buffer]);
+                }
             } else if self.scan_line == VBLANK_START {
                 self.status_register.set_vertical_blank(true);
             } else if self.scan_line == LAST_SCANLINE {
@@ -299,11 +309,12 @@ impl PPU {
             }
         }
 
-        // Check for Sprite Zero hit during visible scanlines (0–239)
-        if !self.sprite_zero_was_hit_this_frame && self.scan_line >= 0 && self.scan_line < 240 {
-            //TODO: using current_buffer ^ 1 fixes missing sprite zero hit in some games but
-            //also causes sprite zero hit one scnaline to early in others
-            self.check_sprite_zero_hit(pixel_range, &scanline_buffers[current_buffer]);
+        if let Some(x) = self.pending_s0_hit_dot {
+            if self.cycles >= x {
+                self.set_sprite_zero_hit();
+                self.sprite_zero_was_hit_this_frame = true;
+                self.pending_s0_hit_dot = None;
+            }
         }
 
         if (0..VBLANK_START).contains(&self.scan_line)
@@ -316,26 +327,25 @@ impl PPU {
         self.scan_line
     }
 
-    fn check_sprite_zero_hit(&mut self, range_to_check: Range<usize>, scanline: &Scanline) {
-        if self.show_sprites()
-            && self.scan_line < VBLANK_START
-            && range_to_check.start < self.sprite_zero_pos.end
-            && self.sprite_zero_pos.start < range_to_check.end
-            && self.show_background()
-            && (range_to_check.end > 8 || self.show_sprites_left() && self.show_background_left())
-        {
-            for pos in max(range_to_check.start, self.sprite_zero_pos.start)
-                ..min(range_to_check.end, self.sprite_zero_pos.end)
-            {
-                if scanline.data[pos].sprite_zero_opaque
-                    && !scanline.data[pos].background_color.transparent
-                {
-                    self.set_sprite_zero_hit();
-                    self.sprite_zero_was_hit_this_frame = true;
-                    break;
-                }
-            }
+    /// Find the leftmost screen x where sprite 0 has an opaque pixel over an opaque background pixel
+    /// on the just-composited display row, or `None`. Both halves (background + the sprite pixels
+    /// drawn on this row) live in the same buffer at the call site, so this is a single scan.
+    ///
+    /// Applies left-column clipping (no hit in x 0..7 if either the background or sprites are hidden
+    /// there) and the x=255 hardware quirk (the hit never occurs on the last dot).
+    fn find_sprite_zero_hit_x(&self, scanline: &Scanline) -> Option<usize> {
+        if !self.show_sprites() || !self.show_background() {
+            return None;
         }
+        let start = if self.show_sprites_left() && self.show_background_left() {
+            0
+        } else {
+            8
+        };
+        (start..(SCREEN_WIDTH - 1)).find(|&pos| {
+            scanline.data[pos].sprite_zero_opaque
+                && !scanline.data[pos].background_color.transparent
+        })
     }
 
     /// Renders sprite on the current scanline also logs if sprite zero is rendered during this
@@ -352,7 +362,6 @@ impl PPU {
         let mut buggy_sprite_scanning = false;
         // should be always zero, but due to the NES hardware bug is incremented after eight sprites
         let mut y_cor_offset = 0;
-        self.sprite_zero_pos = 0..0;
 
         // a helper to fill the sprite_buffer
         // returns true if sprite evaluation should continue
@@ -363,10 +372,6 @@ impl PPU {
             {
                 self.sprite_buffer[current_sprite_slot] =
                     Sprite::new(raw, sprite_idx == 0, upper_half).unwrap();
-                if sprite_idx == 0 {
-                    let x_start = self.sprite_buffer[current_sprite_slot].get_x();
-                    self.sprite_zero_pos = x_start..(x_start + 8);
-                }
                 current_sprite_slot += 1;
                 buggy_sprite_scanning = current_sprite_slot >= 8;
                 if current_sprite_slot >= 9 {
